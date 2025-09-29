@@ -1,15 +1,15 @@
 //! MeshChat is an iced GUI app that uses the meshtastic "rust" crate to discover and control
 //! meshtastic compatible radios connected to the host running it
 
-mod discovery;
 mod device_list_view;
 mod device_view;
+mod discovery;
 
-use iced::{Element, Pixels, Settings, Size, Subscription, Task, Theme};
+use crate::Message::{Device, Discovery, WindowEvent};
 use crate::device_list_view::DeviceListView;
 use crate::device_view::{DeviceEvent, DeviceView};
-use crate::discovery::{ble_discovery, DiscoveryEvent};
-use crate::Message::{Device, Discovery, WindowEvent};
+use crate::discovery::{DiscoveryEvent, ble_discovery};
+use iced::{Element, Pixels, Settings, Size, Subscription, Task, Theme};
 
 const MESHCHAT_ID: &str = "meshchat";
 
@@ -50,7 +50,6 @@ fn main() -> iced::Result {
         .run_with(MeshChat::new)
 }
 
-
 impl MeshChat {
     fn new() -> (Self, Task<Message>) {
         (
@@ -67,20 +66,19 @@ impl MeshChat {
         "MeshChat".to_string()
     }
 
-
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             WindowEvent(_) => Task::none(),
-            Discovery(discovery_event   ) => self.device_list_view.update(discovery_event),
+            Discovery(discovery_event) => self.device_list_view.update(discovery_event),
             Device(device_event) => {
                 let (show_device_view, task) = self.device_view.update(device_event);
-                if  show_device_view {
+                if show_device_view {
                     self.view = View::Device;
                 } else {
                     self.view = View::DeviceList;
                 };
                 task
-            },
+            }
         }
     }
 
@@ -96,7 +94,7 @@ impl MeshChat {
         #[allow(unused_mut)]
         let mut subscriptions = vec![
             iced::event::listen().map(WindowEvent),
-            Subscription::run(ble_discovery).map(Discovery)
+            Subscription::run(ble_discovery).map(Discovery),
         ];
 
         Subscription::batch(subscriptions)

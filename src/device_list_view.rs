@@ -1,20 +1,20 @@
-use std::collections::HashMap;
-use btleplug::platform::PeripheralId;
-use iced::{Element, Length, Task};
-use iced::widget::{button, container, text, Column};
+use crate::Message;
+use crate::Message::Device;
 use crate::device_view::DeviceEvent::DeviceConnect;
 use crate::discovery::DiscoveryEvent;
-use crate::Message;
-use crate::Message::{Device};
+use btleplug::platform::PeripheralId;
+use iced::widget::{Column, button, container, text};
+use iced::{Element, Length, Task};
+use std::collections::HashMap;
 
 pub struct DeviceListView {
-    devices: HashMap<PeripheralId, String>
+    devices: HashMap<PeripheralId, String>,
 }
 
 impl DeviceListView {
     pub fn new() -> Self {
         Self {
-            devices: HashMap::new()
+            devices: HashMap::new(),
         }
     }
 
@@ -31,7 +31,8 @@ impl DeviceListView {
         let mut main_col = Column::new();
 
         for (id, name) in &self.devices {
-            main_col = main_col.push(button(text(name.clone())).on_press(Device(DeviceConnect(id.clone()))));
+            main_col = main_col
+                .push(button(text(name.clone())).on_press(Device(DeviceConnect(id.clone()))));
         }
 
         let content = container(main_col)

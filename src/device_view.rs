@@ -1,9 +1,9 @@
-use btleplug::platform::PeripheralId;
-use iced::{Element, Length, Task};
-use iced::widget::{button, container, text, Column};
-use crate::device_view::State::{Connected, Connecting, Disconnected};
-use crate::{Message};
+use crate::Message;
 use crate::device_view::DeviceEvent::{ConnectedEvent, DeviceConnect, DeviceDisconnect};
+use crate::device_view::State::{Connected, Connecting, Disconnected};
+use btleplug::platform::PeripheralId;
+use iced::widget::{Column, button, container, text};
+use iced::{Element, Length, Task};
 
 enum State {
     Disconnected,
@@ -34,14 +34,17 @@ impl DeviceView {
         match device_event {
             DeviceConnect(id) => {
                 self.state = Connecting(id.clone());
-                (true, Task::perform(Self::do_connect(id.clone()), |result| {
-                    Message::Device(ConnectedEvent(result.unwrap()))
-                }))
-            },
+                (
+                    true,
+                    Task::perform(Self::do_connect(id.clone()), |result| {
+                        Message::Device(ConnectedEvent(result.unwrap()))
+                    }),
+                )
+            }
             DeviceDisconnect(_id) => {
                 self.state = Disconnected;
                 (false, Task::none())
-            },
+            }
             ConnectedEvent(id) => {
                 self.state = Connected(id);
                 (true, Task::none())
@@ -60,17 +63,18 @@ impl DeviceView {
         match &self.state {
             Disconnected => {
                 main_col = main_col.push(text("disconnected"));
-            },
+            }
 
             Connecting(id) => {
                 main_col = main_col.push(text(format!("connecting to : {id}")));
-
             }
 
             Connected(id) => {
                 main_col = main_col.push(text(format!("connected to : {id}")));
-                main_col = main_col.push(button("Disconnect").on_press(Message::Device(DeviceDisconnect(id.clone()))));
-            },
+                main_col = main_col.push(
+                    button("Disconnect").on_press(Message::Device(DeviceDisconnect(id.clone()))),
+                );
+            }
         }
 
         let content = container(main_col)
