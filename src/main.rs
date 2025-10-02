@@ -10,7 +10,7 @@ use crate::device_list_view::DeviceListView;
 use crate::device_view::{DeviceEvent, DeviceView};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
 use crate::Message::{Device, Discovery, Exit, NavigationBack, WindowEvent};
-use iced::{window, Element, Pixels, Settings, Subscription, Task, Theme};
+use iced::{window, Element, Subscription, Task, Theme};
 use std::cmp::PartialEq;
 
 const MESHCHAT_ID: &str = "meshchat";
@@ -38,17 +38,10 @@ pub enum Message {
 }
 
 fn main() -> iced::Result {
-    let settings = Settings {
-        id: Some(MESHCHAT_ID.into()),
-        default_text_size: Pixels(14.0),
-        ..Default::default()
-    };
-
     iced::application(MeshChat::title, MeshChat::update, MeshChat::view)
         .subscription(MeshChat::subscription)
         .exit_on_close_request(false)
         .resizable(true)
-        .settings(settings)
         .theme(|_| Theme::Dark)
         .run_with(MeshChat::new)
 }
