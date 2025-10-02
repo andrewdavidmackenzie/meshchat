@@ -10,7 +10,7 @@ use crate::device_list_view::DeviceListView;
 use crate::device_view::{ConnectionState, DeviceEvent, DeviceView};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
 use crate::Message::{Device, Discovery, Exit, Navigation, WindowEvent};
-use iced::{window, Element, Subscription, Task};
+use iced::{window, Element, Event, Subscription, Task};
 use std::cmp::PartialEq;
 
 #[derive(PartialEq)]
@@ -68,30 +68,8 @@ impl MeshChat {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Navigation(navigation_message) => {
-                match navigation_message {
-                    NavigationMessage::Back => {
-                        if self.view == View::Device {
-                            self.view = View::DeviceList;
-                        }
-                    }
-                    NavigationMessage::Connected => {
-                        self.view = View::Device;
-                    }
-                }
-                Task::none()
-            }
-            WindowEvent(event) => {
-                if let iced::Event::Window(window::Event::CloseRequested) = event {
-                    if let ConnectionState::Connected(id) = self.device_view.connection_state() {
-                        Task::perform(comms::do_disconnect(id.clone()), |_result| Exit)
-                    } else {
-                        window::get_latest().and_then(window::close)
-                    }
-                } else {
-                    Task::none()
-                }
-            }
+            Navigation(navigation_message) => self.navigate(navigation_message),
+            WindowEvent(event) => self.window_handler(event),
             Discovery(discovery_event) => self.device_list_view.update(discovery_event),
             Device(device_event) => self.device_view.update(device_event),
             Exit => window::get_latest().and_then(window::close),
@@ -116,5 +94,31 @@ impl MeshChat {
         ];
 
         Subscription::batch(subscriptions)
+    }
+
+    fn navigate(&mut self, navigation_message: NavigationMessage) -> Task<Message> {
+        match navigation_message {
+            NavigationMessage::Back => {
+                if self.view == View::Device {
+                    self.view = View::DeviceList;
+                }
+            }
+            NavigationMessage::Connected => {
+                self.view = View::Device;
+            }
+        }
+        Task::none()
+    }
+
+    fn window_handler(&mut self, event: Event) -> Task<Message> {
+        if let Event::Window(window::Event::CloseRequested) = event {
+            if let ConnectionState::Connected(id) = self.device_view.connection_state() {
+                Task::perform(comms::do_disconnect(id.clone()), |_result| Exit)
+            } else {
+                window::get_latest().and_then(window::close)
+            }
+        } else {
+            Task::none()
+        }
     }
 }
