@@ -10,7 +10,7 @@ use crate::device_list_view::DeviceListView;
 use crate::device_view::{DeviceEvent, DeviceView};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
 use crate::Message::{Device, Discovery, Exit, NavigationBack, WindowEvent};
-use iced::{window, Element, Pixels, Settings, Size, Subscription, Task, Theme};
+use iced::{window, Element, Pixels, Settings, Subscription, Task, Theme};
 use std::cmp::PartialEq;
 
 const MESHCHAT_ID: &str = "meshchat";
@@ -49,7 +49,6 @@ fn main() -> iced::Result {
         .exit_on_close_request(false)
         .resizable(true)
         .settings(settings)
-        .window_size(MeshChat::get_default_window_size())
         .theme(|_| Theme::Dark)
         .run_with(MeshChat::new)
 }
@@ -121,12 +120,5 @@ impl MeshChat {
         ];
 
         Subscription::batch(subscriptions)
-    }
-
-    fn get_default_window_size() -> Size {
-        Size {
-            width: 1060.0,
-            height: 720.0,
-        }
     }
 }
