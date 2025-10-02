@@ -40,7 +40,7 @@ pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
 
         // loop scanning for devices
         loop {
-            match available_ble_devices(Duration::from_secs(1)).await {
+            match available_ble_devices(Duration::from_secs(4)).await {
                 Ok(radios_now_ids) => {
                     // detect lost radios
                     for id in &mesh_radio_ids {
@@ -58,7 +58,7 @@ pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
 
                     // detect new radios found
                     for id in &radios_now_ids {
-                        if mesh_radio_ids
+                        if !mesh_radio_ids
                             .iter()
                             .any(|other_id| compare_bleid(id, other_id))
                         {

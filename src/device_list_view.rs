@@ -35,16 +35,15 @@ impl DeviceListView {
 
         for id in &self.devices {
             let mut device_row = Row::new();
-            let mut device_button = button(text(id.to_string()));
+            device_row = device_row.push(text(id.to_string()));
             if let Some(connected_device) = connected_device {
                 if compare_bleid(connected_device, id) {
-                    device_row = device_row.push(device_button);
                     device_row = device_row
                         .push(button("Disconnect").on_press(Device(DeviceDisconnect(id.clone()))));
                 }
             } else {
-                device_button = device_button.on_press(Device(DeviceConnect(id.clone())));
-                device_row = device_row.push(device_button);
+                device_row =
+                    device_row.push(button("Connect").on_press(Device(DeviceConnect(id.clone()))));
             }
             main_col = main_col.push(device_row);
         }
