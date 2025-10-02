@@ -1980,12 +1980,10 @@ dependencies = [
 name = "meshchat"
 version = "0.1.0"
 dependencies = [
- "bluez-async",
- "btleplug",
+ "anyhow",
  "iced",
  "meshtastic",
  "tokio",
- "uuid",
 ]
 
 [[package]]

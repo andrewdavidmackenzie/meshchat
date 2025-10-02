@@ -1,41 +1,43 @@
 use crate::device_view::DeviceEvent::{DeviceConnect, DeviceDisconnect};
-use crate::discovery::DiscoveryEvent;
+use crate::discovery::{compare_bleid, DiscoveryEvent};
 use crate::Message;
 use crate::Message::Device;
-use btleplug::platform::PeripheralId;
 use iced::widget::{button, container, text, Column, Row};
 use iced::{Element, Length, Task};
-use std::collections::HashMap;
+use meshtastic::utils::stream::BleId;
 
 pub struct DeviceListView {
-    devices: HashMap<PeripheralId, String>,
+    devices: Vec<BleId>,
 }
 
 impl DeviceListView {
     pub fn new() -> Self {
         Self {
-            devices: HashMap::new(),
+            devices: Vec::new(),
         }
     }
 
     pub fn update(&mut self, discovery_event: DiscoveryEvent) -> Task<Message> {
         match discovery_event {
-            DiscoveryEvent::BLERadioFound(id, name) => self.devices.insert(id, name),
-            DiscoveryEvent::BLERadioLost(id) => self.devices.remove(&id),
+            DiscoveryEvent::BLERadioFound(id) => self.devices.push(id),
+            DiscoveryEvent::BLERadioLost(id) => self
+                .devices
+                .retain(|other_id| !compare_bleid(other_id, &id)),
+            DiscoveryEvent::Error(_) => {}
         };
 
         Task::none()
     }
 
-    pub fn view(&self, connected_device: Option<&PeripheralId>) -> Element<'static, Message> {
+    pub fn view(&self, connected_device: Option<&BleId>) -> Element<'static, Message> {
         let mut main_col = Column::new();
         main_col = main_col.push(text("Scanning...Available devices:"));
 
-        for (id, name) in &self.devices {
+        for id in &self.devices {
             let mut device_row = Row::new();
-            let mut device_button = button(text(name.clone()));
+            let mut device_button = button(text(id.to_string()));
             if let Some(connected_device) = connected_device {
-                if connected_device == id {
+                if compare_bleid(connected_device, id) {
                     device_row = device_row.push(device_button);
                     device_row = device_row
                         .push(button("Disconnect").on_press(Device(DeviceDisconnect(id.clone()))));

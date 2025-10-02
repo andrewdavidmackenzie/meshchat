@@ -8,12 +8,5 @@ repository = "https://github.com/andrewdavidmackenzie/meshchat"
 [dependencies]
 meshtastic = { version = "0.1.7", git = "https://github.com/lukipuki/meshtastic-rust.git", branch = "ble-scan", features = ["bluetooth-le"] }
 tokio = "1.47.1"
-btleplug = { version = "0.11.7" }
-uuid = { version = "1.12.1" }
 iced = { version = "0.13.1", features = ["tokio"] }
-
-#TODO: drop pinning of the bluez-async version once we move the MSRV to 1.84 and we can use
-#MSRV-aware resolver instead of this hack. See
-#https://blog.rust-lang.org/2025/01/09/Rust-1.84.0/#cargo-considers-rust-versions-for-dependency-version-selection
-[target.'cfg(target_os = "linux")'.dependencies]
-bluez-async = { version = "=0.8.0", optional = true }
+anyhow = "1.0.100"

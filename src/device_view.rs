@@ -3,23 +3,23 @@ use crate::device_view::DeviceEvent::{
 };
 use crate::device_view::State::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::{comms, Message};
-use btleplug::platform::PeripheralId;
 use iced::widget::{button, container, text, Column};
 use iced::{Element, Length, Task};
+use meshtastic::utils::stream::BleId;
 
 enum State {
     Disconnected,
-    Connecting(PeripheralId),
-    Connected(PeripheralId),
-    Disconnecting(PeripheralId),
+    Connecting(BleId),
+    Connected(BleId),
+    Disconnecting(BleId),
 }
 
 #[derive(Debug, Clone)]
 pub enum DeviceEvent {
-    DeviceConnect(PeripheralId),
-    DeviceDisconnect(PeripheralId),
-    ConnectedEvent(PeripheralId),
-    DisconnectedEvent(PeripheralId),
+    DeviceConnect(BleId),
+    DeviceDisconnect(BleId),
+    ConnectedEvent(BleId),
+    DisconnectedEvent(BleId),
 }
 
 pub struct DeviceView {
@@ -33,7 +33,7 @@ impl DeviceView {
         }
     }
 
-    pub fn connected_device(&self) -> Option<&PeripheralId> {
+    pub fn connected_device(&self) -> Option<&BleId> {
         match &self.state {
             Connected(id) => Some(id),
             _ => None,
