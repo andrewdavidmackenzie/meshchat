@@ -11,14 +11,14 @@ use crate::{device_subscription, Message, NavigationMessage};
 use iced::futures::channel::mpsc::Sender;
 use iced::futures::SinkExt;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{button, scrollable, text, Column, Row};
+use iced::widget::{scrollable, text, Column, Row};
 use iced::{Element, Task};
 use iced_futures::core::Length::Fill;
 use iced_futures::Subscription;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
-use meshtastic::protobufs::{Channel, NodeInfo};
+use meshtastic::protobufs::{Channel, MeshPacket, NodeInfo};
 use meshtastic::utils::stream::BleId;
 
 #[derive(Clone)]
@@ -39,8 +39,8 @@ pub enum DeviceViewMessage {
 pub struct DeviceView {
     pub connection_state: ConnectionState,
     subscription_sender: Option<Sender<SubscriberMessage>>, // TODO Maybe combine with Disconnected state?
-    channels: Vec<Channel>, // Upto 8 - but maybe depends on firmware
-    nodes: Vec<NodeInfo>,   // all nodes known to the connected radio
+    channels: Vec<(Channel, Vec<MeshPacket>)>, // Upto 8 - but maybe depends on firmware
+    nodes: Vec<NodeInfo>,                      // all nodes known to the connected radio
 }
 
 async fn request_connection(mut sender: Sender<SubscriberMessage>, id: BleId) {
@@ -74,7 +74,7 @@ impl DeviceView {
                 self.connection_state = Connecting(id.clone()); // TODO make state change depend on message back from subscription
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_connection(sender.unwrap(), id), |_| {
-                    Message::Navigation(NavigationMessage::Connecting)
+                    Message::Navigation(NavigationMessage::DeviceView)
                 })
             }
             DisconnectRequest(id) => {
@@ -101,7 +101,11 @@ impl DeviceView {
                 DevicePacket(packet) => {
                     match packet.payload_variant.unwrap() {
                         PayloadVariant::Packet(mesh_packet) => {
-                            println!("MeshPacket: {mesh_packet:?}");
+                            if let Some((_, packets)) =
+                                &mut self.channels.get_mut(mesh_packet.channel as usize)
+                            {
+                                packets.push(mesh_packet);
+                            }
                         }
                         PayloadVariant::MyInfo(my_node_info) => {
                             println!(
@@ -110,7 +114,7 @@ impl DeviceView {
                             );
                         }
                         PayloadVariant::NodeInfo(node_info) => {
-                            // TODO: Filter out myself as I asspear in the nodes known too?
+                            // TODO: Filter out myself as I appear in the nodes known too?
                             self.nodes.push(node_info)
                         }
                         PayloadVariant::Config(_) => {}
@@ -118,7 +122,7 @@ impl DeviceView {
                         PayloadVariant::ConfigCompleteId(_) => {}
                         PayloadVariant::Rebooted(_) => {}
                         PayloadVariant::ModuleConfig(_) => {}
-                        PayloadVariant::Channel(channel) => self.channels.push(channel),
+                        PayloadVariant::Channel(channel) => self.channels.push((channel, vec![])),
                         PayloadVariant::QueueStatus(_) => {
                             // TODO maybe show if devices in outgoing queue?
                         }
@@ -142,36 +146,14 @@ impl DeviceView {
     }
 
     pub fn view(&self) -> Element<'static, Message> {
-        let mut main_col = Column::new();
-
-        match &self.connection_state {
-            Disconnected => {
-                main_col = main_col.push(text("disconnected"));
-            }
-
-            Connecting(id) => {
-                main_col = main_col.push(text(format!("connecting to : {id}")));
-            }
-
-            Connected(id) => {
-                main_col = main_col.push(text(format!("connected to : {id}")));
-                main_col = main_col.push(
-                    button("Disconnect").on_press(Message::Device(DisconnectRequest(id.clone()))),
-                );
-            }
-            Disconnecting(id) => {
-                main_col = main_col.push(text(format!("disconnecting from : {id}")));
-            }
-        }
-
         let mut channels_view = Column::new();
-        for channel in &self.channels {
+        for (channel, packets) in &self.channels {
             // TODO show QR of the channel config
             // TODO button to enter the channel to chat on it
             let channel_row = match Role::try_from(channel.role).unwrap() {
                 Disabled => break,
-                Primary => Self::channel_row(true, channel),
-                Secondary => Self::channel_row(false, channel),
+                Primary => Self::channel_row(true, channel, packets),
+                Secondary => Self::channel_row(false, channel, packets),
             };
             channels_view = channels_view.push(channel_row);
         }
@@ -203,16 +185,21 @@ impl DeviceView {
             .width(Fill)
             .height(Fill);
 
+        let mut main_col = Column::new();
         main_col = main_col.push(channel_and_user_scroll);
         main_col.into()
     }
 
-    fn channel_row(primary: bool, channel: &Channel) -> Row<'static, Message> {
+    fn channel_row(
+        primary: bool,
+        channel: &Channel,
+        packets: &Vec<MeshPacket>,
+    ) -> Row<'static, Message> {
         let mut channel_row = Row::new();
         if primary {
             channel_row = channel_row.push(text("Channel: Primary: "))
         } else {
-            channel_row = channel_row.push(text("Channel Secondary: "))
+            channel_row = channel_row.push(text("Channel Secondary "))
         }
 
         if let Some(settings) = &channel.settings {
@@ -222,6 +209,7 @@ impl DeviceView {
                 settings.name.clone()
             };
             channel_row = channel_row.push(text(name).shaping(text::Shaping::Advanced));
+            channel_row = channel_row.push(text(packets.len()))
         }
 
         channel_row

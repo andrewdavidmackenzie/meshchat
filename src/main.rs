@@ -7,11 +7,11 @@ mod device_view;
 mod discovery;
 
 use crate::device_list_view::DeviceListView;
-use crate::device_view::ConnectionState::Connected;
+use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
 use crate::Message::{Device, Discovery, Exit, Navigation, WindowEvent};
-use iced::widget::{button, Column, Row};
+use iced::widget::{button, text, Column, Row};
 use iced::{window, Element, Event, Subscription, Task};
 use std::cmp::PartialEq;
 
@@ -24,7 +24,7 @@ enum View {
 #[derive(Debug, Clone)]
 pub enum NavigationMessage {
     Back,
-    Connecting,
+    DeviceView,
 }
 
 struct MeshChat {
@@ -96,6 +96,25 @@ impl MeshChat {
                 .push(button("<-- Back").on_press(Message::Navigation(NavigationMessage::Back)));
         }
 
+        match &self.device_view.connection_state {
+            Disconnected => {
+                header = header.push(text("Disconnected"));
+            }
+            Connecting(id) => {
+                header = header.push(text(format!("Connecting to {}", id.to_string())));
+            }
+            Connected(id) => {
+                header = header.push(text("Connected to "));
+                header = header.push(
+                    button(text(id.to_string()))
+                        .on_press(Message::Navigation(NavigationMessage::DeviceView)),
+                );
+            }
+            Disconnecting(id) => {
+                header = header.push(text(format!("Disconnecting from {}", id.to_string())));
+            }
+        }
+
         outer = outer.push(header);
         outer = outer.push(inner);
 
@@ -121,7 +140,7 @@ impl MeshChat {
                     self.view = View::DeviceList;
                 }
             }
-            NavigationMessage::Connecting => {
+            NavigationMessage::DeviceView => {
                 self.view = View::Device;
             }
         }
