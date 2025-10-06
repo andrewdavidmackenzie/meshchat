@@ -96,7 +96,7 @@ impl MeshChat {
                 .push(button("<-- Back").on_press(Message::Navigation(NavigationMessage::Back)));
         }
 
-        match &self.device_view.connection_state {
+        match &self.device_view.connection_state() {
             Disconnected => {
                 header = header.push(text("Disconnected"));
             }

@@ -37,8 +37,9 @@ pub enum DeviceViewMessage {
 }
 
 pub struct DeviceView {
-    pub connection_state: ConnectionState,
+    connection_state: ConnectionState,
     subscription_sender: Option<Sender<SubscriberMessage>>, // TODO Maybe combine with Disconnected state?
+    my_node_num: Option<u32>,
     channels: Vec<(Channel, Vec<MeshPacket>)>, // Upto 8 - but maybe depends on firmware
     nodes: Vec<NodeInfo>,                      // all nodes known to the connected radio
 }
@@ -60,6 +61,7 @@ impl DeviceView {
             subscription_sender: None,
             channels: vec![],
             nodes: vec![],
+            my_node_num: None,
         }
     }
 
@@ -108,14 +110,14 @@ impl DeviceView {
                             }
                         }
                         PayloadVariant::MyInfo(my_node_info) => {
-                            println!(
-                                "My node number in the mesh is: {}",
-                                my_node_info.my_node_num
-                            );
+                            self.my_node_num = Some(my_node_info.my_node_num);
                         }
                         PayloadVariant::NodeInfo(node_info) => {
-                            // TODO: Filter out myself as I appear in the nodes known too?
-                            self.nodes.push(node_info)
+                            if let Some(my_node_num) = self.my_node_num
+                                && my_node_num != node_info.num
+                            {
+                                self.nodes.push(node_info)
+                            }
                         }
                         PayloadVariant::Config(_) => {}
                         PayloadVariant::LogRecord(_) => {}
@@ -163,7 +165,6 @@ impl DeviceView {
                 && let Some(user) = &node.user
             {
                 let mut node_row = Row::new();
-                // TODO: display emojis in the name
                 node_row = node_row.push(
                     text(format!("User: {}", user.long_name.clone()))
                         .shaping(text::Shaping::Advanced),
