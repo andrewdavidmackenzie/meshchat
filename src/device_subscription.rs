@@ -66,7 +66,8 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                 }
                 Connected(id, packet_receiver) => {
                     while let Some(packet) = packet_receiver.recv().await {
-                        println!("Received: {:?}", packet);
+                        // TODO filter out all the types that we know the GUI is not interested in
+
                         gui_sender
                             .send(DevicePacket(Box::new(packet)))
                             .await
