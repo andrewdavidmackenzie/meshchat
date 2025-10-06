@@ -182,7 +182,10 @@ impl DeviceView {
             {
                 let mut node_row = Row::new();
                 // TODO: display emojis in the name
-                node_row = node_row.push(text(format!("User: {}", user.long_name.clone())));
+                node_row = node_row.push(
+                    text(format!("User: {}", user.long_name.clone()))
+                        .shaping(text::Shaping::Advanced),
+                );
                 channels_view = channels_view.push(node_row);
                 // TODO can add to nodes on the channel list above if channel is "populated" (not 0?)
                 // TODO mark as a favourite if has is_favorite set
@@ -218,7 +221,7 @@ impl DeviceView {
             } else {
                 settings.name.clone()
             };
-            channel_row = channel_row.push(text(name));
+            channel_row = channel_row.push(text(name).shaping(text::Shaping::Advanced));
         }
 
         channel_row
