@@ -1,5 +1,5 @@
 use crate::device_view::ConnectionState;
-use crate::device_view::DeviceViewMessage::{DeviceConnect, DeviceDisconnect};
+use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::discovery::{compare_bleid, DiscoveryEvent};
 use crate::Message;
 use crate::Message::Device;
@@ -41,13 +41,13 @@ impl DeviceListView {
                 ConnectionState::Connected(connected_device_id) => {
                     if compare_bleid(connected_device_id, id) {
                         device_row = device_row.push(
-                            button("Disconnect").on_press(Device(DeviceDisconnect(id.clone()))),
+                            button("Disconnect").on_press(Device(DisconnectRequest(id.clone()))),
                         );
                     }
                 }
                 ConnectionState::Disconnected => {
                     device_row = device_row
-                        .push(button("Connect").on_press(Device(DeviceConnect(id.clone()))));
+                        .push(button("Connect").on_press(Device(ConnectRequest(id.clone()))));
                 }
                 ConnectionState::Connecting(connecting_device) => {
                     if compare_bleid(connecting_device, id) {

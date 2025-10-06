@@ -4,7 +4,9 @@ use crate::device_subscription::SubscriptionEvent::{
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-use crate::device_view::DeviceViewMessage::{DeviceConnect, DeviceDisconnect, SubscriptionMessage};
+use crate::device_view::DeviceViewMessage::{
+    ConnectRequest, DisconnectRequest, SubscriptionMessage,
+};
 use crate::{device_subscription, Message, NavigationMessage};
 use iced::futures::channel::mpsc::Sender;
 use iced::futures::SinkExt;
@@ -29,8 +31,8 @@ pub enum ConnectionState {
 
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
-    DeviceConnect(BleId),
-    DeviceDisconnect(BleId),
+    ConnectRequest(BleId),
+    DisconnectRequest(BleId),
     SubscriptionMessage(SubscriptionEvent),
 }
 
@@ -68,14 +70,14 @@ impl DeviceView {
     /// Return a true value to show we can show the device view, false for main to decide
     pub fn update(&mut self, device_event: DeviceViewMessage) -> Task<Message> {
         match device_event {
-            DeviceConnect(id) => {
+            ConnectRequest(id) => {
                 self.connection_state = Connecting(id.clone()); // TODO make state change depend on message back from subscription
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_connection(sender.unwrap(), id), |_| {
                     Message::Navigation(NavigationMessage::Connecting)
                 })
             }
-            DeviceDisconnect(id) => {
+            DisconnectRequest(id) => {
                 self.connection_state = Disconnecting(id.clone()); // TODO make state change depend on message back from subscription
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
@@ -154,7 +156,7 @@ impl DeviceView {
             Connected(id) => {
                 main_col = main_col.push(text(format!("connected to : {id}")));
                 main_col = main_col.push(
-                    button("Disconnect").on_press(Message::Device(DeviceDisconnect(id.clone()))),
+                    button("Disconnect").on_press(Message::Device(DisconnectRequest(id.clone()))),
                 );
             }
             Disconnecting(id) => {
