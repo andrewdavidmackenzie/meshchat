@@ -11,13 +11,14 @@ use crate::{device_subscription, Message, NavigationMessage};
 use iced::futures::channel::mpsc::Sender;
 use iced::futures::SinkExt;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{scrollable, text, Column, Row};
+use iced::widget::{button, scrollable, text, Column, Row};
 use iced::{Element, Task};
 use iced_futures::core::Length::Fill;
 use iced_futures::Subscription;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
+use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::{Channel, MeshPacket, NodeInfo};
 use meshtastic::utils::stream::BleId;
 
@@ -34,6 +35,7 @@ pub enum DeviceViewMessage {
     ConnectRequest(BleId),
     DisconnectRequest(BleId),
     SubscriptionMessage(SubscriptionEvent),
+    ShowChannel(i32),
 }
 
 pub struct DeviceView {
@@ -42,6 +44,7 @@ pub struct DeviceView {
     my_node_num: Option<u32>,
     channels: Vec<(Channel, Vec<MeshPacket>)>, // Upto 8 - but maybe depends on firmware
     nodes: Vec<NodeInfo>,                      // all nodes known to the connected radio
+    showing_channel: i32,                      // Channel numbers from 0 to 7
 }
 
 async fn request_connection(mut sender: Sender<SubscriberMessage>, id: BleId) {
@@ -62,6 +65,7 @@ impl DeviceView {
             channels: vec![],
             nodes: vec![],
             my_node_num: None,
+            showing_channel: -1, // No channel
         }
     }
 
@@ -70,8 +74,8 @@ impl DeviceView {
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
-    pub fn update(&mut self, device_event: DeviceViewMessage) -> Task<Message> {
-        match device_event {
+    pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
+        match device_view_message {
             ConnectRequest(id) => {
                 self.connection_state = Connecting(id.clone()); // TODO make state change depend on message back from subscription
                 let sender = self.subscription_sender.clone();
@@ -86,6 +90,10 @@ impl DeviceView {
                 Task::perform(request_disconnection(sender.unwrap()), |_| {
                     Message::Navigation(NavigationMessage::Back)
                 })
+            }
+            DeviceViewMessage::ShowChannel(channel_num) => {
+                self.showing_channel = channel_num;
+                Task::none()
             }
             SubscriptionMessage(device_event) => match device_event {
                 ConnectedEvent(id) => {
@@ -124,7 +132,14 @@ impl DeviceView {
                         PayloadVariant::ConfigCompleteId(_) => {}
                         PayloadVariant::Rebooted(_) => {}
                         PayloadVariant::ModuleConfig(_) => {}
-                        PayloadVariant::Channel(channel) => self.channels.push((channel, vec![])),
+                        PayloadVariant::Channel(mut channel) => {
+                            if let Some(settings) = channel.settings.as_mut() {
+                                if settings.name.is_empty() {
+                                    settings.name = "Default".to_string();
+                                };
+                                self.channels.push((channel, vec![]))
+                            }
+                        }
                         PayloadVariant::QueueStatus(_) => {
                             // TODO maybe show if devices in outgoing queue?
                         }
@@ -148,10 +163,17 @@ impl DeviceView {
     }
 
     pub fn view(&self) -> Element<'static, Message> {
+        if self.showing_channel >= 0 {
+            self.channel_view()
+        } else {
+            self.device_view()
+        }
+    }
+
+    fn device_view(&self) -> Element<'static, Message> {
         let mut channels_view = Column::new();
         for (channel, packets) in &self.channels {
             // TODO show QR of the channel config
-            // TODO button to enter the channel to chat on it
             let channel_row = match Role::try_from(channel.role).unwrap() {
                 Disabled => break,
                 Primary => Self::channel_row(true, channel, packets),
@@ -178,16 +200,44 @@ impl DeviceView {
         let channel_and_user_scroll = scrollable(channels_view)
             .direction({
                 let scrollbar = Scrollbar::new().width(10.0);
-                scrollable::Direction::Both {
-                    horizontal: scrollbar,
-                    vertical: scrollbar,
-                }
+                scrollable::Direction::Vertical(scrollbar)
             })
             .width(Fill)
             .height(Fill);
 
         let mut main_col = Column::new();
         main_col = main_col.push(channel_and_user_scroll);
+        main_col.into()
+    }
+
+    fn channel_view(&self) -> Element<'static, Message> {
+        let mut channel_view = Column::new();
+        let (_channel, packets) = self.channels.get(self.showing_channel as usize).unwrap();
+
+        for packet in packets {
+            if let Some(Decoded(data)) = &packet.payload_variant {
+                if data.emoji == 0 {
+                    // false - TODO handle emoji replies
+                    let mut packet_row = Row::new();
+                    packet_row = packet_row.push(
+                        text(String::from_utf8(data.payload.clone()).unwrap())
+                            .shaping(text::Shaping::Advanced),
+                    );
+                    channel_view = channel_view.push(packet_row);
+                }
+            }
+        }
+
+        let channel_scroll = scrollable(channel_view)
+            .direction({
+                let scrollbar = Scrollbar::new().width(10.0);
+                scrollable::Direction::Vertical(scrollbar)
+            })
+            .width(Fill)
+            .height(Fill);
+
+        let mut main_col = Column::new();
+        main_col = main_col.push(channel_scroll);
         main_col.into()
     }
 
@@ -203,15 +253,14 @@ impl DeviceView {
             channel_row = channel_row.push(text("Channel Secondary "))
         }
 
-        if let Some(settings) = &channel.settings {
-            let name = if settings.name.is_empty() {
-                "Default".to_string()
-            } else {
-                settings.name.clone()
-            };
-            channel_row = channel_row.push(text(name).shaping(text::Shaping::Advanced));
-            channel_row = channel_row.push(text(format!(" ({})", packets.len())))
-        }
+        let settings = channel.settings.as_ref();
+        let settings = &settings.unwrap();
+        let name = settings.name.clone();
+        channel_row = channel_row.push(text(name).shaping(text::Shaping::Advanced));
+        channel_row = channel_row.push(text(format!(" ({})", packets.len())));
+        channel_row = channel_row.push(button(" Chat").on_press(Message::Device(
+            DeviceViewMessage::ShowChannel(channel.index),
+        )));
 
         channel_row
     }

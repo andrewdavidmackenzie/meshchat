@@ -92,8 +92,7 @@ impl MeshChat {
         let mut header = Row::new();
 
         if back {
-            header = header
-                .push(button("<-- Back").on_press(Message::Navigation(NavigationMessage::Back)));
+            header = header.push(button("<-- Back").on_press(Navigation(NavigationMessage::Back)));
         }
 
         match &self.device_view.connection_state() {
@@ -107,7 +106,7 @@ impl MeshChat {
                 header = header.push(text("Connected to "));
                 header = header.push(
                     button(text(id.to_string()))
-                        .on_press(Message::Navigation(NavigationMessage::DeviceView)),
+                        .on_press(Navigation(NavigationMessage::DeviceView)),
                 );
             }
             Disconnecting(id) => {
