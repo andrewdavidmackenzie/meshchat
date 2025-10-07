@@ -7,7 +7,6 @@ repository = "https://github.com/andrewdavidmackenzie/meshchat"
 
 [dependencies]
 meshtastic = { version = "0.1.7", git = "https://github.com/lukipuki/meshtastic-rust.git", branch = "ble-scan", features = ["bluetooth-le"] }
-tokio = "1.47.1"
 iced = { version = "0.13.1", features = ["tokio"] }
 iced_futures = { version = "0.13", default-features = false }
 anyhow = "1.0.100"

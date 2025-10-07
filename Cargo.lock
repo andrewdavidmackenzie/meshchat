@@ -1984,7 +1984,6 @@ dependencies = [
  "iced",
  "iced_futures",
  "meshtastic",
- "tokio",
 ]
 
 [[package]]
