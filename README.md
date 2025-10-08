@@ -54,5 +54,6 @@ These are the top-level dependencies of meshchat and their licenses:
 * iced - [MIT License](https://github.com/iced-rs/iced/blob/master/LICENSE)
 * iced_futures - Inherits from iced, so MIT
 * anyhow - Apache Version 2, or MIT license at your option
+* directories - Apache Version 2, or MIT license at your option
 
 So, due to the meshtastic license, this project is also licensed under the [GPL-3.0 License](LICENSE)

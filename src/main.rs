@@ -1,19 +1,23 @@
 //! MeshChat is an iced GUI app that uses the meshtastic "rust" crate to discover and control
 //! meshtastic compatible radios connected to the host running it
 
-mod device_list_view;
-mod device_subscription;
-mod device_view;
-mod discovery;
-
+use crate::config::{load_config, save_config, Config};
 use crate::device_list_view::DeviceListView;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
-use crate::Message::{Device, Discovery, Exit, Navigation, WindowEvent};
+use crate::Message::{AppError, Device, Discovery, Exit, Navigation, NewConfig, WindowEvent};
 use iced::widget::{button, text, Column, Row};
 use iced::{window, Element, Event, Subscription, Task};
+use meshtastic::utils::stream::BleId;
 use std::cmp::PartialEq;
+
+mod channel_view;
+mod config;
+mod device_list_view;
+mod device_subscription;
+mod device_view;
+mod discovery;
 
 #[derive(PartialEq)]
 enum View {
@@ -31,6 +35,7 @@ struct MeshChat {
     view: View,
     device_list_view: DeviceListView,
     device_view: DeviceView,
+    config: Config,
 }
 
 /// These are the messages that MeshChat responds to
@@ -41,6 +46,10 @@ pub enum Message {
     Discovery(DiscoveryEvent),
     Device(DeviceViewMessage),
     Exit,
+    NewConfig(Config),
+    SaveConfig,
+    AppError(String),
+    None,
 }
 
 fn main() -> iced::Result {
@@ -58,8 +67,9 @@ impl MeshChat {
                 view: View::DeviceList, // Make the initial view the device list
                 device_list_view: DeviceListView::new(),
                 device_view: DeviceView::new(),
+                config: Config::default(),
             },
-            Task::batch(vec![]),
+            Task::batch(vec![load_config()]),
         )
     }
 
@@ -75,6 +85,32 @@ impl MeshChat {
             Discovery(discovery_event) => self.device_list_view.update(discovery_event),
             Device(device_event) => self.device_view.update(device_event),
             Exit => window::get_latest().and_then(window::close),
+            NewConfig(config) => {
+                println!("New config was loaded: {config:?}");
+                self.config = config;
+                Task::none()
+            }
+            AppError(e) => {
+                eprintln!("{e}");
+                Task::none()
+            }
+            Message::None => Task::none(),
+            Message::SaveConfig => {
+                if let Connected(id) = self.device_view.connection_state() {
+                    self.config.device_id = Some(Self::name_from_id(id));
+                    save_config(self.config.clone())
+                } else {
+                    Task::none()
+                }
+            }
+        }
+    }
+
+    fn name_from_id(id: &BleId) -> String {
+        match id {
+            BleId::Name(name) => name.to_string(),
+            BleId::MacAddress(mac) => mac.to_string(),
+            BleId::NameAndMac(name, _) => name.to_string(),
         }
     }
 
@@ -100,17 +136,21 @@ impl MeshChat {
                 header = header.push(text("Disconnected"));
             }
             Connecting(id) => {
-                header = header.push(text(format!("Connecting to {}", id)));
+                header = header.push(text(format!("Connecting to {}", Self::name_from_id(id))));
             }
             Connected(id) => {
+                // TODO Breadcrumbs style?
                 header = header.push(text("Connected to "));
                 header = header.push(
-                    button(text(id.to_string()))
+                    button(text(Self::name_from_id(id)))
                         .on_press(Navigation(NavigationMessage::DeviceView)),
                 );
             }
             Disconnecting(id) => {
-                header = header.push(text(format!("Disconnecting from {}", id)));
+                header = header.push(text(format!(
+                    "Disconnecting from {}",
+                    Self::name_from_id(id)
+                )));
             }
         }
 

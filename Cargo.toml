@@ -10,3 +10,8 @@ meshtastic = { version = "0.1.7", git = "https://github.com/lukipuki/meshtastic-
 iced = { version = "0.13.1", features = ["tokio"] }
 iced_futures = { version = "0.13", default-features = false }
 anyhow = "1.0.100"
+directories = "6.0.0"
+serde = { version = "1.0.228", default-features = false, features = ["derive"] }
+toml = "0.9.7"
+smol = "2.0.2"
+futures-lite = "2.6.1"

@@ -1,3 +1,4 @@
+use crate::channel_view::channel_view;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect};
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, DevicePacket, DisconnectedEvent, Ready,
@@ -5,7 +6,7 @@ use crate::device_subscription::SubscriptionEvent::{
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
-    ConnectRequest, DisconnectRequest, SubscriptionMessage,
+    ConnectRequest, DisconnectRequest, MessageInput, SendMessage, SubscriptionMessage,
 };
 use crate::{device_subscription, Message, NavigationMessage};
 use iced::futures::channel::mpsc::Sender;
@@ -18,7 +19,6 @@ use iced_futures::Subscription;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
-use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::{Channel, MeshPacket, NodeInfo};
 use meshtastic::utils::stream::BleId;
 
@@ -36,15 +36,18 @@ pub enum DeviceViewMessage {
     DisconnectRequest(BleId),
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(i32),
+    MessageInput(String),
+    SendMessage,
 }
 
 pub struct DeviceView {
     connection_state: ConnectionState,
     subscription_sender: Option<Sender<SubscriberMessage>>, // TODO Maybe combine with Disconnected state?
     my_node_num: Option<u32>,
-    channels: Vec<(Channel, Vec<MeshPacket>)>, // Upto 8 - but maybe depends on firmware
-    nodes: Vec<NodeInfo>,                      // all nodes known to the connected radio
-    showing_channel: i32,                      // Channel numbers from 0 to 7
+    pub(crate) channels: Vec<(Channel, Vec<MeshPacket>)>, // Upto 8 - but maybe depends on firmware
+    nodes: Vec<NodeInfo>,                                 // all nodes known to the connected radio
+    pub(crate) showing_channel: i32,                      // Channel numbers from 0 to 7
+    pub message: String,                                  // Message typed in so far
 }
 
 async fn request_connection(mut sender: Sender<SubscriberMessage>, id: BleId) {
@@ -66,6 +69,7 @@ impl DeviceView {
             nodes: vec![],
             my_node_num: None,
             showing_channel: -1, // No channel
+            message: String::new(),
         }
     }
 
@@ -98,7 +102,7 @@ impl DeviceView {
             SubscriptionMessage(device_event) => match device_event {
                 ConnectedEvent(id) => {
                     self.connection_state = Connected(id);
-                    Task::none()
+                    Task::perform(empty(), |_| Message::SaveConfig)
                 }
                 DisconnectedEvent(_) => {
                     self.connection_state = Disconnected;
@@ -159,12 +163,30 @@ impl DeviceView {
                     Task::none()
                 }
             },
+            SendMessage => {
+                println!(
+                    "Sending message: {} to channel #{}",
+                    self.message, self.showing_channel
+                );
+                // TODO Add to messages in the channel for display, or wait for packet back from radio
+                // as a confirmation? Maybe add as sending status?
+                // Display it just above the text input until confirmed by arriving in channel?
+                self.message = String::new();
+                Task::none()
+            }
+            MessageInput(s) => {
+                self.message = s;
+                Task::none()
+            }
         }
     }
 
     pub fn view(&self) -> Element<'static, Message> {
         if self.showing_channel >= 0 {
-            self.channel_view()
+            // TODO add to the breadcrumbs and allow back to device view
+            let (_channel, packets) = self.channels.get(self.showing_channel as usize).unwrap();
+
+            channel_view(self, packets)
         } else {
             self.device_view()
         }
@@ -207,37 +229,6 @@ impl DeviceView {
 
         let mut main_col = Column::new();
         main_col = main_col.push(channel_and_user_scroll);
-        main_col.into()
-    }
-
-    fn channel_view(&self) -> Element<'static, Message> {
-        let mut channel_view = Column::new();
-        let (_channel, packets) = self.channels.get(self.showing_channel as usize).unwrap();
-
-        for packet in packets {
-            if let Some(Decoded(data)) = &packet.payload_variant {
-                if data.emoji == 0 {
-                    // false - TODO handle emoji replies
-                    let mut packet_row = Row::new();
-                    packet_row = packet_row.push(
-                        text(String::from_utf8(data.payload.clone()).unwrap())
-                            .shaping(text::Shaping::Advanced),
-                    );
-                    channel_view = channel_view.push(packet_row);
-                }
-            }
-        }
-
-        let channel_scroll = scrollable(channel_view)
-            .direction({
-                let scrollbar = Scrollbar::new().width(10.0);
-                scrollable::Direction::Vertical(scrollbar)
-            })
-            .width(Fill)
-            .height(Fill);
-
-        let mut main_col = Column::new();
-        main_col = main_col.push(channel_scroll);
         main_col.into()
     }
 
