@@ -92,7 +92,7 @@ impl DeviceView {
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_disconnection(sender.unwrap()), |_| {
-                    Message::Navigation(NavigationMessage::Back)
+                    Message::Navigation(NavigationMessage::DevicesList)
                 })
             }
             DeviceViewMessage::ShowChannel(channel_num) => {
@@ -106,7 +106,9 @@ impl DeviceView {
                 }
                 DisconnectedEvent(_) => {
                     self.connection_state = Disconnected;
-                    Task::perform(empty(), |_| Message::Navigation(NavigationMessage::Back))
+                    Task::perform(empty(), |_| {
+                        Message::Navigation(NavigationMessage::DevicesList)
+                    })
                 }
                 Ready(sender) => {
                     self.subscription_sender = Some(sender);

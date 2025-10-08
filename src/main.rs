@@ -27,7 +27,7 @@ enum View {
 
 #[derive(Debug, Clone)]
 pub enum NavigationMessage {
-    Back,
+    DevicesList,
     DeviceView,
 }
 
@@ -133,7 +133,8 @@ impl MeshChat {
         let mut header = Row::new();
 
         if back {
-            header = header.push(button("<-- Back").on_press(Navigation(NavigationMessage::Back)));
+            header = header
+                .push(button("<-- Back").on_press(Navigation(NavigationMessage::DevicesList)));
         }
 
         match &self.device_view.connection_state() {
@@ -176,7 +177,7 @@ impl MeshChat {
 
     fn navigate(&mut self, navigation_message: NavigationMessage) -> Task<Message> {
         match navigation_message {
-            NavigationMessage::Back => {
+            NavigationMessage::DevicesList => {
                 if self.view == View::Device {
                     self.view = View::DeviceList;
                 }
