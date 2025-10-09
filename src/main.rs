@@ -3,11 +3,11 @@
 
 use crate::config::{load_config, save_config, Config};
 use crate::device_list_view::DeviceListView;
-use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
+use crate::device_view::ConnectionState::Connected;
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
 use crate::Message::{AppError, Device, Discovery, Exit, Navigation, NewConfig, WindowEvent};
-use iced::widget::{button, text, Column, Row};
+use iced::widget::{Column, Row};
 use iced::{window, Element, Event, Subscription, Task};
 use meshtastic::utils::stream::BleId;
 use std::cmp::PartialEq;
@@ -18,6 +18,7 @@ mod device_list_view;
 mod device_subscription;
 mod device_view;
 mod discovery;
+// mod router;
 
 #[derive(PartialEq)]
 enum View {
@@ -120,42 +121,24 @@ impl MeshChat {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let (inner, back) = match self.view {
-            View::DeviceList => (
+        let mut header = Row::new();
+        let inner = match self.view {
+            View::DeviceList => {
+                header = self
+                    .device_list_view
+                    .header(header, self.device_view.connection_state());
                 self.device_list_view
-                    .view(self.device_view.connection_state()),
-                false,
-            ),
-            View::Device => (self.device_view.view(), true),
+                    .view(self.device_view.connection_state())
+            }
+            View::Device => {
+                header = self
+                    .device_view
+                    .header(header, self.device_view.connection_state());
+                self.device_view.view()
+            }
         };
 
         let mut outer = Column::new();
-        let mut header = Row::new();
-
-        if back {
-            header = header
-                .push(button("<-- Back").on_press(Navigation(NavigationMessage::DevicesList)));
-        }
-
-        match &self.device_view.connection_state() {
-            Disconnected => {
-                header = header.push(text("Disconnected"));
-            }
-            Connecting(id) => {
-                header = header.push(text(format!("Connecting to {}", name_from_id(id))));
-            }
-            Connected(id) => {
-                // TODO Breadcrumbs style?
-                header = header.push(text("Connected to "));
-                header = header.push(
-                    button(text(name_from_id(id)))
-                        .on_press(Navigation(NavigationMessage::DeviceView)),
-                );
-            }
-            Disconnecting(id) => {
-                header = header.push(text(format!("Disconnecting from {}", name_from_id(id))));
-            }
-        }
 
         outer = outer.push(header);
         outer = outer.push(inner);

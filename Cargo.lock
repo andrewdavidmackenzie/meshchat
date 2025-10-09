@@ -2014,12 +2014,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "directories",
+ "futures",
  "futures-lite",
  "iced",
  "iced_futures",
  "meshtastic",
  "serde",
  "smol",
+ "tokio-stream",
  "toml",
 ]
 

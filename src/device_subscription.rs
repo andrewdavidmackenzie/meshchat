@@ -1,7 +1,7 @@
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::device_subscription::SubscriberMessage::Connect;
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, DevicePacket, DisconnectedEvent,
+    ConnectedEvent, ConnectionError, DevicePacket, DisconnectedEvent,
 };
 use anyhow::Context;
 use iced::futures::channel::mpsc;
@@ -16,18 +16,22 @@ use meshtastic::utils::stream::BleId;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
+
 pub enum SubscriptionEvent {
     /// A message from the subscription to indicate it is ready to receive messages
     Ready(Sender<SubscriberMessage>),
     ConnectedEvent(BleId),
     DisconnectedEvent(BleId),
     DevicePacket(Box<FromRadio>),
+    MessageSent,
+    ConnectionError(String, String),
 }
 
 /// A message type sent from the UI to the subscriber
 pub enum SubscriberMessage {
     Connect(BleId),
     Disconnect,
+    SendText(String, i32),
 }
 
 enum DeviceState {
@@ -41,6 +45,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     stream::channel(100, move |mut gui_sender| async move {
         let mut device_state = Disconnected;
         let mut stream_api: Option<ConnectedStreamApi> = None;
+        //let router = MyRouter {};
 
         let (subscriber_sender, mut subscriber_receiver) = mpsc::channel::<SubscriberMessage>(100);
 
@@ -54,33 +59,45 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                 Disconnected => {
                     // Wait for a message from the UI to request that we connect to a device
                     if let Some(Connect(id)) = subscriber_receiver.next().await {
-                        let (packet_receiver, stream) = do_connect(&id).await.unwrap();
-                        device_state = Connected(id.clone(), packet_receiver);
-                        stream_api = Some(stream);
+                        match do_connect(&id).await {
+                            Ok((packet_receiver, stream)) => {
+                                device_state = Connected(id.clone(), packet_receiver);
+                                stream_api = Some(stream);
 
-                        gui_sender
-                            .send(ConnectedEvent(id.clone()))
-                            .await
-                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                gui_sender
+                                    .send(ConnectedEvent(id.clone()))
+                                    .await
+                                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                            }
+                            Err(e) => {
+                                gui_sender
+                                    .send(ConnectionError(
+                                        format!("Failed to connect to '{id}'"),
+                                        e.to_string(),
+                                    ))
+                                    .await
+                                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                            }
+                        }
                     }
                 }
                 Connected(id, packet_receiver) => {
                     while let Some(packet) = packet_receiver.recv().await {
                         // TODO filter out all the types that we know the GUI is not interested in
-
                         gui_sender
                             .send(DevicePacket(Box::new(packet)))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                     }
 
+                    // Disconnect
                     let api = stream_api.take().unwrap();
                     let _ = do_disconnect(api).await;
                     gui_sender
                         .send(DisconnectedEvent(id.clone()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                    device_state = Disconnected;
+                    // TODO device_state = Disconnected;
                 }
             }
         }

@@ -1,14 +1,15 @@
 use crate::channel_view::channel_view;
-use crate::device_subscription::SubscriberMessage::{Connect, Disconnect};
+use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, DevicePacket, DisconnectedEvent, Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
-    ConnectRequest, DisconnectRequest, MessageInput, SendMessage, SubscriptionMessage,
+    ConnectRequest, DisconnectRequest, MessageInput, MessageSent, SendMessage, SubscriptionMessage,
 };
-use crate::{device_subscription, Message, NavigationMessage};
+use crate::Message::Navigation;
+use crate::{device_subscription, name_from_id, Message, NavigationMessage};
 use iced::futures::channel::mpsc::Sender;
 use iced::futures::SinkExt;
 use iced::widget::scrollable::Scrollbar;
@@ -38,6 +39,7 @@ pub enum DeviceViewMessage {
     ShowChannel(i32),
     MessageInput(String),
     SendMessage,
+    MessageSent,
 }
 
 pub struct DeviceView {
@@ -52,6 +54,10 @@ pub struct DeviceView {
 
 async fn request_connection(mut sender: Sender<SubscriberMessage>, id: BleId) {
     let _ = sender.send(Connect(id)).await;
+}
+
+async fn request_send(mut sender: Sender<SubscriberMessage>, text: String, channel: i32) {
+    let _ = sender.send(SendText(text, channel)).await;
 }
 
 async fn request_disconnection(mut sender: Sender<SubscriberMessage>) {
@@ -99,7 +105,7 @@ impl DeviceView {
                 self.showing_channel = channel_num;
                 Task::none()
             }
-            SubscriptionMessage(device_event) => match device_event {
+            SubscriptionMessage(subscription_event) => match subscription_event {
                 ConnectedEvent(id) => {
                     self.connection_state = Connected(id);
                     Task::perform(empty(), |_| Message::SaveConfig)
@@ -164,6 +170,14 @@ impl DeviceView {
                     }
                     Task::none()
                 }
+                SubscriptionEvent::MessageSent => {
+                    // TODO Mark as sent in the UI
+                    Task::none()
+                }
+                SubscriptionEvent::ConnectionError(error, detail) => {
+                    eprintln!("Error: {} {}", error, detail);
+                    Task::none()
+                }
             },
             SendMessage => {
                 println!(
@@ -173,12 +187,40 @@ impl DeviceView {
                 // TODO Add to messages in the channel for display, or wait for packet back from radio
                 // as a confirmation? Maybe add as sending status?
                 // Display it just above the text input until confirmed by arriving in channel?
-                self.message = String::new();
-                Task::none()
+                // for now only sent to the subscription
+                let sender = self.subscription_sender.clone();
+                Task::perform(
+                    request_send(sender.unwrap(), self.message.clone(), self.showing_channel),
+                    |_| Message::None,
+                )
             }
             MessageInput(s) => {
                 self.message = s;
                 Task::none()
+            }
+            MessageSent => {
+                // TODO mark as sent in UI
+                self.message = String::new();
+                Task::none()
+            }
+        }
+    }
+
+    pub fn header<'a>(
+        &'a self,
+        mut header: Row<'a, Message>,
+        connection_state: &ConnectionState,
+    ) -> Row<'a, Message> {
+        header = header
+            .push(button("Devices").on_press(Navigation(NavigationMessage::DevicesList)))
+            .push(text(" / "));
+
+        match connection_state {
+            Disconnected => header.push(text("Disconnected")),
+            Connecting(id) => header.push(text(format!("Connecting to {}", name_from_id(id)))),
+            Connected(id) => header.push(button(text(name_from_id(id)))),
+            Disconnecting(id) => {
+                header.push(text(format!("Disconnecting from {}", name_from_id(id))))
             }
         }
     }

@@ -1,8 +1,9 @@
 use crate::device_view::ConnectionState;
+use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::discovery::{compare_bleid, DiscoveryEvent};
-use crate::Message::Device;
-use crate::{name_from_id, Message};
+use crate::Message::{Device, Navigation};
+use crate::{name_from_id, Message, NavigationMessage};
 use iced::widget::{button, container, text, Column, Row};
 use iced::{Element, Length, Task};
 use meshtastic::utils::stream::BleId;
@@ -30,6 +31,27 @@ impl DeviceListView {
         Task::none()
     }
 
+    pub fn header<'a>(
+        &'a self,
+        mut header: Row<'a, Message>,
+        connection_state: &ConnectionState,
+    ) -> Row<'a, Message> {
+        header = header.push(button("Devices")).push(text(" / "));
+
+        match connection_state {
+            Disconnected => header.push(text("Disconnected")),
+            Connecting(id) => header.push(text(format!("Connecting to {}", name_from_id(id)))),
+            Connected(id) => {
+                let breadcrumb = button(text(name_from_id(id)))
+                    .on_press(Navigation(NavigationMessage::DeviceView));
+                header.push(breadcrumb)
+            }
+            Disconnecting(id) => {
+                header.push(text(format!("Disconnecting from {}", name_from_id(id))))
+            }
+        }
+    }
+
     pub fn view(&self, connection_state: &ConnectionState) -> Element<'static, Message> {
         let mut main_col = Column::new();
         // TODO make this a spinner in the view, or a bar back and fore - something visual
@@ -40,23 +62,23 @@ impl DeviceListView {
             let mut device_row = Row::new();
             device_row = device_row.push(text(name_from_id(id)));
             match &connection_state {
-                ConnectionState::Connected(connected_device_id) => {
+                Connected(connected_device_id) => {
                     if compare_bleid(connected_device_id, id) {
                         device_row = device_row.push(
                             button("Disconnect").on_press(Device(DisconnectRequest(id.clone()))),
                         );
                     }
                 }
-                ConnectionState::Disconnected => {
+                Disconnected => {
                     device_row = device_row
                         .push(button("Connect").on_press(Device(ConnectRequest(id.clone()))));
                 }
-                ConnectionState::Connecting(connecting_device) => {
+                Connecting(connecting_device) => {
                     if compare_bleid(connecting_device, id) {
                         device_row = device_row.push(text("Connecting"));
                     }
                 }
-                ConnectionState::Disconnecting(disconnecting_device) => {
+                Disconnecting(disconnecting_device) => {
                     if compare_bleid(disconnecting_device, id) {
                         device_row = device_row.push(text("Disconnecting"));
                     }
