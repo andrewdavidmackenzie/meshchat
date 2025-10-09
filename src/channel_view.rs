@@ -29,6 +29,7 @@ pub fn channel_view(device_view: &DeviceView, packets: &[MeshPacket]) -> Element
                 Ok(PortNum::AlertApp) => println!("Alert payload"),
                 Ok(PortNum::TelemetryApp) => println!("Telemetry payload"),
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
+                Ok(PortNum::NodeinfoApp) => println!("Node Info payload"),
                 _ => eprintln!("Unknown portnum: {}", data.portnum),
             }
         }

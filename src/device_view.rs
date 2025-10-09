@@ -215,13 +215,22 @@ impl DeviceView {
             .push(button("Devices").on_press(Navigation(NavigationMessage::DevicesList)))
             .push(text(" / "));
 
-        match connection_state {
+        header = match connection_state {
             Disconnected => header.push(text("Disconnected")),
             Connecting(id) => header.push(text(format!("Connecting to {}", name_from_id(id)))),
+            // TODO add navigation to device when viewing a channel
             Connected(id) => header.push(button(text(name_from_id(id)))),
             Disconnecting(id) => {
                 header.push(text(format!("Disconnecting from {}", name_from_id(id))))
             }
+        };
+
+        if self.showing_channel >= 0 {
+            let channel_name =
+                Self::channel_name(&self.channels.get(self.showing_channel as usize).unwrap().0);
+            header.push(text(" / ")).push(button(text(channel_name)))
+        } else {
+            header
         }
     }
 
@@ -229,7 +238,6 @@ impl DeviceView {
         if self.showing_channel >= 0 {
             // TODO add to the breadcrumbs and allow back to device view
             let (_channel, packets) = self.channels.get(self.showing_channel as usize).unwrap();
-
             channel_view(self, packets)
         } else {
             self.device_view()
@@ -276,6 +284,13 @@ impl DeviceView {
         main_col.into()
     }
 
+    fn channel_name(channel: &Channel) -> String {
+        let settings = channel.settings.as_ref();
+        // TODO handle errors
+        let settings = &settings.unwrap();
+        settings.name.clone()
+    }
+
     fn channel_row(
         primary: bool,
         channel: &Channel,
@@ -288,9 +303,7 @@ impl DeviceView {
             channel_row = channel_row.push(text("Channel Secondary "))
         }
 
-        let settings = channel.settings.as_ref();
-        let settings = &settings.unwrap();
-        let name = settings.name.clone();
+        let name = Self::channel_name(channel);
         channel_row = channel_row.push(text(name).shaping(text::Shaping::Advanced));
         channel_row = channel_row.push(text(format!(" ({})", packets.len())));
         channel_row = channel_row.push(button(" Chat").on_press(Message::Device(
