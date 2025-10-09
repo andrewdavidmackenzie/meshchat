@@ -58,7 +58,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
             .await;
 
         loop {
-            match &mut device_state {
+            match device_state {
                 Disconnected => {
                     // Wait for a message from the UI to request that we connect to a device
                     if let Some(Connect(id)) = subscriber_receiver.next().await {
@@ -84,7 +84,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
                     }
                 }
-                Connected(id, packet_receiver) => {
+                Connected(id, mut packet_receiver) => {
                     while let Some(packet) = packet_receiver.recv().await {
                         let payload_variant = packet.payload_variant.as_ref().unwrap();
                         // Filter to only send packets UI is interested in
@@ -105,12 +105,12 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
                     // Disconnect
                     let api = stream_api.take().unwrap();
+                    device_state = Disconnected;
                     let _ = do_disconnect(api).await;
                     gui_sender
                         .send(DisconnectedEvent(id.clone()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                    // TODO device_state = Disconnected;
                 }
             }
         }
