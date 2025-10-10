@@ -72,6 +72,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
             match device_state {
                 Disconnected => {
                     // Wait for a message from the UI to request that we connect to a device
+                    // No need to wait for any messages from a radio, as we are not connected to one
                     if let Some(Connect(id)) = subscriber_receiver.next().await {
                         match do_connect(&id).await {
                             Ok((packet_receiver, stream)) => {
@@ -98,10 +99,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                 Connected(id, packet_receiver) => {
                     let mut radio_stream = UnboundedReceiverStream::from(packet_receiver);
 
-                    // TODO I can't merge the streams until I am connected and have the parket receiver unbounded receiver
-                    // But then, bing inside a loop, I get problems trying to move subscriber_receiver repeatedly and
-                    // the subscriber_receiver Stream can't be cloned
-                    let merged_stream = radio_stream.merge(subscriber_receiver);
+                    let merged_stream = radio_stream.merge(&subscriber_receiver);
 
                     // TODO receive either types of message: FromRadio or SubscriberMessage from the merged stream
                     // This is the code that works to handle the radio packets
@@ -150,11 +148,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     // Disconnect
                     let api = stream_api.take().unwrap();
                     device_state = Disconnected;
-                    let _ = do_disconnect(api).await;
-                    gui_sender
-                        .send(DisconnectedEvent(id.clone()))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    let _ = do_disconnect(api, &gui_sender).await;
                 }
             }
         }
@@ -170,10 +164,19 @@ async fn do_connect(id: &BleId) -> Result<(PacketReceiver, ConnectedStreamApi), 
     Ok((packet_receiver, stream_api))
 }
 
-async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<(), anyhow::Error> {
+async fn do_disconnect(
+    stream_api: ConnectedStreamApi,
+    id: &BleId,
+    gui_sender: &Sender<SubscriptionEvent>,
+) -> Result<(), anyhow::Error> {
     stream_api
         .disconnect()
         .await
         .context("Failed to disconnect")?;
+    gui_sender
+        .send(DisconnectedEvent(id.clone()))
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
     Ok(())
 }
