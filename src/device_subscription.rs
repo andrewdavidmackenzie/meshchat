@@ -1,5 +1,5 @@
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::device_subscription::SubscriberMessage::Connect;
+use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, Radio, SendText};
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectionError, DevicePacket, DisconnectedEvent,
 };
@@ -37,6 +37,7 @@ pub enum SubscriberMessage {
     Connect(BleId),
     Disconnect,
     SendText(String, i32),
+    Radio(Box<FromRadio>),
 }
 
 enum DeviceState {
@@ -96,54 +97,57 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     }
                 }
                 Connected(id, packet_receiver) => {
-                    let mut radio_stream = UnboundedReceiverStream::from(packet_receiver);
+                    let radio_stream = UnboundedReceiverStream::from(packet_receiver)
+                        .map(|fr| Radio(Box::new(fr)));
 
-                    // TODO: Problem is they return two different types - so need to join in enum or
-                    // some alternative
-                    let merged_stream = radio_stream.merge(&mut subscriber_receiver);
+                    let mut merged_stream = radio_stream.merge(&mut subscriber_receiver);
 
                     // TODO receive either types of message: FromRadio or SubscriberMessage from the merged stream
                     // This is the code that works to handle the radio packets
-                    while let Some(packet) = StreamExt::next(&mut radio_stream).await {
-                        let payload_variant = packet.payload_variant.as_ref().unwrap();
-                        // Filter to only send packets UI is interested in
-                        if matches!(
-                            payload_variant,
-                            Packet(_)
-                                | MyInfo(_)
-                                | NodeInfo(_)
-                                | Channel(_)
-                                | ClientNotification(_)
-                        ) {
-                            gui_sender
-                                .send(DevicePacket(Box::new(packet)))
-                                .await
-                                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                        }
-
-                        /*
-                        // received a message from the UI
-                        ui_message = subscriber_receiver.next() => {
-                            match ui_message {
-                                Some(Connect(_id)) => {},
-                                Some(Disconnect) => break,
-                                Some(SendText(_text, _channel_number)) => {
-                                    // TODO handle send errors and report to UI
-                                    let api = stream_api.take().unwrap();
-                                    let _ = api.send_text(
+                    while let Some(message) = StreamExt::next(&mut merged_stream).await {
+                        match message {
+                            Connect(_) => eprintln!("Already connected!"),
+                            Disconnect => break,
+                            SendText(_text, _channel_number) => {
+                                /*
+                                // TODO handle send errors and report to UI
+                                let api = stream_api.take().unwrap();
+                                let _ = api
+                                    .send_text(
                                         &mut router,
                                         text,
                                         PacketDestination::Broadcast,
                                         true,
-                                        MeshChannel::from(channel_number as u32)).await;
-                                    gui_sender
+                                        MeshChannel::from(channel_number as u32),
+                                    )
+                                    .await;
+                                gui_sender
                                     .send(MessageSent)
                                     .await
                                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 
-                                    let _none = stream_api.replace(api);
+                                let _none = stream_api.replace(api);
+
+                                 */
+                            }
+                            Radio(packet) => {
+                                let payload_variant = packet.payload_variant.as_ref().unwrap();
+                                // Filter to only send packets UI is interested in
+                                if matches!(
+                                    payload_variant,
+                                    Packet(_)
+                                        | MyInfo(_)
+                                        | NodeInfo(_)
+                                        | Channel(_)
+                                        | ClientNotification(_)
+                                ) {
+                                    gui_sender
+                                        .send(DevicePacket(packet))
+                                        .await
+                                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                                 }
-                         */
+                            }
+                        }
                     }
 
                     // Disconnect
