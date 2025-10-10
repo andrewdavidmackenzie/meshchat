@@ -123,10 +123,28 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
 
                         /*
-                           match subscriber_message {
-                               SendText(text, channel) => take steam_api and call send_text on it
-                           }
-                        */
+                        // received a message from the UI
+                        ui_message = subscriber_receiver.next() => {
+                            match ui_message {
+                                Some(Connect(_id)) => {},
+                                Some(Disconnect) => break,
+                                Some(SendText(_text, _channel_number)) => {
+                                    // TODO handle send errors and report to UI
+                                    let api = stream_api.take().unwrap();
+                                    let _ = api.send_text(
+                                        &mut router,
+                                        text,
+                                        PacketDestination::Broadcast,
+                                        true,
+                                        MeshChannel::from(channel_number as u32)).await;
+                                    gui_sender
+                                    .send(MessageSent)
+                                    .await
+                                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
+                                    let _none = stream_api.replace(api);
+                                }
+                         */
                     }
 
                     // Disconnect
