@@ -1,7 +1,7 @@
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, Radio, SendText};
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DevicePacket, DisconnectedEvent, TextSent,
+    ConnectedEvent, ConnectionError, DevicePacket, DisconnectedEvent, MessageSent,
 };
 use anyhow::Context;
 use futures::SinkExt;
@@ -28,7 +28,7 @@ pub enum SubscriptionEvent {
     ConnectedEvent(BleId),
     DisconnectedEvent(BleId),
     DevicePacket(Box<FromRadio>),
-    TextSent,
+    MessageSent, // Maybe add type for when we send emojis or something else
     ConnectionError(String, String),
 }
 
@@ -124,7 +124,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     .await;
                                  */
                                 gui_sender
-                                    .send(TextSent)
+                                    .send(MessageSent)
                                     .await
                                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 

@@ -2,13 +2,12 @@ use crate::channel_view::channel_view;
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DevicePacket, DisconnectedEvent, Ready, TextSent,
+    ConnectedEvent, ConnectionError, DevicePacket, DisconnectedEvent, MessageSent, Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
-    ConnectRequest, DisconnectRequest, MessageInput, MessageSent, SendMessage, ShowChannel,
-    SubscriptionMessage,
+    ConnectRequest, DisconnectRequest, MessageInput, SendMessage, ShowChannel, SubscriptionMessage,
 };
 use crate::Message::Navigation;
 use crate::{device_subscription, name_from_id, Message, NavigationMessage};
@@ -40,7 +39,6 @@ pub enum DeviceViewMessage {
     ShowChannel(i32),
     MessageInput(String),
     SendMessage,
-    MessageSent,
 }
 
 pub struct DeviceView {
@@ -119,6 +117,7 @@ impl DeviceView {
                     Task::none()
                 }
             }
+            // TODO move some of this to channel view?
             SubscriptionMessage(subscription_event) => match subscription_event {
                 ConnectedEvent(id) => {
                     let name = name_from_id(&id);
@@ -196,7 +195,7 @@ impl DeviceView {
                     }
                     Task::none()
                 }
-                TextSent => {
+                MessageSent => {
                     // TODO Mark as sent in the UI, and clear the message entry
                     // Until we have some kind of queue of messages being sent pending confirmation
                     self.message = String::new();
@@ -215,6 +214,10 @@ impl DeviceView {
                     // Display it just above the text input until confirmed by arriving in channel?
                     // for now only sent to the subscription
                     let sender = self.subscription_sender.clone();
+                    // TODO add an id to the message, or get it back from the subscription to be
+                    // able to handle replies to it later. Get a timestamp and maybe sender id
+                    // when TextSent then add to the UI list of messages, interleaved with
+                    // those received using the timestamp
                     Task::perform(
                         request_send(sender.unwrap(), self.message.clone(), channel_number),
                         |_| Message::None,
@@ -225,11 +228,6 @@ impl DeviceView {
             }
             MessageInput(s) => {
                 self.message = s;
-                Task::none()
-            }
-            MessageSent => {
-                // TODO mark as sent in UI
-                self.message = String::new();
                 Task::none()
             }
         }
