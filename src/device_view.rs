@@ -22,10 +22,11 @@ use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::{Channel, MeshPacket, NodeInfo};
 use meshtastic::utils::stream::BleId;
 use tokio::sync::mpsc::Sender;
+use crate::NavigationMessage::DevicesList;
 
 #[derive(Clone)]
 pub enum ConnectionState {
-    #[allow(dead_code)] // Remove this when the optional error string i sused
+    #[allow(dead_code)] // Remove this when the optional error string is used
     Disconnected(Option<String>),
     Connecting(String),
     Connected(String),
@@ -84,6 +85,10 @@ impl DeviceView {
         &self.connection_state
     }
 
+    fn report_error(summary: String, detail: String) -> Task<Message> {
+        Task::perform(empty(), move |_| Message::AppError(summary.clone(), detail.clone()))
+    }
+
     /// Return a true value to show we can show the device view, false for main to decide
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
@@ -101,7 +106,7 @@ impl DeviceView {
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_disconnection(sender.unwrap()), |_| {
-                    Navigation(NavigationMessage::DevicesList)
+                    Navigation(DevicesList)
                 })
             }
             ShowChannel(channel_number) => {
@@ -205,7 +210,7 @@ impl DeviceView {
                 ConnectionError(summary, detail) => {
                     eprintln!("Error: {} {}", summary, detail);
                     self.connection_state = Disconnected(Some(summary.clone()));
-                    Task::perform(empty(), move |_| Message::AppError(summary.clone(), detail.clone()))
+                    Task::perform(empty(), |_| Message::Navigation(DevicesList)).chain(Self::report_error(summary.clone(), detail.clone()))
                 }
             },
             SendMessage => {
