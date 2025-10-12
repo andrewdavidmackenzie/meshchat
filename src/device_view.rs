@@ -203,8 +203,7 @@ impl DeviceView {
                 }
                 ConnectionError(error, detail) => {
                     eprintln!("Error: {} {}", error, detail);
-                    let ec = error.clone();
-                    Task::perform(empty(), move |_| Message::AppError(ec.clone()))
+                    Task::perform(empty(), move |_| Message::AppError(error.clone()))
                 }
             },
             SendMessage => {
