@@ -10,6 +10,7 @@ use crate::device_view::DeviceViewMessage::{
     ConnectRequest, DisconnectRequest, MessageInput, SendMessage, ShowChannel, SubscriptionMessage,
 };
 use crate::Message::Navigation;
+use crate::NavigationMessage::DevicesList;
 use crate::{device_subscription, name_from_id, Message, NavigationMessage};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{button, scrollable, text, Column, Row};
@@ -22,12 +23,11 @@ use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::{Channel, MeshPacket, NodeInfo};
 use meshtastic::utils::stream::BleId;
 use tokio::sync::mpsc::Sender;
-use crate::NavigationMessage::DevicesList;
 
 #[derive(Clone)]
 pub enum ConnectionState {
     #[allow(dead_code)] // Remove this when the optional error string is used
-    Disconnected(Option<String>),
+    Disconnected(Option<BleId>, Option<String>),
     Connecting(String),
     Connected(String),
     Disconnecting(String),
@@ -71,7 +71,7 @@ async fn empty() {}
 impl DeviceView {
     pub fn new() -> Self {
         Self {
-            connection_state: Disconnected(None),
+            connection_state: Disconnected(None, None),
             subscription_sender: None,
             channels: vec![],
             nodes: vec![],
@@ -86,7 +86,9 @@ impl DeviceView {
     }
 
     fn report_error(summary: String, detail: String) -> Task<Message> {
-        Task::perform(empty(), move |_| Message::AppError(summary.clone(), detail.clone()))
+        Task::perform(empty(), move |_| {
+            Message::AppError(summary.clone(), detail.clone())
+        })
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
@@ -143,9 +145,9 @@ impl DeviceView {
                         }),
                     }
                 }
-                DisconnectedEvent(_) => {
-                    self.connection_state = Disconnected(None);
-                    Task::perform(empty(), |_| Navigation(NavigationMessage::DevicesList))
+                DisconnectedEvent(id) => {
+                    self.connection_state = Disconnected(Some(id), None);
+                    Task::perform(empty(), |_| Navigation(DevicesList))
                 }
                 Ready(sender) => {
                     self.subscription_sender = Some(sender);
@@ -207,10 +209,10 @@ impl DeviceView {
                     self.message = String::new();
                     Task::none()
                 }
-                ConnectionError(summary, detail) => {
-                    eprintln!("Error: {} {}", summary, detail);
-                    self.connection_state = Disconnected(Some(summary.clone()));
-                    Task::perform(empty(), |_| Message::Navigation(DevicesList)).chain(Self::report_error(summary.clone(), detail.clone()))
+                ConnectionError(id, summary, detail) => {
+                    self.connection_state = Disconnected(Some(id), Some(summary.clone()));
+                    Task::perform(empty(), |_| Navigation(DevicesList))
+                        .chain(Self::report_error(summary.clone(), detail.clone()))
                 }
             },
             SendMessage => {
@@ -249,9 +251,8 @@ impl DeviceView {
             .push(text(" / "));
 
         header = match connection_state {
-            Disconnected(_) => header.push(text("Disconnected")),
+            Disconnected(_, _) => header.push(text("Disconnected")),
             Connecting(name) => header.push(text(format!("Connecting to {}", name))),
-            // TODO add navigation to device when viewing a channel
             Connected(name) => {
                 if self.channel_number.is_some() {
                     header.push(

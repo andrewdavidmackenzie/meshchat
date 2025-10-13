@@ -29,7 +29,7 @@ pub enum SubscriptionEvent {
     DisconnectedEvent(BleId),
     DevicePacket(Box<FromRadio>),
     MessageSent, // Maybe add type for when we send emojis or something else
-    ConnectionError(String, String),
+    ConnectionError(BleId, String, String),
 }
 
 /// A message type sent from the UI to the subscriber
@@ -87,6 +87,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             Err(e) => {
                                 gui_sender
                                     .send(ConnectionError(
+                                        id.clone(),
                                         format!("Failed to connect to '{id}'"),
                                         e.to_string(),
                                     ))

@@ -12,6 +12,8 @@ pub struct DeviceListView {
     devices: Vec<BleId>,
 }
 
+async fn empty() {}
+
 impl DeviceListView {
     pub fn new() -> Self {
         Self {
@@ -25,7 +27,11 @@ impl DeviceListView {
             DiscoveryEvent::BLERadioLost(id) => self
                 .devices
                 .retain(|other_id| !compare_bleid(other_id, &id)),
-            DiscoveryEvent::Error(_) => {}
+            DiscoveryEvent::Error(e) => {
+                return Task::perform(empty(), move |_| {
+                    Message::AppError("Discovery Error".to_string(), e.to_string())
+                });
+            }
         };
 
         Task::none()
@@ -39,8 +45,7 @@ impl DeviceListView {
         header = header.push(button("Devices")).push(text(" / "));
 
         match connection_state {
-            // TODO maybe display an error against it if present
-            Disconnected(_) => header.push(text("Disconnected")),
+            Disconnected(_, _) => header.push(text("Disconnected")),
             Connecting(name) => header.push(text(format!("Connecting to {}", name))),
             Connected(name) => {
                 let breadcrumb =
@@ -55,6 +60,7 @@ impl DeviceListView {
         let mut main_col = Column::new();
         // TODO make this a spinner in the view, or a bar back and fore - something visual
         main_col = main_col.push(text("Scanning...Available devices:"));
+
         // TODO add a scrollable area in case there are a lot of devices
 
         for id in &self.devices {
@@ -69,8 +75,8 @@ impl DeviceListView {
                         );
                     }
                 }
-                Disconnected(_) => {
-                    // TODO maybe show an error against it if present?
+                // TODO maybe show an error against it if present?
+                Disconnected(_id, _error) => {
                     device_row = device_row.push(
                         button("Connect").on_press(Device(ConnectRequest(name_from_id(id), None))),
                     );

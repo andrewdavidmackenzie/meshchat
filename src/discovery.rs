@@ -52,7 +52,7 @@ pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
                             gui_sender
                                 .send(DiscoveryEvent::BLERadioLost(id.clone()))
                                 .await
-                                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
                         }
                     }
 
