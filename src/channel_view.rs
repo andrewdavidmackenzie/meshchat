@@ -14,10 +14,10 @@ pub fn channel_view(device_view: &DeviceView, packets: &[MeshPacket]) -> Element
     for packet in packets {
         if let Some(Decoded(data)) = &packet.payload_variant
             && data.emoji == 0
+        // TODO handle emoji replies
         {
             match PortNum::try_from(data.portnum) {
                 Ok(PortNum::TextMessageApp) => {
-                    // false - TODO handle emoji replies
                     let mut packet_row = Row::new();
                     packet_row = packet_row.push(
                         text(String::from_utf8(data.payload.clone()).unwrap())
@@ -30,7 +30,7 @@ pub fn channel_view(device_view: &DeviceView, packets: &[MeshPacket]) -> Element
                 Ok(PortNum::TelemetryApp) => println!("Telemetry payload"),
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => println!("Node Info payload"),
-                _ => eprintln!("Unknown portnum: {}", data.portnum),
+                _ => eprintln!("Unexpected payload type from radio: {}", data.portnum),
             }
         }
     }
