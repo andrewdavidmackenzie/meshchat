@@ -252,7 +252,15 @@ impl DeviceView {
             Disconnected(_) => header.push(text("Disconnected")),
             Connecting(name) => header.push(text(format!("Connecting to {}", name))),
             // TODO add navigation to device when viewing a channel
-            Connected(name) => header.push(button(text(name))),
+            Connected(name) => {
+                if self.channel_number.is_some() {
+                    header.push(
+                        button(text(name)).on_press(Navigation(NavigationMessage::DeviceView)),
+                    )
+                } else {
+                    header.push(button(text(name)))
+                }
+            }
             Disconnecting(name) => header.push(text(format!("Disconnecting from {}", name))),
         };
 
