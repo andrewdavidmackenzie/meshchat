@@ -6,9 +6,15 @@ use crate::device_list_view::DeviceListView;
 use crate::device_view::ConnectionState::Connected;
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
-use crate::Message::{AppError, Device, Discovery, Exit, Navigation, NewConfig, WindowEvent};
-use iced::widget::{text, Column, Row};
-use iced::{window, Element, Event, Subscription, Task};
+use crate::Message::{
+    AppError, AppNotification, Device, Discovery, Exit, Navigation, NewConfig, SaveConfig,
+    WindowEvent,
+};
+use iced::border::Radius;
+use iced::widget::container::Style;
+use iced::widget::{button, Column, Container, Row};
+use iced::{window, Border, Color, Event, Subscription, Task, Theme};
+use iced::{Background, Element};
 use meshtastic::utils::stream::BleId;
 use std::cmp::PartialEq;
 
@@ -33,12 +39,18 @@ pub enum NavigationMessage {
     DeviceView,
 }
 
+enum NotificationType {
+    Error,
+    Info,
+}
+
 #[derive(Default)]
 struct MeshChat {
     view: View,
     device_list_view: DeviceListView,
     device_view: DeviceView,
-    errors: Vec<(String, String)>,
+    notifications: Vec<(usize, NotificationType, String, String)>,
+    next_id: usize,
 }
 
 /// These are the messages that MeshChat responds to
@@ -51,7 +63,9 @@ pub enum Message {
     Exit,
     NewConfig(Config),
     SaveConfig(Config),
+    AppNotification(String, String),
     AppError(String, String),
+    RemoveNotification(usize),
     None,
 }
 
@@ -98,13 +112,36 @@ impl MeshChat {
                     Task::none()
                 }
             }
+            AppNotification(summary, detail) => {
+                self.add_notification(NotificationType::Info, summary, detail);
+                Task::none()
+            }
             AppError(summary, detail) => {
-                eprintln!("{summary} {detail}");
+                self.add_notification(NotificationType::Error, summary, detail);
                 Task::none()
             }
             Message::None => Task::none(),
-            Message::SaveConfig(config) => save_config(config),
+            SaveConfig(config) => save_config(config),
+            Message::RemoveNotification(id) => {
+                self.remove_notification(id);
+                Task::none()
+            }
         }
+    }
+
+    fn add_notification(
+        &mut self,
+        notification_type: NotificationType,
+        summary: String,
+        detail: String,
+    ) {
+        self.notifications
+            .push((self.next_id, notification_type, summary, detail));
+        self.next_id += 1; // TODO wrapped add
+    }
+
+    fn remove_notification(&mut self, id: usize) {
+        self.notifications.retain(|item| item.0 != id);
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -128,22 +165,29 @@ impl MeshChat {
         let mut outer = Column::new();
 
         outer = outer.push(header);
-        outer = outer.push(self.errors());
+        outer = outer.push(self.notifications());
         outer = outer.push(inner);
 
         outer.into()
     }
 
-    fn errors(&self) -> Element<'_, Message> {
-        let mut errors = Row::new().padding(10);
+    fn notifications(&self) -> Element<'_, Message> {
+        let mut notifications = Row::new().padding(10);
 
-        // TODO a box with color and padding and a cancel button that removes this error
+        // TODO a box with color and a cancel button that removes this error
         // larger font for summary, detail can be unfolded
-        for (summary, _details) in &self.errors {
-            errors = errors.push(text(summary.clone()));
+        for (id, notification_type, summary, details) in &self.notifications {
+            match notification_type {
+                NotificationType::Error => {
+                    notifications = notifications.push(Self::error(*id, summary, details));
+                }
+                NotificationType::Info => {
+                    notifications = notifications.push(Self::info(*id, summary, details));
+                }
+            }
         }
 
-        errors.into()
+        notifications.into()
     }
 
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
@@ -182,5 +226,51 @@ impl MeshChat {
         } else {
             Task::none()
         }
+    }
+
+    fn info<'a>(id: usize, summary: &'a str, _detail: &'a str) -> Element<'a, Message> {
+        Self::info_box(id, summary)
+    }
+
+    fn error_box(id: usize, text: &str) -> Element<'_, Message> {
+        let row = Row::new().push(iced::widget::text(text));
+        let row = row.push(button("OK").on_press(Message::RemoveNotification(id)));
+
+        Container::new(row)
+            .padding([6, 12]) // adjust to taste
+            .style(|_theme: &Theme| Style {
+                text_color: Some(Color::WHITE),
+                background: Some(Background::Color(Color::from_rgb8(0xE5, 0x2D, 0x2C))), // red
+                border: Border {
+                    radius: Radius::from(12.0), // rounded corners
+                    width: 2.0,
+                    color: Color::from_rgb8(0xFF, 0xD7, 0x00), // yellow
+                },
+                ..Default::default()
+            })
+            .into()
+    }
+
+    fn info_box(id: usize, text: &str) -> Element<'_, Message> {
+        let row = Row::new().push(iced::widget::text(text));
+        let row = row.push(button("OK").on_press(Message::RemoveNotification(id)));
+
+        Container::new(row)
+            .padding([6, 12]) // adjust to taste
+            .style(|_theme: &Theme| Style {
+                text_color: Some(Color::WHITE),
+                background: Some(Background::Color(Color::from_rgb8(0x00, 0x00, 0x00))), // black
+                border: Border {
+                    radius: Radius::from(12.0), // rounded corners
+                    width: 2.0,
+                    color: Color::WHITE,
+                },
+                ..Default::default()
+            })
+            .into()
+    }
+
+    fn error<'a>(id: usize, summary: &'a str, _detail: &'a str) -> Element<'a, Message> {
+        Self::error_box(id, summary)
     }
 }

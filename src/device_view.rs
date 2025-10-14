@@ -9,7 +9,7 @@ use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, D
 use crate::device_view::DeviceViewMessage::{
     ChannelMsg, ConnectRequest, DisconnectRequest, SendMessage, ShowChannel, SubscriptionMessage,
 };
-use crate::Message::Navigation;
+use crate::Message::{AppError, Navigation};
 use crate::NavigationMessage::DevicesList;
 use crate::{device_subscription, name_from_id, Message, NavigationMessage};
 use iced::widget::scrollable::Scrollbar;
@@ -131,7 +131,6 @@ impl DeviceView {
                     Task::none()
                 }
             }
-            // TODO move some of this to channel view?
             SubscriptionMessage(subscription_event) => match subscription_event {
                 ConnectedEvent(id) => {
                     let name = name_from_id(&id);
@@ -157,7 +156,9 @@ impl DeviceView {
                 }
                 Ready(sender) => {
                     self.subscription_sender = Some(sender);
-                    Task::none()
+                    Task::perform(empty(), |_| {
+                        AppError("subscriber ready".to_string(), "ready".to_string())
+                    })
                 }
                 DevicePacket(packet) => {
                     match packet.payload_variant.unwrap() {
@@ -178,11 +179,6 @@ impl DeviceView {
                                 self.nodes.push(node_info)
                             }
                         }
-                        PayloadVariant::Config(_) => {}
-                        PayloadVariant::LogRecord(_) => {}
-                        PayloadVariant::ConfigCompleteId(_) => {}
-                        PayloadVariant::Rebooted(_) => {}
-                        PayloadVariant::ModuleConfig(_) => {}
                         PayloadVariant::Channel(mut channel) => {
                             if let Some(settings) = channel.settings.as_mut() {
                                 if settings.name.is_empty() {
@@ -196,18 +192,14 @@ impl DeviceView {
                         PayloadVariant::QueueStatus(_) => {
                             // TODO maybe show if devices in outgoing queue?
                         }
-                        PayloadVariant::XmodemPacket(_) => {
-                            // TODO understand what this is used for
-                        }
                         PayloadVariant::Metadata(_) => {
                             // TODO could be interesting to get device_hardware value
                         }
-                        PayloadVariant::MqttClientProxyMessage(_) => {}
-                        PayloadVariant::FileInfo(_) => {}
                         PayloadVariant::ClientNotification(notification) => {
+                            // TODO display a notification in the header
                             println!("Received notification: {}", notification.message);
                         }
-                        PayloadVariant::DeviceuiConfig(_) => {}
+                        _ => {}
                     }
                     Task::none()
                 }
