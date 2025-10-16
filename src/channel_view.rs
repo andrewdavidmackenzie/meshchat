@@ -234,18 +234,22 @@ impl ChannelView {
 fn message_box(msg: String, me: bool) -> Element<'static, Message> {
     let style = if me { MY_STYLE } else { OTHERS_STYLE };
 
-    let bubble = Container::new(iced::widget::text(msg).shaping(text::Shaping::Advanced))
-        .padding([6, 12]) // adjust to taste
-        .style(move |_theme: &Theme| style);
+    let bubble = Container::new(
+        iced::widget::text(msg)
+            .align_x(Right)
+            .shaping(text::Shaping::Advanced),
+    )
+    .padding([6, 12])
+    .style(move |_theme: &Theme| style);
 
     let mut row = Row::new().padding([6, 6]);
     if me {
         row = row.push(Space::new(100.0, 1.0)).push(bubble);
-        let col = Column::new().align_x(Right);
+        let col = Column::new().width(Fill).align_x(Right);
         col.push(row).into()
     } else {
         row = row.push(bubble).push(Space::new(100.0, 1.0));
-        let col = Column::new().align_x(Left);
+        let col = Column::new().width(Fill).align_x(Left);
         col.push(row).into()
     }
 }
