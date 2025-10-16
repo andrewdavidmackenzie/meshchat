@@ -8,6 +8,8 @@ use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
 use iced::{Background, Border, Color, Element, Fill, Left, Right, Shadow, Task, Theme};
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::{MeshPacket, PortNum};
+use sorted_vec::SortedVec;
+use std::cmp::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const RADIUS_12: Radius = Radius {
@@ -51,16 +53,35 @@ pub enum ChannelViewMessage {
 
 struct ChannelMessage {
     from: u32,
-    to: u32,
-    rx_time: u32,
+    rx_time: u64,
     text: String,
 }
+
+impl PartialEq<Self> for ChannelMessage {
+    fn eq(&self, other: &Self) -> bool {
+        self.rx_time == other.rx_time
+    }
+}
+
+impl PartialOrd<Self> for ChannelMessage {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ChannelMessage {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.rx_time.cmp(&other.rx_time)
+    }
+}
+
+impl Eq for ChannelMessage {}
 
 pub struct ChannelView {
     pub(crate) channel_index: i32, // Channel number of the channel we are chatting on
     pub packets: Vec<MeshPacket>,
     message: String, // Message typed in so far
-    messages: Vec<ChannelMessage>,
+    messages: SortedVec<ChannelMessage>,
     my_source: u32,
 }
 
@@ -70,7 +91,7 @@ impl ChannelView {
             channel_index,
             packets: Vec::new(),
             message: String::new(),
-            messages: vec![],
+            messages: SortedVec::new(),
             my_source: source,
         }
     }
@@ -85,8 +106,7 @@ impl ChannelView {
         self.messages.push(ChannelMessage {
             text: self.message.clone(),
             from: self.my_source,
-            to: self.my_source,  // TODO figure out this?
-            rx_time: now as u32, // time in epoc
+            rx_time: now, // time in epoc
         });
         // Until we have some kind of queue of messages being sent pending confirmation
         self.message = String::new();
@@ -99,11 +119,15 @@ impl ChannelView {
         {
             match PortNum::try_from(data.portnum) {
                 Ok(PortNum::TextMessageApp) => {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|t| t.as_secs())
+                        .unwrap_or(0);
+
                     self.messages.push(ChannelMessage {
                         text: String::from_utf8(data.payload.clone()).unwrap(),
                         from: mesh_packet.from,
-                        to: mesh_packet.to,
-                        rx_time: mesh_packet.rx_time,
+                        rx_time: now,
                     });
                 }
                 Ok(PortNum::PositionApp) => println!("Position payload"),
