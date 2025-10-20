@@ -12,9 +12,12 @@ use crate::device_view::DeviceViewMessage::{
 use crate::Message::Navigation;
 use crate::NavigationMessage::DevicesList;
 use crate::{device_subscription, name_from_id, Message, NavigationMessage};
+use iced::border::Radius;
+use iced::widget::button::Status::Hovered;
+use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{button, scrollable, text, Column, Row};
-use iced::{Element, Task};
+use iced::widget::{button, scrollable, text, Button, Column, Row};
+use iced::{Background, Border, Color, Element, Shadow, Task, Theme};
 use iced_futures::core::Length::Fill;
 use iced_futures::Subscription;
 use meshtastic::protobufs::channel::Role;
@@ -328,13 +331,59 @@ impl DeviceView {
             .unwrap_or("Unknown".to_string())
     }
 
-    fn channel_row(channel: &Channel, num_packets: usize) -> Row<'static, Message> {
-        let mut channel_row = Row::new();
-        let name = Self::channel_name(channel);
-        channel_row = channel_row.push(text(name).shaping(text::Shaping::Advanced));
-        channel_row = channel_row.push(text(format!(" ({})", num_packets)));
-        channel_row
-            .push(button(" Chat").on_press(Message::Device(ShowChannel(Some(channel.index)))))
+    const RADIUS_2: Radius = Radius {
+        top_left: 2.0,
+        top_right: 2.0,
+        bottom_right: 2.0,
+        bottom_left: 2.0,
+    };
+
+    pub(crate) const NO_SHADOW: Shadow = Shadow {
+        color: Color::TRANSPARENT,
+        offset: iced::Vector { x: 0.0, y: 0.0 },
+        blur_radius: 0.0,
+    };
+
+    pub(crate) const WHITE_BORDER: Border = Border {
+        color: Color::WHITE,
+        width: 2.0,
+        radius: Self::RADIUS_2,
+    };
+
+    pub(crate) const NO_BORDER: Border = Border {
+        color: Color::TRANSPARENT,
+        width: 0.0,
+        radius: Self::RADIUS_2,
+    };
+
+    const VIEW_BUTTON_HOVER_STYLE: Style = Style {
+        background: Some(Background::Color(Color::from_rgba(0.0, 0.8, 0.8, 1.0))),
+        text_color: Color::BLACK,
+        border: Self::WHITE_BORDER,
+        shadow: Self::NO_SHADOW,
+    };
+
+    const VIEW_BUTTON_STYLE: Style = Style {
+        background: Some(Background::Color(Color::from_rgba(0.0, 1.0, 1.0, 0.0))),
+        text_color: Color::WHITE,
+        border: Self::NO_BORDER,
+        shadow: Self::NO_SHADOW,
+    };
+
+    fn view_button(_: &Theme, status: Status) -> Style {
+        if status == Hovered {
+            Self::VIEW_BUTTON_HOVER_STYLE
+        } else {
+            Self::VIEW_BUTTON_STYLE
+        }
+    }
+
+    fn channel_row(channel: &Channel, num_packets: usize) -> Button<'static, Message> {
+        let row_text = format!("{} ({})", Self::channel_name(channel), num_packets);
+        button(text(row_text))
+            .on_press(Message::Device(ShowChannel(Some(channel.index))))
+            .width(Fill)
+            .style(Self::view_button)
     }
 
     /// Create subscriptions for events coming from a connected hardware device (radio)
