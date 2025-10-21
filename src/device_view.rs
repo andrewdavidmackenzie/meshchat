@@ -336,8 +336,6 @@ impl DeviceView {
     fn device_view(&self) -> Element<'static, Message> {
         let mut channels_view = Column::new();
 
-        // Search box at the top
-
         for (index, channel) in self.channels.iter().enumerate() {
             // TODO show QR of the channel config
             let channel_name = Self::channel_name(channel);
@@ -373,11 +371,11 @@ impl DeviceView {
             .width(Fill)
             .height(Fill);
 
-        let mut main_col = Column::new().padding(12);
-        main_col = main_col
+        Column::new()
+            .padding(12)
             .push(self.search_box())
-            .push(channel_and_user_scroll);
-        main_col.into()
+            .push(channel_and_user_scroll)
+            .into()
     }
 
     fn channel_name(channel: &Channel) -> String {

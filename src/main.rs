@@ -13,7 +13,7 @@ use crate::Message::{
 use iced::border::Radius;
 use iced::widget::container::Style;
 use iced::widget::{button, Column, Container, Row};
-use iced::{window, Border, Color, Event, Subscription, Task, Theme};
+use iced::{window, Border, Bottom, Color, Event, Subscription, Task, Theme};
 use iced::{Background, Element};
 use meshtastic::utils::stream::BleId;
 use std::cmp::PartialEq;
@@ -145,7 +145,7 @@ impl MeshChat {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let mut header = Row::new();
+        let mut header = Row::new().align_y(Bottom);
         let inner = match self.view {
             View::DeviceList => {
                 header = self
