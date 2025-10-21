@@ -312,6 +312,7 @@ impl DeviceView {
 
         if let Some(channel_number) = self.channel_number {
             if let Some(channel) = &self.channels.get(channel_number as usize) {
+                // TODO do this in channel_view code like in view() below.
                 let channel_name = Self::channel_name(channel);
                 header.push(text(" / ")).push(button(text(channel_name)))
             } else {
