@@ -17,7 +17,7 @@ use iced::border::Radius;
 use iced::widget::button::Status::Hovered;
 use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{button, scrollable, text, text_input, Button, Column, Container, Row};
+use iced::widget::{button, scrollable, text, text_input, Button, Column, Row};
 use iced::{Background, Border, Color, Element, Shadow, Task, Theme};
 use iced_futures::core::Length::Fill;
 use iced_futures::Subscription;
@@ -414,8 +414,12 @@ impl DeviceView {
         let search_box = text_input("Search", &self.filter)
             .style(
                 |_theme: &Theme, _status: text_input::Status| text_input::Style {
-                    background: Background::Color(Default::default()),
-                    border: Default::default(),
+                    background: Background::Color(Color::from_rgb8(0x40, 0x40, 0x40)),
+                    border: Border {
+                        radius: Radius::from(20.0), // rounded corners
+                        width: 2.0,
+                        color: Color::WHITE,
+                    },
                     icon: Color::WHITE,
                     placeholder: Color::from_rgb8(0x80, 0x80, 0x80),
                     value: Color::WHITE,
@@ -424,21 +428,7 @@ impl DeviceView {
             )
             .on_input(|s| Message::Device(SearchInput(s)));
 
-        let container = Container::new(search_box)
-            .padding([2, 2]) // adjust to taste
-            .style(|_theme: &Theme| iced::widget::container::Style {
-                text_color: Some(Color::WHITE),
-                background: Some(Background::Color(Color::from_rgb8(0x40, 0x40, 0x40))),
-                border: Border {
-                    radius: Radius::from(12.0), // rounded corners
-                    width: 0.0,
-                    color: Color::WHITE,
-                },
-                ..Default::default()
-            });
-
-        let row = Row::new().padding([6, 6]);
-        row.push(container).into()
+        Row::new().padding([6, 6]).push(search_box).into()
     }
 
     /// Create subscriptions for events coming from a connected hardware device (radio)

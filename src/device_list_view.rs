@@ -53,9 +53,7 @@ impl DeviceListView {
 
     pub fn view(&self, connection_state: &ConnectionState) -> Element<'static, Message> {
         let mut main_col = Column::new();
-        // TODO make this bar moving back and fore at the top
-        main_col = main_col.push(text("Available devices:"));
-
+        // TODO add a scanning bar at the top
         // TODO add a scrollable area in case there are a lot of devices
 
         for id in &self.devices {
@@ -90,11 +88,10 @@ impl DeviceListView {
             main_col = main_col.push(device_row);
         }
 
-        let content = container(main_col)
+        container(main_col)
             .height(Length::Fill)
             .width(Length::Fill)
-            .align_x(iced::alignment::Horizontal::Left);
-
-        content.into()
+            .align_x(iced::alignment::Horizontal::Left)
+            .into()
     }
 }

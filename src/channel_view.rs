@@ -201,8 +201,12 @@ impl ChannelView {
         let text_box = text_input("Send Message", &self.message)
             .style(
                 |_theme: &Theme, _status: text_input::Status| text_input::Style {
-                    background: Background::Color(Default::default()),
-                    border: Default::default(),
+                    background: Background::Color(Color::from_rgb8(0x40, 0x40, 0x40)),
+                    border: Border {
+                        radius: Radius::from(20.0), // rounded corners
+                        width: 2.0,
+                        color: Color::WHITE,
+                    },
                     icon: Color::WHITE,
                     placeholder: Color::from_rgb8(0x80, 0x80, 0x80),
                     value: Color::WHITE,
@@ -215,21 +219,7 @@ impl ChannelView {
                 self.channel_index,
             )));
 
-        let container = Container::new(text_box)
-            .padding([2, 2]) // adjust to taste
-            .style(|_theme: &Theme| Style {
-                text_color: Some(Color::WHITE),
-                background: Some(Background::Color(Color::from_rgb8(0x40, 0x40, 0x40))),
-                border: Border {
-                    radius: Radius::from(12.0), // rounded corners
-                    width: 0.0,
-                    color: Color::WHITE,
-                },
-                ..Default::default()
-            });
-
-        let row = Row::new().padding([6, 6]);
-        row.push(container).into()
+        Row::new().padding([6, 6]).push(text_box).into()
     }
 }
 
