@@ -213,6 +213,11 @@ impl DeviceView {
                                 &mut self.channel_views.get_mut(mesh_packet.channel as usize)
                             {
                                 channel_view.push_packet(mesh_packet);
+                            } else {
+                                eprintln!(
+                                    "No channel for packet received: {}",
+                                    mesh_packet.channel
+                                );
                             }
                         }
                         PayloadVariant::MyInfo(my_node_info) => {
@@ -417,7 +422,7 @@ impl DeviceView {
 
     fn search_box(&self) -> Element<'static, Message> {
         // TODO move styles to constants
-        let search_box = text_input("Search", &self.filter)
+        text_input("Search", &self.filter)
             .style(
                 |_theme: &Theme, _status: text_input::Status| text_input::Style {
                     background: Background::Color(Color::from_rgb8(0x40, 0x40, 0x40)),
@@ -432,18 +437,14 @@ impl DeviceView {
                     selection: Default::default(),
                 },
             )
-            .on_input(|s| Message::Device(SearchInput(s)));
-
-        Row::new().padding([6, 6]).push(search_box).into()
+            .padding([6, 6])
+            .on_input(|s| Message::Device(SearchInput(s)))
+            .into()
     }
 
     /// Create subscriptions for events coming from a connected hardware device (radio)
     pub fn subscription(&self) -> Subscription<DeviceViewMessage> {
-        let subscriptions = vec![
-            Subscription::run_with_id("device", device_subscription::subscribe())
-                .map(SubscriptionMessage),
-        ];
-
-        Subscription::batch(subscriptions)
+        Subscription::run_with_id("device", device_subscription::subscribe())
+            .map(SubscriptionMessage)
     }
 }
