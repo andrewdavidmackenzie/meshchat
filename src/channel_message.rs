@@ -1,11 +1,15 @@
 use std::cmp::Ordering;
 
+pub enum ChannelMsg {
+    Text(String),
+}
+
 // A text message to this user on this device, sent from another device
 pub struct ChannelMessage {
     // TODO see if we can/should make some of these private with methods
     pub from: u32,
     pub rx_time: u64,
-    pub text: String,
+    pub message: ChannelMsg,
 }
 
 impl PartialEq<Self> for ChannelMessage {

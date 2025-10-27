@@ -1,3 +1,4 @@
+use crate::channel_message::ChannelMsg::Text;
 use crate::channel_view::ChannelId::Channel;
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendMessage};
@@ -41,7 +42,7 @@ pub enum ChannelViewMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum ChannelId {
     Channel(i32), // Channel::index 0..7
-    User(String), // User::id
+    Node(u32),    // NodeInfo::node number
 }
 
 impl Default for ChannelId {
@@ -85,7 +86,7 @@ impl ChannelView {
 
         // TODO Mark as sent in the UI, and clear the message entry
         self.messages.push(ChannelMessage {
-            text: self.message.clone(),
+            message: Text(self.message.clone()),
             from: self.my_source,
             rx_time: now, // time in epoc
         });
@@ -119,10 +120,14 @@ impl ChannelView {
         let mut channel_view = Column::new();
 
         for message in &self.messages {
-            channel_view = channel_view.push(message_box(
-                message.text.clone(),
-                message.from == self.my_source,
-            ));
+            match &message.message {
+                Text(text_msg) => {
+                    channel_view = channel_view.push(message_box(
+                        text_msg.clone(),
+                        message.from == self.my_source,
+                    ));
+                }
+            }
         }
 
         let channel_scroll = scrollable(channel_view)

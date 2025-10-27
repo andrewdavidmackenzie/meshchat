@@ -1,4 +1,5 @@
 use crate::channel_message::ChannelMessage;
+use crate::channel_message::ChannelMsg::Text;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
@@ -72,7 +73,7 @@ pub struct DeviceView {
     subscription_sender: Option<Sender<SubscriberMessage>>, // TODO Maybe combine with Disconnected state?
     my_node_num: Option<u32>,
     pub(crate) channels: Vec<Channel>,
-    nodes: Vec<NodeInfo>, // all nodes known to the connected radio
+    nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
     pub(crate) viewing_channel: Option<ChannelId>,
     channel_views: HashMap<ChannelId, ChannelView>,
     filter: String,
@@ -105,7 +106,7 @@ impl DeviceView {
             connection_state: Disconnected(None, None),
             subscription_sender: None,
             channels: vec![],
-            nodes: vec![],
+            nodes: HashMap::new(),
             my_node_num: None,
             viewing_channel: None, // No channel is being shown by default
             channel_views: HashMap::new(),
@@ -265,10 +266,8 @@ impl DeviceView {
             && !node_info.is_ignored
             && node_info.user.is_some()
         {
-            let id = node_info.user.as_ref().unwrap().id.clone();
-            self.nodes.push(node_info);
-
-            let channel_id = ChannelId::User(id);
+            let channel_id = ChannelId::Node(node_info.num);
+            self.nodes.insert(node_info.num, node_info);
             self.channel_views.insert(
                 channel_id.clone(),
                 ChannelView::new(channel_id, self.my_node_num.unwrap()),
@@ -305,7 +304,7 @@ impl DeviceView {
                     let channel_id = ChannelId::Channel(mesh_packet.channel as i32);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelMessage {
-                            text: String::from_utf8(data.payload.clone()).unwrap(),
+                            message: Text(String::from_utf8(data.payload.clone()).unwrap()),
                             from: mesh_packet.from,
                             rx_time: now,
                         };
@@ -318,7 +317,12 @@ impl DeviceView {
                 Ok(PortNum::PositionApp) => {
                     let position =
                         meshtastic::protobufs::Position::decode(&data.payload as &[u8]).unwrap();
-                    println!("Position: {position:?} from {}", mesh_packet.from)
+                    if let Some(sender) = self.nodes.get(&mesh_packet.from) {
+                        let user = sender.user.as_ref().unwrap();
+                        println!("Position: {position:?} from {}", user.short_name)
+                    } else {
+                        println!("Position: {position:?} from unknown {}", mesh_packet.from)
+                    }
                 }
                 Ok(PortNum::TelemetryApp) => {
                     let telemetry =
@@ -333,10 +337,10 @@ impl DeviceView {
                         .unwrap_or(0);
 
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
-                    let channel_id = ChannelId::User(user.id);
+                    let channel_id = ChannelId::Node(mesh_packet.from);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelMessage {
-                            text: format!("Ping from User: {}", user.short_name),
+                            message: Text(format!("Ping from User: {}", user.short_name)),
                             from: mesh_packet.from,
                             rx_time: now,
                         };
@@ -419,15 +423,15 @@ impl DeviceView {
         }
 
         // We only store Nodes that have a valid user set
-        for node in &self.nodes {
-            let user = &node.user.as_ref().unwrap();
+        for (node_id, node_info) in &self.nodes {
+            let user = &node_info.user.as_ref().unwrap();
 
             // If there is a filter and the Username does not contain it, don't show this row
             if !self.filter.is_empty() && !user.long_name.contains(&self.filter) {
                 continue;
             }
 
-            let channel_id = ChannelId::User(user.id.clone());
+            let channel_id = ChannelId::Node(*node_id);
 
             channels_view = channels_view.push(Self::node_row(
                 user.long_name.clone(),
