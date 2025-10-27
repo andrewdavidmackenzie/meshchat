@@ -7,7 +7,6 @@ use iced::widget::container::Style;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
 use iced::{Background, Border, Color, Element, Fill, Left, Right, Task, Theme};
-use meshtastic::protobufs::MeshPacket;
 use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
 use std::fmt::{Display, Formatter};
@@ -61,7 +60,6 @@ impl Display for ChannelId {
 
 pub struct ChannelView {
     pub(crate) channel_id: ChannelId,
-    pub packets: Vec<MeshPacket>,
     message: String,                     // Message typed in so far
     messages: SortedVec<ChannelMessage>, // Messages received so far
     my_source: u32,
@@ -73,7 +71,6 @@ impl ChannelView {
     pub fn new(channel_id: ChannelId, source: u32) -> Self {
         Self {
             channel_id,
-            packets: Vec::new(),
             message: String::new(),
             messages: SortedVec::new(),
             my_source: source,
@@ -100,8 +97,8 @@ impl ChannelView {
         self.messages.push(new_message);
     }
 
-    pub fn num_packets(&self) -> usize {
-        self.packets.len()
+    pub fn num_messages(&self) -> usize {
+        self.messages.len()
     }
 
     pub fn update(&mut self, channel_view_message: ChannelViewMessage) -> Task<Message> {

@@ -318,12 +318,12 @@ impl DeviceView {
                 Ok(PortNum::PositionApp) => {
                     let position =
                         meshtastic::protobufs::Position::decode(&data.payload as &[u8]).unwrap();
-                    println!("Position: {position:?}")
+                    println!("Position: {position:?} from {}", mesh_packet.from)
                 }
                 Ok(PortNum::TelemetryApp) => {
                     let telemetry =
                         meshtastic::protobufs::Telemetry::decode(&data.payload as &[u8]).unwrap();
-                    println!("Telemetry: {telemetry:?}")
+                    println!("Telemetry: {telemetry:?} from {}", mesh_packet.from)
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
@@ -412,7 +412,7 @@ impl DeviceView {
             let channel_id = ChannelId::Channel(index as i32);
             let channel_row = Self::channel_row(
                 channel_name,
-                self.channel_views.get(&channel_id).unwrap().num_packets(),
+                self.channel_views.get(&channel_id).unwrap().num_messages(),
                 channel_id,
             );
             channels_view = channels_view.push(channel_row);
@@ -427,9 +427,13 @@ impl DeviceView {
                 continue;
             }
 
-            channels_view =
-                channels_view.push(Self::node_row(user.long_name.clone(), user.id.clone()));
-            // TODO can add to nodes on the channel list above if channel is "populated" (not 0?)
+            let channel_id = ChannelId::User(user.id.clone());
+
+            channels_view = channels_view.push(Self::node_row(
+                user.long_name.clone(),
+                self.channel_views.get(&channel_id).unwrap().num_messages(),
+                channel_id,
+            ));
             // TODO mark as a favourite if has is_favorite set
         }
 
@@ -466,19 +470,24 @@ impl DeviceView {
 
     fn channel_row(
         name: String,
-        num_packets: usize,
+        num_messages: usize,
         channel_id: ChannelId,
     ) -> Button<'static, Message> {
-        let row_text = format!("{} ({})", name, num_packets);
+        let row_text = format!("{} ({})", name, num_messages);
         button(text(row_text))
             .on_press(Message::Device(ShowChannel(Some(channel_id))))
             .width(Fill)
             .style(Self::view_button)
     }
 
-    fn node_row(name: String, id: String) -> Button<'static, Message> {
-        button(text(name).shaping(text::Shaping::Advanced))
-            .on_press(Message::Device(ShowChannel(Some(ChannelId::User(id)))))
+    fn node_row(
+        name: String,
+        num_messages: usize,
+        channel_id: ChannelId,
+    ) -> Button<'static, Message> {
+        let row_text = format!("{} ({})", name, num_messages);
+        button(text(row_text).shaping(text::Shaping::Advanced))
+            .on_press(Message::Device(ShowChannel(Some(channel_id))))
             .width(Fill)
             .style(Self::view_button)
     }
