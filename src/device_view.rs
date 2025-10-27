@@ -265,7 +265,14 @@ impl DeviceView {
             && !node_info.is_ignored
             && node_info.user.is_some()
         {
+            let id = node_info.user.as_ref().unwrap().id.clone();
             self.nodes.push(node_info);
+
+            let channel_id = ChannelId::User(id);
+            self.channel_views.insert(
+                channel_id.clone(),
+                ChannelView::new(channel_id, self.my_node_num.unwrap()),
+            );
         }
     }
 
@@ -420,7 +427,8 @@ impl DeviceView {
                 continue;
             }
 
-            channels_view = channels_view.push(Self::node_row(user.long_name.clone()));
+            channels_view =
+                channels_view.push(Self::node_row(user.long_name.clone(), user.id.clone()));
             // TODO can add to nodes on the channel list above if channel is "populated" (not 0?)
             // TODO mark as a favourite if has is_favorite set
         }
@@ -468,15 +476,16 @@ impl DeviceView {
             .style(Self::view_button)
     }
 
-    fn node_row(name: String) -> Button<'static, Message> {
+    fn node_row(name: String, id: String) -> Button<'static, Message> {
         button(text(name).shaping(text::Shaping::Advanced))
+            .on_press(Message::Device(ShowChannel(Some(ChannelId::User(id)))))
             .width(Fill)
             .style(Self::view_button)
     }
 
     fn search_box(&self) -> Element<'static, Message> {
         // TODO move styles to constants
-        text_input("Search", &self.filter)
+        text_input("Search for Channel or User", &self.filter)
             .style(text_input_style)
             .padding([6, 6])
             .on_input(|s| Message::Device(SearchInput(s)))
