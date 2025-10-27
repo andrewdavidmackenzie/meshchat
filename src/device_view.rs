@@ -19,6 +19,7 @@ use crate::{device_subscription, name_from_id, Message, NavigationMessage};
 use iced::widget::button::Status::Hovered;
 use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
+use iced::widget::text::Shaping::Advanced;
 use iced::widget::{button, scrollable, text, text_input, Button, Column, Row};
 use iced::{Background, Color, Element, Task, Theme};
 use iced_futures::core::Length::Fill;
@@ -389,18 +390,27 @@ impl DeviceView {
             Disconnecting(name) => header.push(text(format!("Disconnecting from {}", name))),
         };
 
-        // TODO handle User case
-        if let Some(ChannelId::Channel(channel_index)) = &self.viewing_channel {
-            let index = *channel_index as usize;
-            if let Some(channel) = &self.channels.get(index) {
-                // TODO do this in channel_view code like in view() below.
-                let channel_name = Self::channel_name(channel);
-                header.push(text(" / ")).push(button(text(channel_name)))
-            } else {
-                header
+        match &self.viewing_channel {
+            Some(ChannelId::Channel(channel_index)) => {
+                let index = *channel_index as usize;
+                if let Some(channel) = self.channels.get(index) {
+                    // TODO do this in channel_view code like in view() below.
+                    let channel_name = Self::channel_name(channel);
+                    header.push(text(" / ")).push(button(text(channel_name)))
+                } else {
+                    header
+                }
             }
-        } else {
-            header
+            Some(ChannelId::Node(node_id)) => {
+                if let Some(node_info) = self.nodes.get(node_id) {
+                    header.push(text(" / ")).push(button(
+                        text(node_info.user.as_ref().unwrap().long_name.clone()).shaping(Advanced),
+                    ))
+                } else {
+                    header
+                }
+            }
+            None => header,
         }
     }
 

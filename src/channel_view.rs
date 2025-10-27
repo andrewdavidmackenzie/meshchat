@@ -128,8 +128,10 @@ impl ChannelView {
                     ));
                 }
                 Position(lat, long) => {
+                    let latitude = 0.0000001 * *lat as f64;
+                    let longitude = 0.0000001 * *long as f64;
                     channel_view = channel_view.push(message_box(
-                        format!("({}, {})", lat, long),
+                        format!("({}, {})", latitude, longitude),
                         message.from == self.my_source,
                     ));
                 }
