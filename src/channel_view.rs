@@ -1,3 +1,4 @@
+use crate::channel_view::ChannelId::Channel;
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendMessage};
 use crate::styles::{text_input_style, NO_SHADOW, RADIUS_12};
@@ -9,7 +10,9 @@ use iced::{Background, Border, Color, Element, Fill, Left, Right, Task, Theme};
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::{MeshPacket, PortNum};
 use meshtastic::Message as _;
+use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
+use std::fmt::{Display, Formatter};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MESSAGE_BORDER: Border = Border {
@@ -38,20 +41,38 @@ pub enum ChannelViewMessage {
     ClearMessage,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+pub enum ChannelId {
+    Channel(i32), // Channel::index 0..7
+    User(String), // User::id
+}
+
+impl Default for ChannelId {
+    fn default() -> Self {
+        Channel(0)
+    }
+}
+
+impl Display for ChannelId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:?}", self)
+    }
+}
+
 pub struct ChannelView {
-    pub(crate) channel_index: u32, // Channel number of the channel we are chatting on
+    pub(crate) channel_id: ChannelId,
     pub packets: Vec<MeshPacket>,
-    message: String, // Message typed in so far
-    messages: SortedVec<ChannelMessage>,
+    message: String,                     // Message typed in so far
+    messages: SortedVec<ChannelMessage>, // Messages received so far
     my_source: u32,
 }
 
 // A view of a single channel and it's message, which maybe a real radio "Channel" or a chat channel
 // with a specific [meshtastic:User]
 impl ChannelView {
-    pub fn new(channel_index: u32, source: u32) -> Self {
+    pub fn new(channel_id: ChannelId, source: u32) -> Self {
         Self {
-            channel_index,
+            channel_id,
             packets: Vec::new(),
             message: String::new(),
             messages: SortedVec::new(),
@@ -97,6 +118,7 @@ impl ChannelView {
                 Ok(PortNum::AlertApp) => println!("Alert payload"),
                 Ok(PortNum::TelemetryApp) => println!("Telemetry payload"),
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
+                // TODO will need to parse a lot of these at the next layer up before here
                 Ok(PortNum::NodeinfoApp) => {
                     let buf = &data.payload as &[u8];
                     let user = meshtastic::protobufs::User::decode(buf).unwrap();
@@ -170,7 +192,7 @@ impl ChannelView {
             .on_input(|s| Message::Device(ChannelMsg(MessageInput(s))))
             .on_submit(Message::Device(SendMessage(
                 self.message.clone(),
-                self.channel_index,
+                self.channel_id.clone(),
             )))
             .padding([6, 6])
             .into()

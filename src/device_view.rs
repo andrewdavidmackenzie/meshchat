@@ -1,4 +1,4 @@
-use crate::channel_view::{ChannelView, ChannelViewMessage};
+use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
 use crate::device_subscription::SubscriptionEvent::{
@@ -54,12 +54,12 @@ pub enum ConnectionState {
 
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
-    ConnectRequest(String, Option<u32>),
+    ConnectRequest(String, Option<ChannelId>),
     DisconnectRequest(String),
     SubscriptionMessage(SubscriptionEvent),
-    ShowChannel(Option<u32>),
+    ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
-    SendMessage(String, u32),
+    SendMessage(String, ChannelId),
     SearchInput(String),
 }
 
@@ -67,10 +67,10 @@ pub struct DeviceView {
     connection_state: ConnectionState,
     subscription_sender: Option<Sender<SubscriberMessage>>, // TODO Maybe combine with Disconnected state?
     my_node_num: Option<u32>,
-    pub(crate) channels: Vec<Channel>, // Upto 8 - but maybe depends on firmware
-    nodes: Vec<NodeInfo>,              // all nodes known to the connected radio
-    pub(crate) channel_number: Option<u32>, // Channel numbers from 0 to 7
-    channel_views: HashMap<u32, ChannelView>,
+    pub(crate) channels: Vec<Channel>,
+    nodes: Vec<NodeInfo>, // all nodes known to the connected radio
+    pub(crate) viewing_channel: Option<ChannelId>,
+    channel_views: HashMap<ChannelId, ChannelView>,
     filter: String,
 }
 
@@ -79,8 +79,8 @@ async fn request_connection(sender: Sender<SubscriberMessage>, name: String) {
     let _ = sender.send(Connect(id)).await;
 }
 
-async fn request_send(sender: Sender<SubscriberMessage>, text: String, channel: u32) {
-    let _ = sender.send(SendText(text, channel)).await;
+async fn request_send(sender: Sender<SubscriberMessage>, text: String, channel_id: ChannelId) {
+    let _ = sender.send(SendText(text, channel_id)).await;
 }
 
 async fn request_disconnection(sender: Sender<SubscriberMessage>) {
@@ -103,7 +103,7 @@ impl DeviceView {
             channels: vec![],
             nodes: vec![],
             my_node_num: None,
-            channel_number: None, // No channel is being shown by default
+            viewing_channel: None, // No channel is being shown by default
             channel_views: HashMap::new(),
             filter: String::default(),
         }
@@ -122,9 +122,9 @@ impl DeviceView {
     /// Return a true value to show we can show the device view, false for main to decide
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
-            ConnectRequest(name, channel_number) => {
+            ConnectRequest(name, channel_id) => {
                 // save the desired channel to show for when the connection is completed later
-                self.channel_number = channel_number;
+                self.viewing_channel = channel_id;
                 self.connection_state = Connecting(name.clone()); // TODO make state change depend on message back from subscription
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_connection(sender.unwrap(), name.clone()), |_| {
@@ -139,14 +139,15 @@ impl DeviceView {
                     Navigation(DevicesList)
                 })
             }
-            ShowChannel(channel_number) => {
+            ShowChannel(channel_id) => {
                 if let Connected(name) = &self.connection_state {
                     let device_name = Some(name.clone());
-                    self.channel_number = channel_number;
+                    let channel_id_clone = channel_id.clone();
+                    self.viewing_channel = channel_id;
                     Task::perform(empty(), move |_| {
                         Message::SaveConfig(Config {
                             device_name: device_name.clone(),
-                            channel_number,
+                            channel_id: channel_id_clone.clone(),
                         })
                     })
                 } else {
@@ -157,19 +158,22 @@ impl DeviceView {
                 ConnectedEvent(id) => {
                     let name = name_from_id(&id);
                     self.connection_state = Connected(name);
-                    match self.channel_number {
+                    match &self.viewing_channel {
                         None => {
-                            let channel_number = self.channel_number;
+                            let channel_id = self.viewing_channel.clone();
                             Task::perform(empty(), move |_| {
                                 Message::SaveConfig(Config {
                                     device_name: Some(name_from_id(&id)),
-                                    channel_number,
+                                    channel_id: channel_id.clone(),
                                 })
                             })
                         }
-                        Some(channel_number) => Task::perform(empty(), move |_| {
-                            Message::Device(ShowChannel(Some(channel_number)))
-                        }),
+                        Some(channel_id) => {
+                            let channel_id = channel_id.clone();
+                            Task::perform(empty(), move |_| {
+                                Message::Device(ShowChannel(Some(channel_id.clone())))
+                            })
+                        }
                     }
                 }
                 DisconnectedEvent(id) => {
@@ -185,8 +189,8 @@ impl DeviceView {
                         PayloadVariant::Packet(mesh_packet) => {
                             // TODO determine if there is a packet for this node or user, and
                             // not a channel? Then send to node view?
-                            if let Some(channel_view) =
-                                &mut self.channel_views.get_mut(&mesh_packet.channel)
+                            let channel_id = ChannelId::Channel(mesh_packet.channel as i32);
+                            if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id)
                             {
                                 channel_view.push_packet(mesh_packet);
                             } else {
@@ -213,10 +217,11 @@ impl DeviceView {
                                     settings.name = "Default".to_string();
                                 };
                                 self.channels.push(channel);
-                                let channel_index = (self.channels.len() - 1) as u32;
+                                let channel_id =
+                                    ChannelId::Channel((self.channels.len() - 1) as i32);
                                 self.channel_views.insert(
-                                    channel_index,
-                                    ChannelView::new(channel_index, self.my_node_num.unwrap()),
+                                    channel_id.clone(),
+                                    ChannelView::new(channel_id, self.my_node_num.unwrap()),
                                 );
                             }
                         }
@@ -253,8 +258,8 @@ impl DeviceView {
                 })
             }
             ChannelMsg(msg) => {
-                if let Some(channel_number) = self.channel_number {
-                    if let Some(channel_view) = self.channel_views.get_mut(&channel_number) {
+                if let Some(channel_id) = &self.viewing_channel {
+                    if let Some(channel_view) = self.channel_views.get_mut(channel_id) {
                         channel_view.update(msg)
                     } else {
                         Task::none()
@@ -283,7 +288,7 @@ impl DeviceView {
             Disconnected(_, _) => header.push(text("Disconnected")),
             Connecting(name) => header.push(text(format!("Connecting to {}", name))),
             Connected(name) => {
-                if self.channel_number.is_some() {
+                if self.viewing_channel.is_some() {
                     header.push(button(text(name)).on_press(Message::Device(ShowChannel(None))))
                 } else {
                     header.push(button(text(name)))
@@ -292,8 +297,10 @@ impl DeviceView {
             Disconnecting(name) => header.push(text(format!("Disconnecting from {}", name))),
         };
 
-        if let Some(channel_number) = self.channel_number {
-            if let Some(channel) = &self.channels.get(channel_number as usize) {
+        // TODO handle User case
+        if let Some(ChannelId::Channel(channel_index)) = &self.viewing_channel {
+            let index = *channel_index as usize;
+            if let Some(channel) = &self.channels.get(index) {
                 // TODO do this in channel_view code like in view() below.
                 let channel_name = Self::channel_name(channel);
                 header.push(text(" / ")).push(button(text(channel_name)))
@@ -306,9 +313,9 @@ impl DeviceView {
     }
 
     pub fn view(&self) -> Element<'static, Message> {
-        if let Some(channel_number) = self.channel_number {
+        if let Some(channel_number) = &self.viewing_channel {
             // && let Some((_channel, packets)) = &self.channels.get(channel_number as usize)
-            if let Some(channel_view) = self.channel_views.get(&channel_number) {
+            if let Some(channel_view) = self.channel_views.get(channel_number) {
                 return channel_view.view();
             }
         }
@@ -330,14 +337,14 @@ impl DeviceView {
 
             let channel_row = match Role::try_from(channel.role).unwrap() {
                 Disabled => break,
-                _ => Self::channel_row(
-                    channel_name,
-                    self.channel_views
-                        .get(&(index as u32))
-                        .unwrap()
-                        .num_packets(),
-                    index as u32,
-                ),
+                _ => {
+                    let channel_id = ChannelId::Channel(index as i32);
+                    Self::channel_row(
+                        channel_name,
+                        self.channel_views.get(&channel_id).unwrap().num_packets(),
+                        channel_id,
+                    )
+                }
             };
             channels_view = channels_view.push(channel_row);
         }
@@ -388,10 +395,14 @@ impl DeviceView {
         }
     }
 
-    fn channel_row(name: String, num_packets: usize, index: u32) -> Button<'static, Message> {
+    fn channel_row(
+        name: String,
+        num_packets: usize,
+        channel_id: ChannelId,
+    ) -> Button<'static, Message> {
         let row_text = format!("{} ({})", name, num_packets);
         button(text(row_text))
-            .on_press(Message::Device(ShowChannel(Some(index))))
+            .on_press(Message::Device(ShowChannel(Some(channel_id))))
             .width(Fill)
             .style(Self::view_button)
     }

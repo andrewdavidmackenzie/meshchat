@@ -1,3 +1,4 @@
+use crate::channel_view::ChannelId;
 use crate::Message;
 use directories::ProjectDirs;
 use futures_lite::io::AsyncWriteExt;
@@ -9,7 +10,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub device_name: Option<String>,
-    pub channel_number: Option<u32>,
+    pub channel_id: Option<ChannelId>,
 }
 
 async fn load(config_path: PathBuf) -> Result<Config, anyhow::Error> {

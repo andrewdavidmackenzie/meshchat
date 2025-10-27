@@ -1,3 +1,4 @@
+use crate::channel_view::ChannelId;
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, Radio, SendText};
 use crate::device_subscription::SubscriptionEvent::{
@@ -29,7 +30,7 @@ pub enum SubscriptionEvent {
     ConnectedEvent(BleId),
     DisconnectedEvent(BleId),
     DevicePacket(Box<FromRadio>),
-    MessageSent(u32), // Maybe add type for when we send emojis or something else
+    MessageSent(ChannelId), // Maybe add type for when we send emojis or something else
     ConnectionError(BleId, String, String),
 }
 
@@ -37,7 +38,7 @@ pub enum SubscriptionEvent {
 pub enum SubscriberMessage {
     Connect(BleId),
     Disconnect,
-    SendText(String, u32),
+    SendText(String, ChannelId),
     Radio(Box<FromRadio>),
 }
 

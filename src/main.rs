@@ -108,7 +108,7 @@ impl MeshChat {
                 if let Some(name) = &config.device_name {
                     self.device_view.update(DeviceViewMessage::ConnectRequest(
                         name.clone(),
-                        config.channel_number,
+                        config.channel_id,
                     ))
                 } else {
                     Task::none()
