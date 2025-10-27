@@ -1,7 +1,7 @@
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendMessage};
 use crate::styles::{text_input_style, NO_SHADOW, RADIUS_12};
-use crate::Message;
+use crate::{channel_message::ChannelMessage, Message};
 use iced::widget::container::Style;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
@@ -10,7 +10,6 @@ use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::{MeshPacket, PortNum};
 use meshtastic::Message as _;
 use sorted_vec::SortedVec;
-use std::cmp::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MESSAGE_BORDER: Border = Border {
@@ -39,42 +38,18 @@ pub enum ChannelViewMessage {
     ClearMessage,
 }
 
-struct ChannelMessage {
-    from: u32,
-    rx_time: u64,
-    text: String,
-}
-
-impl PartialEq<Self> for ChannelMessage {
-    fn eq(&self, other: &Self) -> bool {
-        self.rx_time == other.rx_time
-    }
-}
-
-impl PartialOrd<Self> for ChannelMessage {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for ChannelMessage {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.rx_time.cmp(&other.rx_time)
-    }
-}
-
-impl Eq for ChannelMessage {}
-
 pub struct ChannelView {
-    pub(crate) channel_index: i32, // Channel number of the channel we are chatting on
+    pub(crate) channel_index: u32, // Channel number of the channel we are chatting on
     pub packets: Vec<MeshPacket>,
     message: String, // Message typed in so far
     messages: SortedVec<ChannelMessage>,
     my_source: u32,
 }
 
+// A view of a single channel and it's message, which maybe a real radio "Channel" or a chat channel
+// with a specific [meshtastic:User]
 impl ChannelView {
-    pub fn new(channel_index: i32, source: u32) -> Self {
+    pub fn new(channel_index: u32, source: u32) -> Self {
         Self {
             channel_index,
             packets: Vec::new(),

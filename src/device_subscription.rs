@@ -29,7 +29,7 @@ pub enum SubscriptionEvent {
     ConnectedEvent(BleId),
     DisconnectedEvent(BleId),
     DevicePacket(Box<FromRadio>),
-    MessageSent(i32), // Maybe add type for when we send emojis or something else
+    MessageSent(u32), // Maybe add type for when we send emojis or something else
     ConnectionError(BleId, String, String),
 }
 
@@ -37,7 +37,7 @@ pub enum SubscriptionEvent {
 pub enum SubscriberMessage {
     Connect(BleId),
     Disconnect,
-    SendText(String, i32),
+    SendText(String, u32),
     Radio(Box<FromRadio>),
 }
 

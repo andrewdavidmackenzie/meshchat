@@ -26,6 +26,7 @@ use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::{Channel, NodeInfo};
 use meshtastic::utils::stream::BleId;
+use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
 const VIEW_BUTTON_HOVER_STYLE: Style = Style {
@@ -53,12 +54,12 @@ pub enum ConnectionState {
 
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
-    ConnectRequest(String, Option<i32>),
+    ConnectRequest(String, Option<u32>),
     DisconnectRequest(String),
     SubscriptionMessage(SubscriptionEvent),
-    ShowChannel(Option<i32>),
+    ShowChannel(Option<u32>),
     ChannelMsg(ChannelViewMessage),
-    SendMessage(String, i32),
+    SendMessage(String, u32),
     SearchInput(String),
 }
 
@@ -68,8 +69,8 @@ pub struct DeviceView {
     my_node_num: Option<u32>,
     pub(crate) channels: Vec<Channel>, // Upto 8 - but maybe depends on firmware
     nodes: Vec<NodeInfo>,              // all nodes known to the connected radio
-    pub(crate) channel_number: Option<i32>, // Channel numbers from 0 to 7
-    channel_views: Vec<ChannelView>,
+    pub(crate) channel_number: Option<u32>, // Channel numbers from 0 to 7
+    channel_views: HashMap<u32, ChannelView>,
     filter: String,
 }
 
@@ -78,7 +79,7 @@ async fn request_connection(sender: Sender<SubscriberMessage>, name: String) {
     let _ = sender.send(Connect(id)).await;
 }
 
-async fn request_send(sender: Sender<SubscriberMessage>, text: String, channel: i32) {
+async fn request_send(sender: Sender<SubscriberMessage>, text: String, channel: u32) {
     let _ = sender.send(SendText(text, channel)).await;
 }
 
@@ -103,7 +104,7 @@ impl DeviceView {
             nodes: vec![],
             my_node_num: None,
             channel_number: None, // No channel is being shown by default
-            channel_views: vec![],
+            channel_views: HashMap::new(),
             filter: String::default(),
         }
     }
@@ -185,7 +186,7 @@ impl DeviceView {
                             // TODO determine if there is a packet for this node or user, and
                             // not a channel? Then send to node view?
                             if let Some(channel_view) =
-                                &mut self.channel_views.get_mut(mesh_packet.channel as usize)
+                                &mut self.channel_views.get_mut(&mesh_packet.channel)
                             {
                                 channel_view.push_packet(mesh_packet);
                             } else {
@@ -205,16 +206,18 @@ impl DeviceView {
                                 self.nodes.push(node_info)
                             }
                         }
+                        // This Packet conveys information about a Channel that exists on the radio
                         PayloadVariant::Channel(mut channel) => {
                             if let Some(settings) = channel.settings.as_mut() {
                                 if settings.name.is_empty() {
                                     settings.name = "Default".to_string();
                                 };
                                 self.channels.push(channel);
-                                self.channel_views.push(ChannelView::new(
-                                    (self.channels.len() - 1) as i32,
-                                    self.my_node_num.unwrap(),
-                                ));
+                                let channel_index = (self.channels.len() - 1) as u32;
+                                self.channel_views.insert(
+                                    channel_index,
+                                    ChannelView::new(channel_index, self.my_node_num.unwrap()),
+                                );
                             }
                         }
                         PayloadVariant::QueueStatus(_) => {
@@ -232,7 +235,7 @@ impl DeviceView {
                     Task::none()
                 }
                 MessageSent(channel_index) => {
-                    if let Some(channel_view) = self.channel_views.get_mut(channel_index as usize) {
+                    if let Some(channel_view) = self.channel_views.get_mut(&channel_index) {
                         channel_view.message_sent();
                     }
                     Task::none()
@@ -251,8 +254,7 @@ impl DeviceView {
             }
             ChannelMsg(msg) => {
                 if let Some(channel_number) = self.channel_number {
-                    if let Some(channel_view) = self.channel_views.get_mut(channel_number as usize)
-                    {
+                    if let Some(channel_view) = self.channel_views.get_mut(&channel_number) {
                         channel_view.update(msg)
                     } else {
                         Task::none()
@@ -306,7 +308,7 @@ impl DeviceView {
     pub fn view(&self) -> Element<'static, Message> {
         if let Some(channel_number) = self.channel_number {
             // && let Some((_channel, packets)) = &self.channels.get(channel_number as usize)
-            if let Some(channel_view) = self.channel_views.get(channel_number as usize) {
+            if let Some(channel_view) = self.channel_views.get(&channel_number) {
                 return channel_view.view();
             }
         }
@@ -328,9 +330,14 @@ impl DeviceView {
 
             let channel_row = match Role::try_from(channel.role).unwrap() {
                 Disabled => break,
-                _ => {
-                    Self::channel_row(channel_name, self.channel_views[index].num_packets(), index)
-                }
+                _ => Self::channel_row(
+                    channel_name,
+                    self.channel_views
+                        .get(&(index as u32))
+                        .unwrap()
+                        .num_packets(),
+                    index as u32,
+                ),
             };
             channels_view = channels_view.push(channel_row);
         }
@@ -381,10 +388,10 @@ impl DeviceView {
         }
     }
 
-    fn channel_row(name: String, num_packets: usize, index: usize) -> Button<'static, Message> {
+    fn channel_row(name: String, num_packets: usize, index: u32) -> Button<'static, Message> {
         let row_text = format!("{} ({})", name, num_packets);
         button(text(row_text))
-            .on_press(Message::Device(ShowChannel(Some(index as i32))))
+            .on_press(Message::Device(ShowChannel(Some(index))))
             .width(Fill)
             .style(Self::view_button)
     }

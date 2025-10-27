@@ -18,6 +18,7 @@ use iced::{Background, Element};
 use meshtastic::utils::stream::BleId;
 use std::cmp::PartialEq;
 
+mod channel_message;
 mod channel_view;
 mod config;
 mod device_list_view;

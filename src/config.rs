@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub device_name: Option<String>,
-    pub channel_number: Option<i32>,
+    pub channel_number: Option<u32>,
 }
 
 async fn load(config_path: PathBuf) -> Result<Config, anyhow::Error> {
@@ -52,7 +52,9 @@ pub fn load_config() -> Task<Message> {
             Task::perform(load(config_path), {
                 |result| match result {
                     Ok(config) => Message::NewConfig(config),
-                    Err(e) => Message::AppError("Error loading config file".to_string(), e.to_string()),
+                    Err(e) => {
+                        Message::AppError("Error loading config file".to_string(), e.to_string())
+                    }
                 }
             })
         } else {
@@ -60,7 +62,9 @@ pub fn load_config() -> Task<Message> {
             Task::perform(create(config_path), {
                 |result| match result {
                     Ok(_) => Message::None,
-                    Err(e) => Message::AppError("Error creating config file: ".to_string(), e.to_string()),
+                    Err(e) => {
+                        Message::AppError("Error creating config file: ".to_string(), e.to_string())
+                    }
                 }
             })
         }
