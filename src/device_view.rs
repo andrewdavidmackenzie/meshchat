@@ -1,3 +1,4 @@
+use crate::channel_message::ChannelMessage;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
@@ -24,9 +25,12 @@ use iced_futures::Subscription;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
-use meshtastic::protobufs::{Channel, NodeInfo};
+use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
+use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum};
 use meshtastic::utils::stream::BleId;
+use meshtastic::Message as _;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 
 const VIEW_BUTTON_HOVER_STYLE: Style = Style {
@@ -185,58 +189,7 @@ impl DeviceView {
                     Task::none()
                 }
                 DevicePacket(packet) => {
-                    match packet.payload_variant.unwrap() {
-                        PayloadVariant::Packet(mesh_packet) => {
-                            // TODO determine if there is a packet for this node or user, and
-                            // not a channel? Then send to node view?
-                            let channel_id = ChannelId::Channel(mesh_packet.channel as i32);
-                            if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id)
-                            {
-                                channel_view.push_packet(mesh_packet);
-                            } else {
-                                eprintln!(
-                                    "No channel for packet received: {}",
-                                    mesh_packet.channel
-                                );
-                            }
-                        }
-                        PayloadVariant::MyInfo(my_node_info) => {
-                            self.my_node_num = Some(my_node_info.my_node_num);
-                        }
-                        PayloadVariant::NodeInfo(node_info) => {
-                            if let Some(my_node_num) = self.my_node_num
-                                && my_node_num != node_info.num
-                            {
-                                self.nodes.push(node_info)
-                            }
-                        }
-                        // This Packet conveys information about a Channel that exists on the radio
-                        PayloadVariant::Channel(mut channel) => {
-                            if let Some(settings) = channel.settings.as_mut() {
-                                if settings.name.is_empty() {
-                                    settings.name = "Default".to_string();
-                                };
-                                self.channels.push(channel);
-                                let channel_id =
-                                    ChannelId::Channel((self.channels.len() - 1) as i32);
-                                self.channel_views.insert(
-                                    channel_id.clone(),
-                                    ChannelView::new(channel_id, self.my_node_num.unwrap()),
-                                );
-                            }
-                        }
-                        PayloadVariant::QueueStatus(_) => {
-                            // TODO maybe show if devices in outgoing queue?
-                        }
-                        PayloadVariant::Metadata(_) => {
-                            // TODO could be interesting to get device_hardware value
-                        }
-                        PayloadVariant::ClientNotification(notification) => {
-                            // TODO display a notification in the header
-                            println!("Received notification: {}", notification.message);
-                        }
-                        _ => {}
-                    }
+                    self.handle_packet(packet);
                     Task::none()
                 }
                 MessageSent(channel_index) => {
@@ -271,6 +224,92 @@ impl DeviceView {
             SearchInput(filter) => {
                 self.filter = filter;
                 Task::none()
+            }
+        }
+    }
+
+    fn handle_packet(&mut self, packet: Box<FromRadio>) {
+        match packet.payload_variant {
+            Some(PayloadVariant::Packet(mesh_packet)) => self.handle_mesh_packet(mesh_packet),
+            Some(PayloadVariant::MyInfo(my_node_info)) => {
+                self.my_node_num = Some(my_node_info.my_node_num);
+            }
+            Some(PayloadVariant::NodeInfo(node_info)) => {
+                if let Some(my_node_num) = self.my_node_num
+                    && my_node_num != node_info.num
+                {
+                    self.nodes.push(node_info)
+                }
+            }
+            // This Packet conveys information about a Channel that exists on the radio
+            Some(PayloadVariant::Channel(mut channel)) => {
+                if let Some(settings) = channel.settings.as_mut() {
+                    if settings.name.is_empty() {
+                        settings.name = "Default".to_string();
+                    };
+                    self.channels.push(channel);
+                    let channel_id = ChannelId::Channel((self.channels.len() - 1) as i32);
+                    self.channel_views.insert(
+                        channel_id.clone(),
+                        ChannelView::new(channel_id, self.my_node_num.unwrap()),
+                    );
+                }
+            }
+            Some(PayloadVariant::QueueStatus(_)) => {
+                // TODO maybe show if devices in outgoing queue?
+            }
+            Some(PayloadVariant::Metadata(_)) => {
+                // TODO could be interesting to get device_hardware value
+            }
+            Some(PayloadVariant::ClientNotification(notification)) => {
+                // TODO display a notification in the header
+                println!("Received notification: {}", notification.message);
+            }
+            Some(_) => {
+                println!("Unexpected payload variant: {:?}", packet.payload_variant);
+            }
+            _ => println!("Error parsing packet: {:?}", packet.payload_variant),
+        }
+    }
+
+    fn handle_mesh_packet(&mut self, mesh_packet: MeshPacket) {
+        if let Some(Decoded(data)) = &mesh_packet.payload_variant
+            && data.emoji == 0
+        // TODO handle emoji replies
+        {
+            match PortNum::try_from(data.portnum) {
+                Ok(PortNum::TextMessageApp) => {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|t| t.as_secs())
+                        .unwrap_or(0);
+
+                    // TODO determine if there is a packet for this node or user, and
+                    // not a channel? Then send to node view?
+                    let channel_id = ChannelId::Channel(mesh_packet.channel as i32);
+                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                        let new_message = ChannelMessage {
+                            text: String::from_utf8(data.payload.clone()).unwrap(),
+                            from: mesh_packet.from,
+                            rx_time: now,
+                        };
+
+                        channel_view.new_message(new_message);
+                    } else {
+                        eprintln!("No channel for packet received: {}", mesh_packet.channel);
+                    }
+                }
+                Ok(PortNum::PositionApp) => println!("Position payload"),
+                Ok(PortNum::AlertApp) => println!("Alert payload"),
+                Ok(PortNum::TelemetryApp) => println!("Telemetry payload"),
+                Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
+                // TODO will need to parse a lot of these at the next layer up before here
+                Ok(PortNum::NodeinfoApp) => {
+                    let buf = &data.payload as &[u8];
+                    let user = meshtastic::protobufs::User::decode(buf).unwrap();
+                    println!("Ping from User: {}", user.short_name);
+                }
+                _ => eprintln!("Unexpected payload type from radio: {}", data.portnum),
             }
         }
     }

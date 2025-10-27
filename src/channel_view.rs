@@ -7,9 +7,7 @@ use iced::widget::container::Style;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
 use iced::{Background, Border, Color, Element, Fill, Left, Right, Task, Theme};
-use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
-use meshtastic::protobufs::{MeshPacket, PortNum};
-use meshtastic::Message as _;
+use meshtastic::protobufs::MeshPacket;
 use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
 use std::fmt::{Display, Formatter};
@@ -96,37 +94,8 @@ impl ChannelView {
         self.message = String::new();
     }
 
-    pub fn push_packet(&mut self, mesh_packet: MeshPacket) {
-        if let Some(Decoded(data)) = &mesh_packet.payload_variant
-            && data.emoji == 0
-        // TODO handle emoji replies
-        {
-            match PortNum::try_from(data.portnum) {
-                Ok(PortNum::TextMessageApp) => {
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|t| t.as_secs())
-                        .unwrap_or(0);
-
-                    self.messages.push(ChannelMessage {
-                        text: String::from_utf8(data.payload.clone()).unwrap(),
-                        from: mesh_packet.from,
-                        rx_time: now,
-                    });
-                }
-                Ok(PortNum::PositionApp) => println!("Position payload"),
-                Ok(PortNum::AlertApp) => println!("Alert payload"),
-                Ok(PortNum::TelemetryApp) => println!("Telemetry payload"),
-                Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
-                // TODO will need to parse a lot of these at the next layer up before here
-                Ok(PortNum::NodeinfoApp) => {
-                    let buf = &data.payload as &[u8];
-                    let user = meshtastic::protobufs::User::decode(buf).unwrap();
-                    println!("Ping from User: {}", user.short_name);
-                }
-                _ => eprintln!("Unexpected payload type from radio: {}", data.portnum),
-            }
-        }
+    pub fn new_message(&mut self, new_message: ChannelMessage) {
+        self.messages.push(new_message);
     }
 
     pub fn num_packets(&self) -> usize {
