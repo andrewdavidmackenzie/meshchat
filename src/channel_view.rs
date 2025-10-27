@@ -8,6 +8,7 @@ use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
 use iced::{Background, Border, Color, Element, Fill, Left, Right, Task, Theme};
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::{MeshPacket, PortNum};
+use meshtastic::Message as _;
 use sorted_vec::SortedVec;
 use std::cmp::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -122,7 +123,9 @@ impl ChannelView {
                 Ok(PortNum::TelemetryApp) => println!("Telemetry payload"),
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
-                    println!("User Info:");
+                    let buf = &data.payload as &[u8];
+                    let user = meshtastic::protobufs::User::decode(buf).unwrap();
+                    println!("Ping from User: {}", user.short_name);
                 }
                 _ => eprintln!("Unexpected payload type from radio: {}", data.portnum),
             }
