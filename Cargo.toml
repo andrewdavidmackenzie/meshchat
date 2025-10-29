@@ -7,7 +7,7 @@ repository = "https://github.com/andrewdavidmackenzie/meshchat"
 
 [dependencies]
 meshtastic = { version = "0.1.7", git = "https://github.com/lukipuki/meshtastic-rust.git", branch = "ble-scan", features = ["bluetooth-le"] }
-iced = { version = "0.13.1", features = ["tokio"] }
+iced = { version = "0.13.1", features = ["tokio", "advanced", "canvas"] }
 iced_futures = { version = "0.13", default-features = false }
 anyhow = "1.0.100"
 directories = "6.0.0"
@@ -20,3 +20,5 @@ tokio-stream = "0.1.17"
 async-stream = "0.3.6"
 tokio = "1.47.1"
 sorted-vec = "0.8.10"
+lyon_algorithms = "1.0"
+once_cell = "1.21.3"

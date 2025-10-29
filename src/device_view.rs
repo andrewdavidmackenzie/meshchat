@@ -368,14 +368,8 @@ impl DeviceView {
         }
     }
 
-    pub fn header<'a>(
-        &'a self,
-        mut header: Row<'a, Message>,
-        connection_state: &'a ConnectionState,
-    ) -> Row<'a, Message> {
-        header = header
-            .push(button("Devices").on_press(Navigation(DevicesList)))
-            .push(text(" / "));
+    pub fn header<'a>(&'a self, connection_state: &'a ConnectionState) -> Row<'a, Message> {
+        let mut header: Row<Message> = Row::new();
 
         header = match connection_state {
             Disconnected(_, _) => header.push(text("Disconnected")),
@@ -396,22 +390,20 @@ impl DeviceView {
                 if let Some(channel) = self.channels.get(index) {
                     // TODO do this in channel_view code like in view() below.
                     let channel_name = Self::channel_name(channel);
-                    header.push(text(" / ")).push(button(text(channel_name)))
-                } else {
-                    header
+                    header = header.push(text(" / ")).push(button(text(channel_name)))
                 }
             }
             Some(ChannelId::Node(node_id)) => {
                 if let Some(node_info) = self.nodes.get(node_id) {
-                    header.push(text(" / ")).push(button(
+                    header = header.push(text(" / ")).push(button(
                         text(node_info.user.as_ref().unwrap().long_name.clone()).shaping(Advanced),
                     ))
-                } else {
-                    header
                 }
             }
-            None => header,
+            None => {}
         }
+
+        header
     }
 
     pub fn view(&self) -> Element<'static, Message> {

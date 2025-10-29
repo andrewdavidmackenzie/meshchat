@@ -32,22 +32,14 @@ impl DeviceListView {
         Task::none()
     }
 
-    pub fn header<'a>(
-        &'a self,
-        mut header: Row<'a, Message>,
-        connection_state: &'a ConnectionState,
-    ) -> Row<'a, Message> {
-        header = header.push(button("Devices")).push(text(" / "));
-
+    pub fn header<'a>(&'a self, connection_state: &'a ConnectionState) -> Element<'a, Message> {
         match connection_state {
-            Disconnected(_, _) => header.push(text("Disconnected")),
-            Connecting(name) => header.push(text(format!("Connecting to {}", name))),
-            Connected(name) => {
-                let breadcrumb =
-                    button(text(name)).on_press(Navigation(NavigationMessage::DeviceView));
-                header.push(breadcrumb)
-            }
-            Disconnecting(name) => header.push(text(format!("Disconnecting from {}", name))),
+            Disconnected(_, _) => text("Disconnected").into(),
+            Connecting(name) => text(format!("Connecting to {}", name)).into(),
+            Connected(name) => button(text(name))
+                .on_press(Navigation(NavigationMessage::DeviceView))
+                .into(),
+            Disconnecting(name) => text(format!("Disconnecting from {}", name)).into(),
         }
     }
 

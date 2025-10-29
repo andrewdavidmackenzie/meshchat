@@ -6,17 +6,19 @@ use crate::device_list_view::DeviceListView;
 use crate::device_view::ConnectionState::Connected;
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::discovery::{ble_discovery, DiscoveryEvent};
+use crate::linear::Linear;
 use crate::Message::{
     AppError, AppNotification, Device, Discovery, Exit, Navigation, NewConfig, SaveConfig,
     WindowEvent,
 };
 use iced::border::Radius;
 use iced::widget::container::Style;
-use iced::widget::{button, Column, Container, Row};
+use iced::widget::{button, text, Column, Container, Row};
 use iced::{window, Border, Bottom, Color, Event, Subscription, Task, Theme};
 use iced::{Background, Element};
 use meshtastic::utils::stream::BleId;
 use std::cmp::PartialEq;
+use std::time::Duration;
 
 mod channel_message;
 mod channel_view;
@@ -25,6 +27,8 @@ mod device_list_view;
 mod device_subscription;
 mod device_view;
 mod discovery;
+mod easing;
+mod linear;
 mod styles;
 // mod router;
 
@@ -147,26 +151,39 @@ impl MeshChat {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let mut header = Row::new().align_y(Bottom);
-        let inner = match self.view {
+        let mut outer = Column::new();
+        let mut header = Row::new()
+            .align_y(Bottom)
+            .push(button("Devices").on_press(Navigation(NavigationMessage::DevicesList)));
+
+        let (inner, busy) = match self.view {
             View::DeviceList => {
-                header = self
-                    .device_list_view
-                    .header(header, self.device_view.connection_state());
-                self.device_list_view
-                    .view(self.device_view.connection_state())
+                header = header.push(
+                    self.device_list_view
+                        .header(self.device_view.connection_state()),
+                );
+                (
+                    self.device_list_view
+                        .view(self.device_view.connection_state()),
+                    true,
+                )
             }
             View::Device => {
-                header = self
-                    .device_view
-                    .header(header, self.device_view.connection_state());
-                self.device_view.view()
+                header = header.push(text(" / "));
+                header = header.push(self.device_view.header(self.device_view.connection_state()));
+                (self.device_view.view(), false)
             }
         };
 
-        let mut outer = Column::new();
-
         outer = outer.push(header);
+        if busy {
+            outer = outer.push(
+                Linear::new()
+                    .easing(&easing::EMPHASIZED_ACCELERATE)
+                    .cycle_duration(Duration::from_secs_f32(2.0))
+                    .width(iced::Length::Fill),
+            );
+        }
         outer = outer.push(self.notifications());
         outer = outer.push(inner);
 
