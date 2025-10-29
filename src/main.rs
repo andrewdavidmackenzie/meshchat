@@ -151,7 +151,6 @@ impl MeshChat {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let mut outer = Column::new();
         let mut header = Row::new()
             .align_y(Bottom)
             .push(button("Devices").on_press(Navigation(NavigationMessage::DevicesList)));
@@ -175,7 +174,7 @@ impl MeshChat {
             }
         };
 
-        outer = outer.push(header);
+        let mut outer = Column::new().push(header);
         if busy {
             outer = outer.push(
                 Linear::new()
