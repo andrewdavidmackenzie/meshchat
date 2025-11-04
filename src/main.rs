@@ -107,7 +107,9 @@ impl MeshChat {
         match message {
             Navigation(navigation_message) => self.navigate(navigation_message),
             WindowEvent(event) => self.window_handler(event),
-            Discovery(discovery_event) => self.device_list_view.update(discovery_event),
+            Discovery(discovery_event) => self
+                .device_list_view
+                .update(discovery_event, self.device_view.connection_state()),
             Device(device_event) => self.device_view.update(device_event),
             Exit => window::get_latest().and_then(window::close),
             NewConfig(config) => {
@@ -251,7 +253,7 @@ impl MeshChat {
     // TODO accept detail and make it in an expandable box
     fn error_box(id: usize, summary: String, _detail: String) -> Element<'static, Message> {
         let row = Row::new().push(iced::widget::text(summary));
-        let row = row.push(button("OK").on_press(Message::RemoveNotification(id)));
+        let row = row.push(button("OK").on_press(RemoveNotification(id)));
 
         Container::new(row)
             .padding([6, 12]) // adjust to taste
@@ -271,7 +273,7 @@ impl MeshChat {
     // TODO accept detail and make it in an expandable box
     fn info_box(id: usize, summary: String, _detail: String) -> Element<'static, Message> {
         let row = Row::new().push(iced::widget::text(summary));
-        let row = row.push(button("OK").on_press(Message::RemoveNotification(id)));
+        let row = row.push(button("OK").on_press(RemoveNotification(id)));
 
         Container::new(row)
             .padding([6, 12]) // adjust to taste

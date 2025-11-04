@@ -21,8 +21,7 @@ use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::{button, row, scrollable, text, text_input, Button, Column, Row};
-use iced::{alignment, Background, Color, Element, Task, Theme};
-use iced_futures::core::Length::Fill;
+use iced::{alignment, Background, Color, Element, Fill, Task, Theme};
 use iced_futures::Subscription;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
@@ -531,7 +530,7 @@ impl DeviceView {
             .padding([6, 6])
             .on_input(|s| Message::Device(SearchInput(s)))
             .into()])
-        .padding([0, 4]) // 6 pixel spacing minus the 2 pixel border width
+        .padding([0, 4]) // 6 pixels spacing minus the 2 pixels border width
         .into()
     }
 

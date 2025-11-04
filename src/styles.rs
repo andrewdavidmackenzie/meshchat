@@ -46,7 +46,7 @@ const TEXT_INPUT_RADIUS: Radius = Radius {
     bottom_left: TEXT_INPUT_R,
 };
 
-const CYAN: Color = Color::from_rgba(0.0, 0.8, 0.8, 1.0);
+pub const CYAN: Color = Color::from_rgba(0.0, 0.8, 0.8, 1.0);
 
 const TEXT_INPUT_BORDER_ACTIVE: Border = Border {
     radius: TEXT_INPUT_RADIUS, // rounded corners

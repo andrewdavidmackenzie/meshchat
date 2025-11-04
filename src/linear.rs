@@ -11,6 +11,7 @@ use iced::{Background, Color, Element, Event, Length, Rectangle, Size};
 
 use super::easing::{self, Easing};
 
+use crate::styles::CYAN;
 use std::time::Duration;
 
 #[allow(missing_debug_implementations)]
@@ -36,7 +37,7 @@ where
             height: Length::Fixed(4.0),
             style: Theme::Style::default(),
             easing: &easing::STANDARD,
-            cycle_duration: Duration::from_millis(600),
+            cycle_duration: Duration::from_millis(500),
         }
     }
 
@@ -111,9 +112,7 @@ impl State {
 
     fn start(&self) -> Instant {
         match self {
-            Self::Expanding { start, .. } | Self::Contracting { start, .. } => {
-                *start
-            }
+            Self::Expanding { start, .. } | Self::Contracting { start, .. } => *start,
         }
     }
 
@@ -126,11 +125,7 @@ impl State {
         }
     }
 
-    fn with_elapsed(
-        &self,
-        cycle_duration: Duration,
-        elapsed: Duration,
-    ) -> Self {
+    fn with_elapsed(&self, cycle_duration: Duration, elapsed: Duration) -> Self {
         let progress = elapsed.as_secs_f32() / cycle_duration.as_secs_f32();
         match self {
             Self::Expanding { start, .. } => Self::Expanding {
@@ -145,8 +140,7 @@ impl State {
     }
 }
 
-impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for Linear<'a, Theme>
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Linear<'a, Theme>
 where
     Message: Clone + 'a,
     Theme: StyleSheet + 'a,
@@ -242,11 +236,9 @@ where
             State::Contracting { progress, .. } => renderer.fill_quad(
                 Quad {
                     bounds: Rectangle {
-                        x: bounds.x
-                            + self.easing.y_at_x(*progress) * bounds.width,
+                        x: bounds.x + self.easing.y_at_x(*progress) * bounds.width,
                         y: bounds.y,
-                        width: (1.0 - self.easing.y_at_x(*progress))
-                            * bounds.width,
+                        width: (1.0 - self.easing.y_at_x(*progress)) * bounds.width,
                         height: bounds.height,
                     },
                     ..renderer::Quad::default()
@@ -257,8 +249,7 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<Linear<'a, Theme>>
-    for Element<'a, Message, Theme, Renderer>
+impl<'a, Message, Theme, Renderer> From<Linear<'a, Theme>> for Element<'a, Message, Theme, Renderer>
 where
     Message: Clone + 'a,
     Theme: StyleSheet + 'a,
@@ -303,7 +294,7 @@ impl StyleSheet for iced::Theme {
 
         Appearance {
             track_color: palette.background.weak.color,
-            bar_color: palette.primary.base.color,
+            bar_color: CYAN, // TODO pass in through style?
         }
     }
 }
