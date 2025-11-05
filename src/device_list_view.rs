@@ -1,9 +1,10 @@
+use crate::device_list_view::DiscoveryEvent::{BLERadioFound, BLERadioLost, Error};
 use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::chip_style;
 use crate::Message::{Device, Navigation};
-use crate::{name_from_id, Message, NavigationMessage};
+use crate::{name_from_id, Message, View};
 use iced::futures::{SinkExt, Stream};
 use iced::stream;
 use iced::widget::{button, container, text, Column, Row, Space};
@@ -28,15 +29,15 @@ async fn empty() {}
 impl DeviceListView {
     pub fn update(&mut self, discovery_event: DiscoveryEvent) -> Task<Message> {
         match discovery_event {
-            DiscoveryEvent::BLERadioFound(device) => {
+            BLERadioFound(device) => {
                 if !self.discovered_devices.contains(&device) {
                     self.discovered_devices.push(device)
                 }
             }
-            DiscoveryEvent::BLERadioLost(device) => self
+            BLERadioLost(device) => self
                 .discovered_devices
                 .retain(|other_id| other_id != &device),
-            DiscoveryEvent::Error(e) => {
+            Error(e) => {
                 return Task::perform(empty(), move |_| {
                     Message::AppError("Discovery Error".to_string(), e.to_string())
                 });
@@ -58,7 +59,7 @@ impl DeviceListView {
                 .into(),
             Connected(device) => button(text(device.name.as_ref().unwrap()))
                 .style(chip_style)
-                .on_press(Navigation(NavigationMessage::DeviceView))
+                .on_press(Navigation(View::Device))
                 .into(),
             Disconnecting(device) => text(format!(
                 "Disconnecting from {}",
@@ -136,7 +137,7 @@ pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
                         if !radios_now_ids.iter().any(|other_id| id == other_id) {
                             // inform GUI of a device lost
                             gui_sender
-                                .send(DiscoveryEvent::BLERadioLost(id.clone()))
+                                .send(BLERadioLost(id.clone()))
                                 .await
                                 .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
                         }
@@ -150,7 +151,7 @@ pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
 
                             // inform GUI of a new device found
                             gui_sender
-                                .send(DiscoveryEvent::BLERadioFound(id.clone()))
+                                .send(BLERadioFound(id.clone()))
                                 .await
                                 .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
                         }
@@ -158,7 +159,7 @@ pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
                 }
                 Err(e) => {
                     gui_sender
-                        .send(DiscoveryEvent::Error(e.to_string()))
+                        .send(Error(e.to_string()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
                 }

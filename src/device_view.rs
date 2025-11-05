@@ -14,8 +14,7 @@ use crate::device_view::DeviceViewMessage::{
 };
 use crate::styles::{chip_style, text_input_style, NO_BORDER, NO_SHADOW, WHITE_BORDER};
 use crate::Message::Navigation;
-use crate::NavigationMessage::DevicesList;
-use crate::{device_subscription, Message, NavigationMessage};
+use crate::{device_subscription, Message, View};
 use iced::widget::button::Status::Hovered;
 use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
@@ -132,7 +131,7 @@ impl DeviceView {
                 self.connection_state = Connecting(device.clone()); // TODO make state change depend on message back from subscription
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_connection(sender.unwrap(), device.clone()), |_| {
-                    Navigation(NavigationMessage::DeviceView)
+                    Navigation(View::Device)
                 })
             }
             DisconnectRequest(name) => {
@@ -140,7 +139,7 @@ impl DeviceView {
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_disconnection(sender.unwrap()), |_| {
-                    Navigation(DevicesList)
+                    Navigation(View::DeviceList)
                 })
             }
             ShowChannel(channel_id) => {
@@ -186,7 +185,7 @@ impl DeviceView {
                     self.channels.clear();
                     self.my_node_num = None;
                     self.viewing_channel = None;
-                    Task::perform(empty(), |_| Navigation(DevicesList))
+                    Task::perform(empty(), |_| Navigation(View::DeviceList))
                 }
                 Ready(sender) => {
                     self.subscription_sender = Some(sender);
@@ -201,7 +200,7 @@ impl DeviceView {
                 }
                 ConnectionError(id, summary, detail) => {
                     self.connection_state = Disconnected(Some(id), Some(summary.clone()));
-                    Task::perform(empty(), |_| Navigation(DevicesList))
+                    Task::perform(empty(), |_| Navigation(View::DeviceList))
                         .chain(Self::report_error(summary.clone(), detail.clone()))
                 }
             },
@@ -541,7 +540,7 @@ impl DeviceView {
             .padding([6, 6])
             .on_input(|s| Message::Device(SearchInput(s)))
             .into()])
-        .padding([0, 4]) // 6 pixels spacing minus the 2 pixels border width
+        .padding([0, 4]) // 6 pixels spacing minus the 2-pixel border width
         .into()
     }
 

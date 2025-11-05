@@ -8,8 +8,8 @@ use crate::device_view::{ConnectionState, DeviceView, DeviceViewMessage};
 use crate::linear::Linear;
 use crate::styles::chip_style;
 use crate::Message::{
-    AppError, AppNotification, Device, Discovery, Exit, Navigation, NewConfig, RemoveNotification,
-    SaveConfig, WindowEvent,
+    AppError, AppNotification, Device, DeviceListEvent, Exit, Navigation, NewConfig,
+    RemoveNotification, SaveConfig, WindowEvent,
 };
 use crate::View::DeviceList;
 use iced::border::Radius;
@@ -32,17 +32,11 @@ mod linear;
 mod styles;
 // mod router;
 
-#[derive(PartialEq, Default)]
-enum View {
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum View {
     #[default]
     DeviceList,
     Device,
-}
-
-#[derive(Debug, Clone)]
-pub enum NavigationMessage {
-    DevicesList,
-    DeviceView,
 }
 
 /// A [Notification] can be one of two notification types:
@@ -65,9 +59,9 @@ struct MeshChat {
 /// These are the messages that MeshChat responds to
 #[derive(Debug, Clone)]
 pub enum Message {
-    Navigation(NavigationMessage),
+    Navigation(View),
     WindowEvent(Event),
-    Discovery(DiscoveryEvent),
+    DeviceListEvent(DiscoveryEvent),
     Device(DeviceViewMessage),
     Exit,
     NewConfig(Config),
@@ -104,9 +98,9 @@ impl MeshChat {
 
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Navigation(navigation_message) => self.navigate(navigation_message),
+            Navigation(view) => self.navigate(view),
             WindowEvent(event) => self.window_handler(event),
-            Discovery(discovery_event) => self.device_list_view.update(discovery_event),
+            DeviceListEvent(discovery_event) => self.device_list_view.update(discovery_event),
             Device(device_event) => self.device_view.update(device_event),
             Exit => window::get_latest().and_then(window::close),
             NewConfig(config) => {
@@ -152,8 +146,7 @@ impl MeshChat {
         let mut device_list_button = button("Devices").style(chip_style);
         // Activate it if we are not on the device list view
         if self.view != DeviceList {
-            device_list_button =
-                device_list_button.on_press(Navigation(NavigationMessage::DevicesList));
+            device_list_button = device_list_button.on_press(Navigation(DeviceList));
         }
         let mut header = Row::new().align_y(Bottom).push(device_list_button);
 
@@ -195,24 +188,15 @@ impl MeshChat {
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![
             iced::event::listen().map(WindowEvent),
-            Subscription::run(ble_discovery).map(Discovery),
+            Subscription::run(ble_discovery).map(DeviceListEvent),
             self.device_view.subscription().map(Device),
         ];
 
         Subscription::batch(subscriptions)
     }
 
-    fn navigate(&mut self, navigation_message: NavigationMessage) -> Task<Message> {
-        match navigation_message {
-            NavigationMessage::DevicesList => {
-                if self.view == View::Device {
-                    self.view = DeviceList;
-                }
-            }
-            NavigationMessage::DeviceView => {
-                self.view = View::Device;
-            }
-        }
+    fn navigate(&mut self, view: View) -> Task<Message> {
+        self.view = view;
         Task::none()
     }
 
