@@ -13,13 +13,13 @@ use crate::device_view::DeviceViewMessage::{
     SubscriptionMessage,
 };
 use crate::styles::{chip_style, text_input_style, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER};
-use crate::Message::Navigation;
+use crate::Message::{Device, Navigation};
 use crate::{device_subscription, Message, View};
 use iced::widget::button::Status::Hovered;
 use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
-use iced::widget::{button, row, scrollable, text, text_input, Button, Column, Row};
+use iced::widget::{button, row, scrollable, text, text_input, Button, Column, Row, Space};
 use iced::{alignment, Background, Color, Element, Fill, Task, Theme};
 use iced_futures::Subscription;
 use meshtastic::protobufs::channel::Role;
@@ -402,7 +402,12 @@ impl DeviceView {
                 if self.viewing_channel.is_some() {
                     button = button.on_press(Message::Device(ShowChannel(None)));
                 }
-                header.push(button)
+
+                header.push(button).push(Space::new(Fill, 1)).push(
+                    iced::widget::button("Disconnect")
+                        .on_press(Device(DisconnectRequest(device.clone(), false)))
+                        .style(chip_style),
+                )
             }
             Disconnecting(device) => {
                 let button = button(text(device.name.as_ref().unwrap())).style(chip_style);
