@@ -12,7 +12,7 @@ use crate::device_view::DeviceViewMessage::{
     ChannelMsg, ConnectRequest, DisconnectRequest, SearchInput, SendMessage, ShowChannel,
     SubscriptionMessage,
 };
-use crate::styles::{chip_style, text_input_style, NO_BORDER, NO_SHADOW, WHITE_BORDER};
+use crate::styles::{chip_style, text_input_style, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER};
 use crate::Message::Navigation;
 use crate::{device_subscription, Message, View};
 use iced::widget::button::Status::Hovered;
@@ -36,7 +36,7 @@ use tokio::sync::mpsc::Sender;
 const VIEW_BUTTON_HOVER_STYLE: Style = Style {
     background: Some(Background::Color(Color::from_rgba(0.0, 0.8, 0.8, 1.0))),
     text_color: Color::BLACK,
-    border: WHITE_BORDER,
+    border: VIEW_BUTTON_BORDER,
     shadow: NO_SHADOW,
 };
 
@@ -197,7 +197,7 @@ impl DeviceView {
                     self.subscription_sender = Some(sender);
                     Task::none()
                 }
-                DevicePacket(packet) => self.handle_packet(packet),
+                DevicePacket(packet) => self.handle_from_radio(packet),
                 MessageSent(channel_index) => {
                     if let Some(channel_view) = self.channel_views.get_mut(&channel_index) {
                         channel_view.message_sent();
@@ -235,7 +235,7 @@ impl DeviceView {
     }
 
     /// Handle [FromRadio] packets coming from the radio, forwarded from the device_subscription
-    fn handle_packet(&mut self, packet: Box<FromRadio>) -> Task<Message> {
+    fn handle_from_radio(&mut self, packet: Box<FromRadio>) -> Task<Message> {
         match packet.payload_variant {
             Some(PayloadVariant::Packet(mesh_packet)) => self.handle_mesh_packet(mesh_packet),
             Some(PayloadVariant::MyInfo(my_node_info)) => {

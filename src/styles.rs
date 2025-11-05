@@ -33,10 +33,10 @@ pub const RADIUS_12: Radius = Radius {
     bottom_left: 12.0,
 };
 
-pub const WHITE_BORDER: Border = Border {
-    color: Color::WHITE,
+pub const VIEW_BUTTON_BORDER: Border = Border {
+    color: Color::TRANSPARENT,
     width: 2.0,
-    radius: RADIUS_2,
+    radius: TEXT_INPUT_RADIUS,
 };
 
 const TEXT_INPUT_RADIUS: Radius = Radius {
