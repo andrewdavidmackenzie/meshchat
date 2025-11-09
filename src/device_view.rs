@@ -176,7 +176,7 @@ impl DeviceView {
                         Some(channel_id) => {
                             let channel_id = channel_id.clone();
                             Task::perform(empty(), move |_| {
-                                Message::Device(ShowChannel(Some(channel_id.clone())))
+                                Device(ShowChannel(Some(channel_id.clone())))
                             })
                         }
                     }
@@ -310,11 +310,13 @@ impl DeviceView {
                         .unwrap_or(0);
 
                     let channel_id = ChannelId::Channel(mesh_packet.channel as i32);
+                    let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelMessage {
                             message: Text(String::from_utf8(data.payload.clone()).unwrap()),
                             from: mesh_packet.from,
                             rx_time: now,
+                            seen,
                         };
 
                         channel_view.new_message(new_message);
@@ -331,6 +333,7 @@ impl DeviceView {
                         .unwrap_or(0);
 
                     let channel_id = ChannelId::Node(mesh_packet.from);
+                    let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelMessage {
                             message: Position(
@@ -339,6 +342,7 @@ impl DeviceView {
                             ),
                             from: mesh_packet.from,
                             rx_time: now,
+                            seen,
                         };
                         channel_view.new_message(new_message);
                     } else {
@@ -359,11 +363,13 @@ impl DeviceView {
 
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = ChannelId::Node(mesh_packet.from);
+                    let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelMessage {
                             message: Ping(user.short_name),
                             from: mesh_packet.from,
                             rx_time: now,
+                            seen,
                         };
                         channel_view.new_message(new_message);
                     } else {
@@ -400,14 +406,10 @@ impl DeviceView {
                 let mut button = button(text(device.name.as_ref().unwrap())).style(chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
                 if self.viewing_channel.is_some() {
-                    button = button.on_press(Message::Device(ShowChannel(None)));
+                    button = button.on_press(Device(ShowChannel(None)));
                 }
 
-                header.push(button).push(Space::new(Fill, 1)).push(
-                    iced::widget::button("Disconnect")
-                        .on_press(Device(DisconnectRequest(device.clone(), false)))
-                        .style(chip_style),
-                )
+                header.push(button)
             }
             Disconnecting(device) => {
                 let button = button(text(device.name.as_ref().unwrap())).style(chip_style);
@@ -444,6 +446,15 @@ impl DeviceView {
             None => {}
         }
 
+        // Add a disconnect button on the right if we are connected
+        if let Connected(device) = connection_state {
+            header = header.push(Space::new(Fill, 1)).push(
+                iced::widget::button("Disconnect")
+                    .on_press(Device(DisconnectRequest(device.clone(), false)))
+                    .style(chip_style),
+            )
+        }
+
         header.into()
     }
 
@@ -469,7 +480,10 @@ impl DeviceView {
             let channel_id = ChannelId::Channel(index as i32);
             let channel_row = Self::channel_row(
                 channel_name,
-                self.channel_views.get(&channel_id).unwrap().num_messages(),
+                self.channel_views
+                    .get(&channel_id)
+                    .unwrap()
+                    .num_unseen_messages(),
                 channel_id,
             );
             channels_view = channels_view.push(channel_row);
@@ -488,7 +502,10 @@ impl DeviceView {
 
             channels_view = channels_view.push(Self::node_row(
                 user.long_name.clone(),
-                self.channel_views.get(&channel_id).unwrap().num_messages(),
+                self.channel_views
+                    .get(&channel_id)
+                    .unwrap()
+                    .num_unseen_messages(),
                 channel_id,
             ));
             // TODO mark as a favourite if has is_favorite set
@@ -531,7 +548,7 @@ impl DeviceView {
     ) -> Button<'static, Message> {
         let row_text = format!("{} ({})", name, num_messages);
         button(text(row_text))
-            .on_press(Message::Device(ShowChannel(Some(channel_id))))
+            .on_press(Device(ShowChannel(Some(channel_id))))
             .width(Fill)
             .style(Self::view_button)
     }
@@ -543,7 +560,7 @@ impl DeviceView {
     ) -> Button<'static, Message> {
         let row_text = format!("{} ({})", name, num_messages);
         button(text(row_text).shaping(Advanced))
-            .on_press(Message::Device(ShowChannel(Some(channel_id))))
+            .on_press(Device(ShowChannel(Some(channel_id))))
             .width(Fill)
             .style(Self::view_button)
     }
@@ -552,7 +569,7 @@ impl DeviceView {
         row([text_input("Search for Channel or User", &self.filter)
             .style(text_input_style)
             .padding([6, 6])
-            .on_input(|s| Message::Device(SearchInput(s)))
+            .on_input(|s| Device(SearchInput(s)))
             .into()])
         .padding([0, 4]) // 6 pixels spacing minus the 2-pixel border width
         .into()

@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
+#[derive(Serialize, Deserialize)]
 pub enum ChannelMsg {
     Text(String),
     Position(i32, i32),
@@ -7,11 +9,13 @@ pub enum ChannelMsg {
 }
 
 // A text message to this user on this device, sent from another device
+#[derive(Serialize, Deserialize)]
 pub struct ChannelMessage {
     // TODO see if we can/should make some of these private with methods
     pub from: u32,
     pub rx_time: u64,
     pub message: ChannelMsg,
+    pub seen: bool,
 }
 
 impl PartialEq<Self> for ChannelMessage {

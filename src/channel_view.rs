@@ -2,36 +2,15 @@ use crate::channel_message::ChannelMsg::{Ping, Position, Text};
 use crate::channel_view::ChannelId::Channel;
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendMessage};
-use crate::styles::{text_input_style, NO_SHADOW, RADIUS_12};
+use crate::styles::{text_input_style, MY_MESSAGE_STYLE, OTHERS_MESSAGE_STYLE};
 use crate::{channel_message::ChannelMessage, Message};
-use iced::widget::container::Style;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
-use iced::{Background, Border, Color, Element, Fill, Left, Right, Task, Theme};
+use iced::{Element, Fill, Left, Right, Task, Theme};
 use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
 use std::fmt::{Display, Formatter};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-const MESSAGE_BORDER: Border = Border {
-    radius: RADIUS_12, // rounded corners
-    width: 2.0,
-    color: Color::WHITE,
-};
-
-const MY_STYLE: Style = Style {
-    text_color: Some(Color::WHITE),
-    background: Some(Background::Color(Color::from_rgba(0.08, 0.3, 0.22, 1.0))),
-    border: MESSAGE_BORDER,
-    shadow: NO_SHADOW,
-};
-
-const OTHERS_STYLE: Style = Style {
-    text_color: Some(Color::WHITE),
-    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 1.0))),
-    border: MESSAGE_BORDER,
-    shadow: NO_SHADOW,
-};
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -89,6 +68,7 @@ impl ChannelView {
             message: Text(self.message.clone()),
             from: self.my_source,
             rx_time: now, // time in epoc
+            seen: true,
         });
         // Until we have a queue of messages being sent pending confirmation
         self.message = String::new();
@@ -98,7 +78,7 @@ impl ChannelView {
         self.messages.push(new_message);
     }
 
-    pub fn num_messages(&self) -> usize {
+    pub fn num_unseen_messages(&self) -> usize {
         self.messages.len()
     }
 
@@ -187,7 +167,11 @@ impl ChannelView {
 }
 
 fn message_box(msg: String, me: bool) -> Element<'static, Message> {
-    let style = if me { MY_STYLE } else { OTHERS_STYLE };
+    let style = if me {
+        MY_MESSAGE_STYLE
+    } else {
+        OTHERS_MESSAGE_STYLE
+    };
 
     let bubble = Container::new(
         iced::widget::text(msg)

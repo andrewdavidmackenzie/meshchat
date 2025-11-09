@@ -1,4 +1,5 @@
 use iced::border::Radius;
+use iced::widget::container::Style;
 use iced::widget::{button, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 
@@ -139,3 +140,23 @@ pub fn chip_style(_theme: &Theme, status: button::Status) -> button::Style {
         },
     }
 }
+
+const MESSAGE_BORDER: Border = Border {
+    radius: RADIUS_12, // rounded corners
+    width: 2.0,
+    color: Color::WHITE,
+};
+
+pub const MY_MESSAGE_STYLE: Style = Style {
+    text_color: Some(Color::WHITE),
+    background: Some(Background::Color(Color::from_rgba(0.08, 0.3, 0.22, 1.0))),
+    border: MESSAGE_BORDER,
+    shadow: NO_SHADOW,
+};
+
+pub const OTHERS_MESSAGE_STYLE: Style = Style {
+    text_color: Some(Color::WHITE),
+    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 1.0))),
+    border: MESSAGE_BORDER,
+    shadow: NO_SHADOW,
+};
