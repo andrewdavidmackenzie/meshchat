@@ -145,7 +145,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
                     }
                 }
-                Connected(id, packet_receiver) => {
+                Connected(device, packet_receiver) => {
                     let mut my_router = MyRouter {
                         gui_sender: gui_sender.clone(),
                         my_node_num: None,
@@ -176,7 +176,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                             .await;
                                     }
                                     ChannelId::Node(node_id) => {
-                                        let _ = api
+                                        match api
                                             .send_text(
                                                 &mut my_router,
                                                 text.clone(),
@@ -184,12 +184,22 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                                 true,
                                                 MeshChannel::default(),
                                             )
-                                            .await;
-
-                                        gui_sender
-                                            .send(MessageSent(text, channel_id))
                                             .await
-                                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                        {
+                                            Ok(_) => gui_sender
+                                                .send(MessageSent(text, channel_id))
+                                                .await
+                                                .unwrap_or_else(|e| eprintln!("Send error: {e}")),
+
+                                            Err(e) => gui_sender
+                                                .send(ConnectionError(
+                                                    device.clone(),
+                                                    "Failed to send text".to_string(),
+                                                    e.to_string(),
+                                                ))
+                                                .await
+                                                .unwrap_or_else(|e| eprintln!("Send error: {e}")),
+                                        }
                                     }
                                 }
                                 let _none = stream_api.replace(api);
@@ -203,7 +213,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     device_state = Disconnected;
                     let _ = do_disconnect(api).await;
                     gui_sender
-                        .send(DisconnectedEvent(id.clone()))
+                        .send(DisconnectedEvent(device.clone()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
