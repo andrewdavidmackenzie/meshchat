@@ -1,36 +1,43 @@
 # MeshChat
 
-*** WARNING: Alpha quality, and no automated tests yet! ***
-
-(but since it doesn't try to change configuration of attached radio, it's kind of low risk)
-
-An Iced cross-platform GUI application to interact with Meshtastic LoRa radios:
+Meshchat ia an Iced cross-platform GUI application to interact with Meshtastic LoRa radios:
 
 - find Bluetooth Low Energy attached meshtastic devices
 - connect to one
 - use it to chat with others using the available channels or direct messages to Nodes
-- it saves the last device connected to (and channel if applicable) and on re-start it will try to
+- it saves the last device connected to (and channel if applicable), and on re-start it will try to
   automatically reconnect to that and continue chatting
 
-## Thinking
+## Disclaimer
 
-My current thinking is to keep it as simple to look at and use as possible.
+*** WARNING: Alpha quality, and no automated tests yet! ***
+
+Since the app doesn't try to change the configuration of any attached radio, at most it tries to send
+messages, the risk from any bug is kind of low.
+
+## The Thinking
+
+My thinking was to keep the app as simple to look at and use as possible.
 
 - avoid the app being an extremely geeky LoRa/Mesh app.
 - try to give users a simple chat experience, similar to ones they will be accustomed to with WhatsApp, Telegram,
   etc.
 - you will need to use some other app to configure their radio and join a mesh
 
+I've made some unusual (and questionable) UI choices even in the minimal UI I have. They just kind of
+materialized as I went, and I don't claim it's great...If people can use it easily, great. If not, help is welcome
+to improve it.
+
 ## Supported OS
 
-In theory, using Iced and Meshtastic rust crate and other dependencies that are all cross-platform, this app
-should run on many Operating Systems, including macOS, Windows and Linux.
+Meshchat uses the `Iced`, `Meshtastic` and other rust crates that are all cross-platform, so it should run on
+many Operating Systems, including macOS, Windows and Linux.
 
-So far, I have used it successfully on
+So far, I have used it successfully on:
 
 * macOS (Tahoe)
 * Linux (Pop OS!)
-    * Known [bug](https://github.com/andrewdavidmackenzie/meshchat/issues/16) in BLE device discovery - it detects all
+    * Known [bug](https://github.com/andrewdavidmackenzie/meshchat/issues/16) in BLE device discovery—it detects all
       BlueTooth devices, not just Meshtastic radios
 
 If you successfully run it on other OS or variants of the above, drop me a message in the repo's
@@ -39,7 +46,7 @@ of known working OS.
 
 ## Supported Radios
 
-In theory, it should work with all Meshtastic radios that are supported by the Meshtastic rust crate.
+It should work with all Meshtastic radios that are supported by the Meshtastic rust crate.
 
 So far, I have tested with a LillyGo T-ECHO and a T-Deck Pro
 
@@ -49,20 +56,51 @@ radios.
 
 ## Installing
 
-`cargo install meshchat` will get you the binary installed and in your path thanks to cargo, if you have a working
-rust toolchain installed.
+For now, it's very rust-developer-oriented. If you have a working rust toolchain installed, then use:
 
-Later I may work on pre-build binaries attached to GitHub releases, or `cargo binstall`support to make it even easier.
+`cargo install meshchat`
+
+to get the binary built and installed and in your `$PATH`.
+
+Later I may work on pre-build binaries attached to GitHub releases,
+or `cargo binstall` support to make it easier.
 
 ### Binary Size
 
-After a bit of optimizing I did, the binary size should be around 5.6M
+After a bit of optimizing I did, the release binary size is around 5.6 MBytes
 
 ## Running
 
-If you clone the repo, you can run it directly with:
+If you clone the repo, you can run meshchat directly with:
 
 `cargo run --release`
+
+## Users wanted! / Help wanted!
+
+I did this as a bit of an experiment to see if I could get it working with real hardware and the mesh, which
+I did, so I am delighted.
+
+If you use it successfully on some new OS variant, or LoRa radio, please drop me a message in the discussions.
+
+I may (as usual) play with some aspects of it to learn more rust or Iced or specific things (e.g., I really need
+to knuckle down and learn about theming and styling in Iced...).
+
+But I would only invest significant amounts of time if I see real interest and usage from people. I have other
+open source toy projects that keep me busy without this one—the one with the most traction from users will be
+the one that gets more of my time.
+
+## Remaining work / Contributing
+
+I add to the [GitHub Issues](https://github.com/andrewdavidmackenzie/meshchat/issues) as they occur to me. I have
+marked a few with the "help needed" label, but I would basically welcome help in any area, no matter how small.
+
+Help from someone with some real UI / UX chops would be great.
+
+As usual for such rust projects, much work is needed on CI, Releasing, Bundling for OS, etc. Help there would be great.
+
+If you want to help out, submit a well-written issue, or start a conversation in
+the [discussions](https://github.com/andrewdavidmackenzie/meshchat/discussions)
+or clone the repo, make some improvement and submit a PR.
 
 ## Licensing
 
