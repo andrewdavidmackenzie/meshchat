@@ -45,6 +45,11 @@ impl ChannelViewEntry {
     pub fn source_node(&self, node_id: u32) -> bool {
         self.from == node_id
     }
+
+    /// Return the time this message was received/sent as u64 seconds in EPOCH time
+    pub fn time(&self) -> u64 {
+        self.rx_time
+    }
 }
 
 impl PartialEq<Self> for ChannelViewEntry {

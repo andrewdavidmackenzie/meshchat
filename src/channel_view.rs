@@ -36,12 +36,12 @@ impl Display for ChannelId {
     }
 }
 
-/// A View struct for Iced that implements view and update methods for Iced for a set of
+/// [ChannelView] implements view and update methods for Iced for a set of
 /// messages to and from a "Channel" which can be a Channel or a Node
 pub struct ChannelView {
     channel_id: ChannelId,
-    message: String,                       // Message typed in so far
-    messages: SortedVec<ChannelViewEntry>, // Messages received so far
+    message: String,                      // text message typed in so far
+    entries: SortedVec<ChannelViewEntry>, // entries received so far
     my_source: u32,
 }
 
@@ -54,25 +54,25 @@ impl ChannelView {
         Self {
             channel_id,
             message: String::new(),
-            messages: SortedVec::new(),
+            entries: SortedVec::new(),
             my_source: source,
         }
     }
 
     /// WHen a message was sent, add it to the list of messages to display with the current time
     pub fn message_sent(&mut self, msg_text: String) {
-        self.messages
+        self.entries
             .push(ChannelViewEntry::new(Text(msg_text), self.my_source, true));
         // Until we have a queue of messages being sent pending confirmation
         self.message = String::new();
     }
 
     pub fn new_message(&mut self, new_message: ChannelViewEntry) {
-        self.messages.push(new_message);
+        self.entries.push(new_message);
     }
 
     pub fn num_unseen_messages(&self) -> usize {
-        self.messages.len()
+        self.entries.len()
     }
 
     pub fn update(&mut self, channel_view_message: ChannelViewMessage) -> Task<Message> {
@@ -104,29 +104,8 @@ impl ChannelView {
     pub fn view(&self) -> Element<'static, Message> {
         let mut channel_view = Column::new();
 
-        for message in &self.messages {
-            match message.payload() {
-                Text(text_msg) => {
-                    channel_view = channel_view.push(message_box(
-                        text_msg.clone(),
-                        message.source_node(self.my_source),
-                    ));
-                }
-                Position(lat, long) => {
-                    let latitude = 0.0000001 * *lat as f64;
-                    let longitude = 0.0000001 * *long as f64;
-                    channel_view = channel_view.push(message_box(
-                        format!("({}, {})", latitude, longitude),
-                        message.source_node(self.my_source),
-                    ));
-                }
-                Ping(short_name) => {
-                    channel_view = channel_view.push(message_box(
-                        format!("Ping from user '{}'", short_name),
-                        message.source_node(self.my_source),
-                    ));
-                }
-            }
+        for message in &self.entries {
+            channel_view = channel_view.push(self.message_box(message));
         }
 
         let channel_scroll = scrollable(channel_view)
@@ -166,31 +145,44 @@ impl ChannelView {
             .padding([6, 6])
             .into()
     }
-}
 
-fn message_box(msg: String, mine: bool) -> Element<'static, Message> {
-    let style = if mine {
-        MY_MESSAGE_STYLE
-    } else {
-        OTHERS_MESSAGE_STYLE
-    };
+    fn message_box(&self, message: &ChannelViewEntry) -> Element<'static, Message> {
+        let style = if message.source_node(self.my_source) {
+            MY_MESSAGE_STYLE
+        } else {
+            OTHERS_MESSAGE_STYLE
+        };
 
-    let bubble = Container::new(
-        iced::widget::text(msg)
-            .align_x(Right)
-            .shaping(text::Shaping::Advanced),
-    )
-    .padding([6, 12])
-    .style(move |_theme: &Theme| style);
+        // TODO in the future we might change graphics based on type - just text for now
+        let msg = match message.payload() {
+            Text(text_msg) => text_msg.clone(),
+            Position(lat, long) => {
+                let latitude = 0.0000001 * *lat as f64;
+                let longitude = 0.0000001 * *long as f64;
+                format!("({}, {})", latitude, longitude)
+            }
+            Ping(short_name) => format!("Ping from user '{}'", short_name),
+        };
 
-    let mut row = Row::new().padding([6, 6]);
-    if mine {
-        row = row.push(Space::new(100.0, 1.0)).push(bubble);
-        let col = Column::new().width(Fill).align_x(Right);
-        col.push(row).into()
-    } else {
-        row = row.push(bubble).push(Space::new(100.0, 1.0));
-        let col = Column::new().width(Fill).align_x(Left);
-        col.push(row).into()
+        let _time = message.time();
+
+        let bubble = Container::new(
+            iced::widget::text(msg)
+                .align_x(Right)
+                .shaping(text::Shaping::Advanced),
+        )
+        .padding([6, 12])
+        .style(move |_theme: &Theme| style);
+
+        let mut row = Row::new().padding([6, 6]);
+        if message.source_node(self.my_source) {
+            row = row.push(Space::new(100.0, 1.0)).push(bubble);
+            let col = Column::new().width(Fill).align_x(Right);
+            col.push(row).into()
+        } else {
+            row = row.push(bubble).push(Space::new(100.0, 1.0));
+            let col = Column::new().width(Fill).align_x(Left);
+            col.push(row).into()
+        }
     }
 }
