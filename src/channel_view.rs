@@ -37,10 +37,10 @@ impl Display for ChannelId {
     }
 }
 
-// TODO show QR of the channel config
-
+/// A View struct for Iced that implements view and update methods for Iced for a set of
+/// messages to and from a "Channel" which can be a Channel or a Node
 pub struct ChannelView {
-    pub(crate) channel_id: ChannelId,
+    channel_id: ChannelId,
     message: String,                     // Message typed in so far
     messages: SortedVec<ChannelMessage>, // Messages received so far
     my_source: u32,
