@@ -1,15 +1,21 @@
 use crate::channel_view::ChannelId::Channel;
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
-use crate::channel_view_entry::Payload::{Ping, Position, Text};
+use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::device_view::DeviceViewMessage::ChannelMsg;
-use crate::styles::{text_input_style, MY_MESSAGE_STYLE, OTHERS_MESSAGE_STYLE};
+use crate::styles::{
+    text_input_style, MESSAGE_TEXT_STYLE, MESSAGE_TIME_STYLE, MY_MESSAGE_BUBBLE_STYLE,
+    OTHERS_MESSAGE_BUBBLE_STYLE,
+};
 use crate::{channel_view_entry::ChannelViewEntry, Message};
+use chrono::prelude::DateTime;
+use chrono::Utc;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
-use iced::{Element, Fill, Left, Right, Task, Theme};
+use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space, Text};
+use iced::{Bottom, Element, Fill, Left, Renderer, Right, Task, Theme};
 use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
 use std::fmt::{Display, Formatter};
+use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -61,8 +67,11 @@ impl ChannelView {
 
     /// WHen a message was sent, add it to the list of messages to display with the current time
     pub fn message_sent(&mut self, msg_text: String) {
-        self.entries
-            .push(ChannelViewEntry::new(Text(msg_text), self.my_source, true));
+        self.entries.push(ChannelViewEntry::new(
+            TextMessage(msg_text),
+            self.my_source,
+            true,
+        ));
         // Until we have a queue of messages being sent pending confirmation
         self.message = String::new();
     }
@@ -148,14 +157,14 @@ impl ChannelView {
 
     fn message_box(&self, message: &ChannelViewEntry) -> Element<'static, Message> {
         let style = if message.source_node(self.my_source) {
-            MY_MESSAGE_STYLE
+            MY_MESSAGE_BUBBLE_STYLE
         } else {
-            OTHERS_MESSAGE_STYLE
+            OTHERS_MESSAGE_BUBBLE_STYLE
         };
 
         // TODO in the future we might change graphics based on type - just text for now
         let msg = match message.payload() {
-            Text(text_msg) => text_msg.clone(),
+            TextMessage(text_msg) => text_msg.clone(),
             Position(lat, long) => {
                 let latitude = 0.0000001 * *lat as f64;
                 let longitude = 0.0000001 * *long as f64;
@@ -164,25 +173,42 @@ impl ChannelView {
             Ping(short_name) => format!("Ping from user '{}'", short_name),
         };
 
-        let _time = message.time();
-
         let bubble = Container::new(
-            iced::widget::text(msg)
-                .align_x(Right)
-                .shaping(text::Shaping::Advanced),
+            Row::new()
+                .push(
+                    text(msg)
+                        .style(|_| MESSAGE_TEXT_STYLE)
+                        .size(18)
+                        .shaping(text::Shaping::Advanced),
+                )
+                .push(Space::with_width(10.0))
+                .push(Self::time_to_text(message.time()))
+                .align_y(Bottom),
         )
         .padding([6, 12])
         .style(move |_theme: &Theme| style);
 
         let mut row = Row::new().padding([6, 6]);
+        // Put on the right hand side if my message, on the left if from someone else
         if message.source_node(self.my_source) {
+            // Avoid very wide messages from me extending all the way to the left edge of the screen
             row = row.push(Space::new(100.0, 1.0)).push(bubble);
             let col = Column::new().width(Fill).align_x(Right);
             col.push(row).into()
         } else {
+            // TODO from - maybe a name or an icon from the u32? Need to store them somewhere?
+            // Avoid very wide messages from others extending all the way to the right edge
             row = row.push(bubble).push(Space::new(100.0, 1.0));
             let col = Column::new().width(Fill).align_x(Left);
             col.push(row).into()
         }
+    }
+
+    /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
+    /// it occurs in. These will be separated by Day specifiers, so day is not needed.
+    fn time_to_text(time: u64) -> Text<'static, Theme, Renderer> {
+        let datetime = DateTime::<Utc>::from(UNIX_EPOCH + std::time::Duration::from_secs(time));
+        let time_str = datetime.format("%H:%M").to_string(); // Formats as HH:MM
+        text(time_str).style(|_| MESSAGE_TIME_STYLE).size(11)
     }
 }

@@ -1,6 +1,6 @@
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
-use crate::channel_view_entry::Payload::{Ping, Position, Text};
+use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
 use crate::device_subscription::SubscriptionEvent::{
@@ -317,7 +317,7 @@ impl DeviceView {
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let seen = self.viewing_channel == Some(channel_id.clone());
                         let new_message = ChannelViewEntry::new(
-                            Text(String::from_utf8(data.payload.clone()).unwrap()),
+                            TextMessage(String::from_utf8(data.payload.clone()).unwrap()),
                             mesh_packet.from,
                             seen,
                         );

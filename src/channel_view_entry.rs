@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Deserialize)]
 pub enum Payload {
-    Text(String),
+    TextMessage(String),
     Position(i32, i32),
     Ping(String), // Could add hw_model or similar if wanted
 }
