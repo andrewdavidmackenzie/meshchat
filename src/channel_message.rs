@@ -3,32 +3,32 @@ use std::cmp::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Deserialize)]
-pub enum ChannelMsg {
+pub enum Payload {
     Text(String),
     Position(i32, i32),
     Ping(String), // Could add hw_model or similar if wanted
 }
 
-/// A Message to this user on this device or to a channel this device can read. Can be any of
-/// [ChannelMsg] types. Sent from another device.
+/// An entry in the Channel View that represents some type of message sent to either this user on
+/// this device or to a channel this device can read. Can be any of [Payload] types.
 #[derive(Serialize, Deserialize)]
-pub struct ChannelMessage {
+pub struct ChannelViewEntry {
     from: u32,
     rx_time: u64,
-    payload: ChannelMsg,
+    payload: Payload,
     seen: bool,
 }
 
-impl ChannelMessage {
-    /// Create a new [ChannelMessage] from the parameters provided. The received time will be set to
+impl ChannelViewEntry {
+    /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(message: ChannelMsg, from: u32, seen: bool) -> Self {
+    pub fn new(message: Payload, from: u32, seen: bool) -> Self {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())
             .unwrap_or(0);
 
-        ChannelMessage {
+        ChannelViewEntry {
             payload: message,
             from,
             rx_time,
@@ -37,7 +37,7 @@ impl ChannelMessage {
     }
 
     /// Get a reference to the payload of this message
-    pub fn payload(&self) -> &ChannelMsg {
+    pub fn payload(&self) -> &Payload {
         &self.payload
     }
 
@@ -46,22 +46,22 @@ impl ChannelMessage {
     }
 }
 
-impl PartialEq<Self> for ChannelMessage {
+impl PartialEq<Self> for ChannelViewEntry {
     fn eq(&self, other: &Self) -> bool {
         self.rx_time == other.rx_time
     }
 }
 
-impl PartialOrd<Self> for ChannelMessage {
+impl PartialOrd<Self> for ChannelViewEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for ChannelMessage {
+impl Ord for ChannelViewEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         self.rx_time.cmp(&other.rx_time)
     }
 }
 
-impl Eq for ChannelMessage {}
+impl Eq for ChannelViewEntry {}

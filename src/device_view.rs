@@ -1,5 +1,5 @@
-use crate::channel_message::ChannelMessage;
-use crate::channel_message::ChannelMsg::{Ping, Position, Text};
+use crate::channel_message::ChannelViewEntry;
+use crate::channel_message::Payload::{Ping, Position, Text};
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
@@ -316,7 +316,7 @@ impl DeviceView {
 
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let seen = self.viewing_channel == Some(channel_id.clone());
-                        let new_message = ChannelMessage::new(
+                        let new_message = ChannelViewEntry::new(
                             Text(String::from_utf8(data.payload.clone()).unwrap()),
                             mesh_packet.from,
                             seen,
@@ -333,7 +333,7 @@ impl DeviceView {
                     let channel_id = ChannelId::Node(mesh_packet.from);
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelMessage::new(
+                        let new_message = ChannelViewEntry::new(
                             Position(position.latitude_i.unwrap(), position.longitude_i.unwrap()),
                             mesh_packet.from,
                             seen,
@@ -355,7 +355,7 @@ impl DeviceView {
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message =
-                            ChannelMessage::new(Ping(user.short_name), mesh_packet.from, seen);
+                            ChannelViewEntry::new(Ping(user.short_name), mesh_packet.from, seen);
                         channel_view.new_message(new_message);
                     } else {
                         eprintln!("No channel for ChannelId: {}", channel_id);

@@ -1,9 +1,9 @@
-use crate::channel_message::ChannelMsg::{Ping, Position, Text};
+use crate::channel_message::Payload::{Ping, Position, Text};
 use crate::channel_view::ChannelId::Channel;
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::device_view::DeviceViewMessage::ChannelMsg;
 use crate::styles::{text_input_style, MY_MESSAGE_STYLE, OTHERS_MESSAGE_STYLE};
-use crate::{channel_message::ChannelMessage, Message};
+use crate::{channel_message::ChannelViewEntry, Message};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
 use iced::{Element, Fill, Left, Right, Task, Theme};
@@ -40,8 +40,8 @@ impl Display for ChannelId {
 /// messages to and from a "Channel" which can be a Channel or a Node
 pub struct ChannelView {
     channel_id: ChannelId,
-    message: String,                     // Message typed in so far
-    messages: SortedVec<ChannelMessage>, // Messages received so far
+    message: String,                       // Message typed in so far
+    messages: SortedVec<ChannelViewEntry>, // Messages received so far
     my_source: u32,
 }
 
@@ -62,12 +62,12 @@ impl ChannelView {
     /// WHen a message was sent, add it to the list of messages to display with the current time
     pub fn message_sent(&mut self, msg_text: String) {
         self.messages
-            .push(ChannelMessage::new(Text(msg_text), self.my_source, true));
+            .push(ChannelViewEntry::new(Text(msg_text), self.my_source, true));
         // Until we have a queue of messages being sent pending confirmation
         self.message = String::new();
     }
 
-    pub fn new_message(&mut self, new_message: ChannelMessage) {
+    pub fn new_message(&mut self, new_message: ChannelViewEntry) {
         self.messages.push(new_message);
     }
 
