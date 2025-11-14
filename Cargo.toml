@@ -32,6 +32,7 @@ sorted-vec = { version = "0.8.10", default-features = false }
 # For horizontal busy bar in easing.rs
 lyon_algorithms = { version = "1.0", default-features = false }
 futures-channel = "0.3.31"
+chrono = "0.4.42"
 
 # With the standard release profile, binary size was: 10,756,272 (10.7MB)
 # With these changes the binary size reduced to: 5,596,848 (5.56MB)

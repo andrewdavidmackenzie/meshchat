@@ -22,8 +22,8 @@ use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;
 
-mod channel_message;
 mod channel_view;
+mod channel_view_entry;
 mod config;
 mod device_list_view;
 mod device_subscription;

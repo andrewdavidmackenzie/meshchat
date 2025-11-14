@@ -1,6 +1,6 @@
 use iced::border::Radius;
 use iced::widget::container::Style;
-use iced::widget::{button, text_input};
+use iced::widget::{button, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 
 pub const TEXT_INPUT_BACKGROUND: Background =
@@ -147,14 +147,23 @@ const MESSAGE_BORDER: Border = Border {
     color: Color::WHITE,
 };
 
-pub const MY_MESSAGE_STYLE: Style = Style {
+// TODO make a closure that reacts to the theme
+pub const MESSAGE_TEXT_STYLE: text::Style = text::Style {
+    color: Some(Color::WHITE),
+};
+
+pub const TIME_TEXT_COLOR: Color = Color::from_rgba(0.6, 0.6, 0.6, 1.0);
+pub const TIME_TEXT_SIZE: f32 = 11.0;
+pub const TIME_TEXT_WIDTH: f32 = 60.0;
+
+pub const MY_MESSAGE_BUBBLE_STYLE: Style = Style {
     text_color: Some(Color::WHITE),
     background: Some(Background::Color(Color::from_rgba(0.08, 0.3, 0.22, 1.0))),
     border: MESSAGE_BORDER,
     shadow: NO_SHADOW,
 };
 
-pub const OTHERS_MESSAGE_STYLE: Style = Style {
+pub const OTHERS_MESSAGE_BUBBLE_STYLE: Style = Style {
     text_color: Some(Color::WHITE),
     background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 1.0))),
     border: MESSAGE_BORDER,

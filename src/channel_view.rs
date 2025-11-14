@@ -1,16 +1,21 @@
-use crate::channel_message::ChannelMsg::{Ping, Position, Text};
 use crate::channel_view::ChannelId::Channel;
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
+use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::device_view::DeviceViewMessage::ChannelMsg;
-use crate::styles::{text_input_style, MY_MESSAGE_STYLE, OTHERS_MESSAGE_STYLE};
-use crate::{channel_message::ChannelMessage, Message};
+use crate::styles::{
+    text_input_style, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
+    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
+};
+use crate::{channel_view_entry::ChannelViewEntry, Message};
+use chrono::prelude::DateTime;
+use chrono::{Local, Utc};
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space};
-use iced::{Element, Fill, Left, Right, Task, Theme};
+use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space, Text};
+use iced::Length::Fixed;
+use iced::{Bottom, Element, Fill, Left, Renderer, Right, Task, Theme};
 use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
 use std::fmt::{Display, Formatter};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -37,12 +42,12 @@ impl Display for ChannelId {
     }
 }
 
-// TODO show QR of the channel config
-
+/// [ChannelView] implements view and update methods for Iced for a set of
+/// messages to and from a "Channel" which can be a Channel or a Node
 pub struct ChannelView {
-    pub(crate) channel_id: ChannelId,
-    message: String,                     // Message typed in so far
-    messages: SortedVec<ChannelMessage>, // Messages received so far
+    channel_id: ChannelId,
+    message: String,                      // text message typed in so far
+    entries: SortedVec<ChannelViewEntry>, // entries received so far
     my_source: u32,
 }
 
@@ -55,34 +60,28 @@ impl ChannelView {
         Self {
             channel_id,
             message: String::new(),
-            messages: SortedVec::new(),
+            entries: SortedVec::new(),
             my_source: source,
         }
     }
 
     /// WHen a message was sent, add it to the list of messages to display with the current time
     pub fn message_sent(&mut self, msg_text: String) {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|t| t.as_secs())
-            .unwrap_or(0);
-
-        self.messages.push(ChannelMessage {
-            message: Text(msg_text),
-            from: self.my_source,
-            rx_time: now, // time in epoc
-            seen: true,
-        });
+        self.entries.push(ChannelViewEntry::new(
+            TextMessage(msg_text),
+            self.my_source,
+            true,
+        ));
         // Until we have a queue of messages being sent pending confirmation
         self.message = String::new();
     }
 
-    pub fn new_message(&mut self, new_message: ChannelMessage) {
-        self.messages.push(new_message);
+    pub fn new_message(&mut self, new_message: ChannelViewEntry) {
+        self.entries.push(new_message);
     }
 
     pub fn num_unseen_messages(&self) -> usize {
-        self.messages.len()
+        self.entries.len()
     }
 
     pub fn update(&mut self, channel_view_message: ChannelViewMessage) -> Task<Message> {
@@ -114,29 +113,8 @@ impl ChannelView {
     pub fn view(&self) -> Element<'static, Message> {
         let mut channel_view = Column::new();
 
-        for message in &self.messages {
-            match &message.message {
-                Text(text_msg) => {
-                    channel_view = channel_view.push(message_box(
-                        text_msg.clone(),
-                        message.from == self.my_source,
-                    ));
-                }
-                Position(lat, long) => {
-                    let latitude = 0.0000001 * *lat as f64;
-                    let longitude = 0.0000001 * *long as f64;
-                    channel_view = channel_view.push(message_box(
-                        format!("({}, {})", latitude, longitude),
-                        message.from == self.my_source,
-                    ));
-                }
-                Ping(short_name) => {
-                    channel_view = channel_view.push(message_box(
-                        format!("Ping from user '{}'", short_name),
-                        message.from == self.my_source,
-                    ));
-                }
-            }
+        for message in &self.entries {
+            channel_view = channel_view.push(self.message_box(message));
         }
 
         let channel_scroll = scrollable(channel_view)
@@ -176,31 +154,63 @@ impl ChannelView {
             .padding([6, 6])
             .into()
     }
-}
 
-fn message_box(msg: String, me: bool) -> Element<'static, Message> {
-    let style = if me {
-        MY_MESSAGE_STYLE
-    } else {
-        OTHERS_MESSAGE_STYLE
-    };
+    fn message_box(&self, message: &ChannelViewEntry) -> Element<'static, Message> {
+        let style = if message.source_node(self.my_source) {
+            MY_MESSAGE_BUBBLE_STYLE
+        } else {
+            OTHERS_MESSAGE_BUBBLE_STYLE
+        };
 
-    let bubble = Container::new(
-        iced::widget::text(msg)
-            .align_x(Right)
-            .shaping(text::Shaping::Advanced),
-    )
-    .padding([6, 12])
-    .style(move |_theme: &Theme| style);
+        // TODO in the future we might change graphics based on type - just text for now
+        let msg = match message.payload() {
+            TextMessage(text_msg) => text_msg.clone(),
+            Position(lat, long) => {
+                let latitude = 0.0000001 * *lat as f64;
+                let longitude = 0.0000001 * *long as f64;
+                format!("({}, {})", latitude, longitude)
+            }
+            Ping(short_name) => format!("Ping from user '{}'", short_name),
+        };
 
-    let mut row = Row::new().padding([6, 6]);
-    if me {
-        row = row.push(Space::new(100.0, 1.0)).push(bubble);
-        let col = Column::new().width(Fill).align_x(Right);
-        col.push(row).into()
-    } else {
-        row = row.push(bubble).push(Space::new(100.0, 1.0));
-        let col = Column::new().width(Fill).align_x(Left);
-        col.push(row).into()
+        let bubble = Container::new(
+            Row::new()
+                .push(
+                    text(msg)
+                        .style(|_| MESSAGE_TEXT_STYLE)
+                        .size(18)
+                        .shaping(text::Shaping::Advanced),
+                )
+                .push(Space::with_width(10.0))
+                .push(Self::time_to_text(message.time()))
+                .align_y(Bottom),
+        )
+        .padding([6, 12])
+        .style(move |_theme: &Theme| style);
+
+        let mut row = Row::new().padding([6, 6]);
+        // Put on the right hand side if my message, on the left if from someone else
+        if message.source_node(self.my_source) {
+            // Avoid very wide messages from me extending all the way to the left edge of the screen
+            row = row.push(Space::with_width(100.0)).push(bubble);
+            Column::new().width(Fill).align_x(Right).push(row).into()
+        } else {
+            // TODO from - maybe a name or an icon from the u32? Need to store them somewhere?
+            // Avoid very wide messages from others extending all the way to the right edge
+            row = row.push(bubble).push(Space::with_width(100.0));
+            Column::new().width(Fill).align_x(Left).push(row).into()
+        }
+    }
+
+    /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
+    /// it occurs in. These will be separated by Day specifiers, so day is not needed.
+    fn time_to_text(time: u64) -> Text<'static, Theme, Renderer> {
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(time as i64).unwrap();
+        let datetime_local = datetime_utc.with_timezone(&Local);
+        let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
+        text(time_str)
+            .color(TIME_TEXT_COLOR)
+            .size(TIME_TEXT_SIZE)
+            .width(Fixed(TIME_TEXT_WIDTH))
     }
 }

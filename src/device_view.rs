@@ -1,6 +1,6 @@
-use crate::channel_message::ChannelMessage;
-use crate::channel_message::ChannelMsg::{Ping, Position, Text};
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
+use crate::channel_view_entry::ChannelViewEntry;
+use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
 use crate::device_subscription::SubscriptionEvent::{
@@ -31,7 +31,6 @@ use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum};
 use meshtastic::utils::stream::BleDevice;
 use meshtastic::Message as _;
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 
 const VIEW_BUTTON_HOVER_STYLE: Style = Style {
@@ -308,11 +307,6 @@ impl DeviceView {
         if let Some(Decoded(data)) = &mesh_packet.payload_variant {
             match PortNum::try_from(data.portnum) {
                 Ok(PortNum::AlertApp) | Ok(PortNum::TextMessageApp) => {
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|t| t.as_secs())
-                        .unwrap_or(0);
-
                     let channel_id = if mesh_packet.to == u32::MAX {
                         // Destined for a channel
                         ChannelId::Channel(mesh_packet.channel as i32)
@@ -322,12 +316,11 @@ impl DeviceView {
 
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let seen = self.viewing_channel == Some(channel_id.clone());
-                        let new_message = ChannelMessage {
-                            message: Text(String::from_utf8(data.payload.clone()).unwrap()),
-                            from: mesh_packet.from,
-                            rx_time: now,
+                        let new_message = ChannelViewEntry::new(
+                            TextMessage(String::from_utf8(data.payload.clone()).unwrap()),
+                            mesh_packet.from,
                             seen,
-                        };
+                        );
 
                         channel_view.new_message(new_message);
                     } else {
@@ -337,23 +330,14 @@ impl DeviceView {
                 Ok(PortNum::PositionApp) => {
                     let position =
                         meshtastic::protobufs::Position::decode(&data.payload as &[u8]).unwrap();
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|t| t.as_secs())
-                        .unwrap_or(0);
-
                     let channel_id = ChannelId::Node(mesh_packet.from);
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelMessage {
-                            message: Position(
-                                position.latitude_i.unwrap(),
-                                position.longitude_i.unwrap(),
-                            ),
-                            from: mesh_packet.from,
-                            rx_time: now,
+                        let new_message = ChannelViewEntry::new(
+                            Position(position.latitude_i.unwrap(), position.longitude_i.unwrap()),
+                            mesh_packet.from,
                             seen,
-                        };
+                        );
                         channel_view.new_message(new_message);
                     } else {
                         eprintln!("No channel for ChannelId: {}", channel_id);
@@ -366,21 +350,12 @@ impl DeviceView {
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map(|t| t.as_secs())
-                        .unwrap_or(0);
-
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = ChannelId::Node(mesh_packet.from);
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelMessage {
-                            message: Ping(user.short_name),
-                            from: mesh_packet.from,
-                            rx_time: now,
-                            seen,
-                        };
+                        let new_message =
+                            ChannelViewEntry::new(Ping(user.short_name), mesh_packet.from, seen);
                         channel_view.new_message(new_message);
                     } else {
                         eprintln!("No channel for ChannelId: {}", channel_id);
