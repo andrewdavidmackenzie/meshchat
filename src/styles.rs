@@ -152,9 +152,9 @@ pub const MESSAGE_TEXT_STYLE: text::Style = text::Style {
     color: Some(Color::WHITE),
 };
 
-pub const MESSAGE_TIME_STYLE: text::Style = text::Style {
-    color: Some(Color::from_rgba(0.6, 0.6, 0.6, 1.0)),
-};
+pub const TIME_TEXT_COLOR: Color = Color::from_rgba(0.6, 0.6, 0.6, 1.0);
+pub const TIME_TEXT_SIZE: f32 = 11.0;
+pub const TIME_TEXT_WIDTH: f32 = 60.0;
 
 pub const MY_MESSAGE_BUBBLE_STYLE: Style = Style {
     text_color: Some(Color::WHITE),

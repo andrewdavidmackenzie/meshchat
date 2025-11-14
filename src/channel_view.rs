@@ -3,19 +3,19 @@ use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::device_view::DeviceViewMessage::ChannelMsg;
 use crate::styles::{
-    text_input_style, MESSAGE_TEXT_STYLE, MESSAGE_TIME_STYLE, MY_MESSAGE_BUBBLE_STYLE,
-    OTHERS_MESSAGE_BUBBLE_STYLE,
+    text_input_style, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
+    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
 };
 use crate::{channel_view_entry::ChannelViewEntry, Message};
 use chrono::prelude::DateTime;
 use chrono::Utc;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space, Text};
+use iced::Length::Fixed;
 use iced::{Bottom, Element, Fill, Left, Renderer, Right, Task, Theme};
 use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
 use std::fmt::{Display, Formatter};
-use std::time::UNIX_EPOCH;
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -192,23 +192,24 @@ impl ChannelView {
         // Put on the right hand side if my message, on the left if from someone else
         if message.source_node(self.my_source) {
             // Avoid very wide messages from me extending all the way to the left edge of the screen
-            row = row.push(Space::new(100.0, 1.0)).push(bubble);
-            let col = Column::new().width(Fill).align_x(Right);
-            col.push(row).into()
+            row = row.push(Space::with_width(100.0)).push(bubble);
+            Column::new().width(Fill).align_x(Right).push(row).into()
         } else {
             // TODO from - maybe a name or an icon from the u32? Need to store them somewhere?
             // Avoid very wide messages from others extending all the way to the right edge
-            row = row.push(bubble).push(Space::new(100.0, 1.0));
-            let col = Column::new().width(Fill).align_x(Left);
-            col.push(row).into()
+            row = row.push(bubble).push(Space::with_width(100.0));
+            Column::new().width(Fill).align_x(Left).push(row).into()
         }
     }
 
     /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
     /// it occurs in. These will be separated by Day specifiers, so day is not needed.
     fn time_to_text(time: u64) -> Text<'static, Theme, Renderer> {
-        let datetime = DateTime::<Utc>::from(UNIX_EPOCH + std::time::Duration::from_secs(time));
-        let time_str = datetime.format("%H:%M").to_string(); // Formats as HH:MM
-        text(time_str).style(|_| MESSAGE_TIME_STYLE).size(11)
+        let datetime = DateTime::<Utc>::from_timestamp_secs(time as i64).unwrap();
+        let time_str = datetime.naive_local().format("%H:%M").to_string(); // Formats as HH:MM
+        text(time_str)
+            .color(TIME_TEXT_COLOR)
+            .size(TIME_TEXT_SIZE)
+            .width(Fixed(TIME_TEXT_WIDTH))
     }
 }
