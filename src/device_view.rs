@@ -314,11 +314,13 @@ impl DeviceView {
                         ChannelId::Node(mesh_packet.from)
                     };
 
+                    let name = self.source_name(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let seen = self.viewing_channel == Some(channel_id.clone());
                         let new_message = ChannelViewEntry::new(
                             TextMessage(String::from_utf8(data.payload.clone()).unwrap()),
                             mesh_packet.from,
+                            name,
                             seen,
                         );
 
@@ -332,10 +334,12 @@ impl DeviceView {
                         meshtastic::protobufs::Position::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = ChannelId::Node(mesh_packet.from);
                     let seen = self.viewing_channel == Some(channel_id.clone());
+                    let name = self.source_name(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
                             Position(position.latitude_i.unwrap(), position.longitude_i.unwrap()),
                             mesh_packet.from,
+                            name,
                             seen,
                         );
                         channel_view.new_message(new_message);
@@ -352,10 +356,15 @@ impl DeviceView {
                 Ok(PortNum::NodeinfoApp) => {
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = ChannelId::Node(mesh_packet.from);
+                    let name = self.source_name(mesh_packet);
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message =
-                            ChannelViewEntry::new(Ping(user.short_name), mesh_packet.from, seen);
+                        let new_message = ChannelViewEntry::new(
+                            Ping(user.short_name),
+                            mesh_packet.from,
+                            name,
+                            seen,
+                        );
                         channel_view.new_message(new_message);
                     } else {
                         eprintln!("No channel for ChannelId: {}", channel_id);
@@ -366,6 +375,16 @@ impl DeviceView {
         }
 
         Task::none()
+    }
+
+    fn source_name(&self, mesh_packet: &MeshPacket) -> Option<String> {
+        if Some(mesh_packet.from) == self.my_node_num {
+            return None;
+        }
+
+        self.nodes
+            .get(&mesh_packet.from)
+            .map(|node_info| node_info.user.as_ref().unwrap().short_name.clone())
     }
 
     pub fn header<'a>(&'a self, connection_state: &'a ConnectionState) -> Element<'a, Message> {

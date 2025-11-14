@@ -3,19 +3,27 @@ use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::device_view::DeviceViewMessage::ChannelMsg;
 use crate::styles::{
-    text_input_style, DAY_SEPARATOR_STYLE, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE,
-    OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
+    name_box_style, text_input_style, COLOR_DICTIONARY, DAY_SEPARATOR_STYLE,
+    MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE,
+    TIME_TEXT_WIDTH,
 };
 use crate::{channel_view_entry::ChannelViewEntry, Message};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
+use iced::font::Weight;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{scrollable, text, text_input, Column, Container, Row, Space, Text};
+use iced::widget::{
+    container, scrollable, text, text_input, tooltip, Column, Container, Row, Space, Text,
+};
 use iced::Length::Fixed;
-use iced::{Bottom, Center, Element, Fill, Left, Padding, Renderer, Right, Task, Theme};
+use iced::{
+    Bottom, Center, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Task, Theme,
+};
 use serde::{Deserialize, Serialize};
 use sorted_vec::SortedVec;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -65,11 +73,12 @@ impl ChannelView {
         }
     }
 
-    /// WHen a message was sent, add it to the list of messages to display with the current time
+    /// When a message was sent, add it to the list of messages to display with the current time
     pub fn message_sent(&mut self, msg_text: String) {
         self.entries.push(ChannelViewEntry::new(
             TextMessage(msg_text),
             self.my_source,
+            None, // No name for my messages
             true,
         ));
         // Until we have a queue of messages being sent pending confirmation
@@ -223,17 +232,36 @@ impl ChannelView {
             Ping(short_name) => format!("Ping from user '{}'", short_name),
         };
 
-        let bubble = Container::new(
-            Row::new()
-                .push(
-                    text(msg)
-                        .style(|_| MESSAGE_TEXT_STYLE)
-                        .size(18)
-                        .shaping(text::Shaping::Advanced),
+        let mut col = Column::new();
+        if let Some(name) = message.name() {
+            col = col.push(tooltip(
+                container(
+                    text(name.clone())
+                        .color(Self::color_from_name(&name))
+                        .font(Font {
+                            weight: Weight::Bold,
+                            ..Default::default()
+                        }),
                 )
-                .push(Space::with_width(10.0))
-                .push(Self::time_to_text(message.time()))
-                .align_y(Bottom),
+                .style(name_box_style)
+                .padding([3, 3]),
+                text(format!("Sent from node '{name}'")),
+                tooltip::Position::Top,
+            ));
+        }
+        let bubble = Container::new(
+            col.push(
+                Row::new()
+                    .push(
+                        text(msg)
+                            .style(|_| MESSAGE_TEXT_STYLE)
+                            .size(18)
+                            .shaping(text::Shaping::Advanced),
+                    )
+                    .push(Space::with_width(10.0))
+                    .push(Self::time_to_text(message.time()))
+                    .align_y(Bottom),
+            ),
         )
         .padding([6, 12])
         .style(move |_theme: &Theme| style);
@@ -250,6 +278,15 @@ impl ChannelView {
             row = row.push(bubble).push(Space::with_width(100.0));
             Column::new().width(Fill).align_x(Left).push(row).into()
         }
+    }
+
+    fn color_from_name(name: &String) -> Color {
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        let index = (hash % COLOR_DICTIONARY.len() as u64) as usize;
+        COLOR_DICTIONARY[index]
     }
 
     /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day

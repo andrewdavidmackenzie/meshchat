@@ -16,13 +16,14 @@ pub struct ChannelViewEntry {
     from: u32,
     rx_time: u64,
     payload: Payload,
+    name: Option<String>,
     seen: bool,
 }
 
 impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(message: Payload, from: u32, seen: bool) -> Self {
+    pub fn new(message: Payload, from: u32, name: Option<String>, seen: bool) -> Self {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())
@@ -32,6 +33,7 @@ impl ChannelViewEntry {
             payload: message,
             from,
             rx_time,
+            name,
             seen,
         }
     }
@@ -49,6 +51,11 @@ impl ChannelViewEntry {
     /// Return the time this message was received/sent as u64 seconds in EPOCH time
     pub fn time(&self) -> u64 {
         self.rx_time
+    }
+
+    /// Return the optional name of the sender of this messag
+    pub fn name(&self) -> &Option<String> {
+        &self.name
     }
 }
 

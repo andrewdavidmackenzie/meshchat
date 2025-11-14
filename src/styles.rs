@@ -3,6 +3,69 @@ use iced::widget::container::Style;
 use iced::widget::{button, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 
+// Basic Colors
+pub const COLOR_RED: Color = Color::from_rgb(0.9, 0.2, 0.2);
+pub const COLOR_GREEN: Color = Color::from_rgb(0.2, 0.8, 0.2);
+pub const COLOR_BLUE: Color = Color::from_rgb(0.2, 0.4, 0.9);
+pub const COLOR_YELLOW: Color = Color::from_rgb(0.95, 0.9, 0.2);
+pub const COLOR_ORANGE: Color = Color::from_rgb(0.95, 0.6, 0.2);
+pub const COLOR_PURPLE: Color = Color::from_rgb(0.7, 0.3, 0.9);
+pub const COLOR_PINK: Color = Color::from_rgb(0.95, 0.5, 0.7);
+pub const COLOR_CYAN: Color = Color::from_rgb(0.2, 0.8, 0.9);
+
+// Pastel Colors
+pub const COLOR_PASTEL_BLUE: Color = Color::from_rgb(0.68, 0.85, 0.9);
+pub const COLOR_PASTEL_GREEN: Color = Color::from_rgb(0.7, 0.93, 0.77);
+pub const COLOR_PASTEL_YELLOW: Color = Color::from_rgb(0.99, 0.96, 0.7);
+pub const COLOR_PASTEL_PINK: Color = Color::from_rgb(0.98, 0.8, 0.85);
+pub const COLOR_PASTEL_PURPLE: Color = Color::from_rgb(0.8, 0.7, 0.9);
+pub const COLOR_PASTEL_ORANGE: Color = Color::from_rgb(0.98, 0.85, 0.7);
+
+// Dark Colors
+pub const COLOR_DARK_RED: Color = Color::from_rgb(0.5, 0.1, 0.1);
+pub const COLOR_DARK_GREEN: Color = Color::from_rgb(0.1, 0.4, 0.1);
+pub const COLOR_DARK_BLUE: Color = Color::from_rgb(0.1, 0.2, 0.5);
+pub const COLOR_DARK_GRAY: Color = Color::from_rgb(0.2, 0.2, 0.2);
+pub const COLOR_DARK_PURPLE: Color = Color::from_rgb(0.3, 0.1, 0.4);
+
+// Gray Scale
+pub const COLOR_GRAY_10: Color = Color::from_rgb(0.1, 0.1, 0.1);
+pub const COLOR_GRAY_20: Color = Color::from_rgb(0.2, 0.2, 0.2);
+pub const COLOR_GRAY_30: Color = Color::from_rgb(0.3, 0.3, 0.3);
+pub const COLOR_GRAY_40: Color = Color::from_rgb(0.4, 0.4, 0.4);
+pub const COLOR_GRAY_50: Color = Color::from_rgb(0.5, 0.5, 0.5);
+pub const COLOR_GRAY_60: Color = Color::from_rgb(0.6, 0.6, 0.6);
+pub const COLOR_GRAY_70: Color = Color::from_rgb(0.7, 0.7, 0.7);
+pub const COLOR_GRAY_80: Color = Color::from_rgb(0.8, 0.8, 0.8);
+pub const COLOR_GRAY_90: Color = Color::from_rgb(0.9, 0.9, 0.9);
+
+// Vibrant Colors
+pub const COLOR_VIBRANT_RED: Color = Color::from_rgb(1.0, 0.0, 0.2);
+pub const COLOR_VIBRANT_GREEN: Color = Color::from_rgb(0.0, 1.0, 0.3);
+pub const COLOR_VIBRANT_BLUE: Color = Color::from_rgb(0.0, 0.5, 1.0);
+pub const COLOR_VIBRANT_MAGENTA: Color = Color::from_rgb(1.0, 0.0, 1.0);
+pub const COLOR_VIBRANT_CYAN: Color = Color::from_rgb(0.0, 1.0, 1.0);
+pub const COLOR_VIBRANT_YELLOW: Color = Color::from_rgb(1.0, 1.0, 0.0);
+
+// A dictionary of colors to use for names of other nodes
+pub const COLOR_DICTIONARY: [Color; 15] = [
+    COLOR_RED,
+    COLOR_GREEN,
+    COLOR_BLUE,
+    COLOR_CYAN,
+    COLOR_PINK,
+    COLOR_YELLOW,
+    COLOR_GREEN,
+    COLOR_ORANGE,
+    COLOR_PURPLE,
+    COLOR_VIBRANT_BLUE,
+    COLOR_VIBRANT_MAGENTA,
+    COLOR_PASTEL_BLUE,
+    COLOR_PASTEL_GREEN,
+    COLOR_PASTEL_PINK,
+    COLOR_PASTEL_PURPLE,
+];
+
 pub const TEXT_INPUT_BACKGROUND: Background =
     Background::Color(Color::from_rgba(0.25, 0.25, 0.25, 1.0));
 
@@ -182,3 +245,25 @@ pub const OTHERS_MESSAGE_BUBBLE_STYLE: Style = Style {
     border: MESSAGE_BORDER,
     shadow: NO_SHADOW,
 };
+
+const NAME_BOX_BORDER: Border = Border {
+    radius: Radius {
+        top_left: 6.0,
+        top_right: 6.0,
+        bottom_right: 6.0,
+        bottom_left: 6.0,
+    }, // rounded corners
+    width: 1.0,
+    color: Color::WHITE,
+};
+
+pub const NAME_BOX_STYLE: Style = Style {
+    text_color: Some(Color::WHITE),
+    background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 1.0))),
+    border: NO_BORDER,
+    shadow: NO_SHADOW,
+};
+
+pub fn name_box_style(_theme: &Theme) -> Style {
+    NAME_BOX_STYLE
+}
