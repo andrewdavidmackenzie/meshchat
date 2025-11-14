@@ -144,6 +144,11 @@ impl ChannelView {
     }
 
     /// Return an Element that displays a day separator
+    /// If in the same week, then just the day name "Friday"
+    /// If in a previous week, of the same year, then "Friday, Jul 8"
+    /// If in a previous year, then "Friday, Jul 8, 2021"
+    ///
+    /// Meaning of format strings used
     /// "%Y" - Year . e.g. "2021"
     /// "%b" - Three letter month name e.g. "Jul"
     /// "%e" - space padded date e.g. " 8" for the 8th day of the month
