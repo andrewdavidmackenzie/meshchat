@@ -74,10 +74,11 @@ impl ChannelView {
     }
 
     /// When a message was sent, add it to the list of messages to display with the current time
-    pub fn message_sent(&mut self, msg_text: String) {
+    pub fn message_sent(&mut self, msg_text: String, message_id: u32) {
         self.entries.push(ChannelViewEntry::new(
             TextMessage(msg_text),
             self.my_source,
+            message_id,
             None, // No name for my messages
             true,
         ));

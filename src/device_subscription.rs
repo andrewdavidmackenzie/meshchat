@@ -2,7 +2,7 @@ use crate::channel_view::ChannelId;
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, RadioPacket, SendText};
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, MessageSent,
+    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent,
 };
 use crate::name_from_id;
 use futures::SinkExt;
@@ -31,7 +31,7 @@ pub enum SubscriptionEvent {
     DisconnectedEvent(BleDevice),
     DevicePacket(Box<FromRadio>),
     DeviceMeshPacket(Box<MeshPacket>),
-    MessageSent(String, ChannelId), // Maybe add type for when we send emojis or something else
+    MessageSent(String, ChannelId, u32), // Maybe add type for when we send emojis or something else
     ConnectionError(BleDevice, String, String),
 }
 
@@ -161,8 +161,8 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             Connect(_) => eprintln!("Already connected!"),
                             Disconnect => break,
                             SendText(text, channel_id) => {
-                                // TODO handle send errors and report to UI
                                 let mut api = stream_api.take().unwrap();
+                                // TODO handle errors
                                 match channel_id {
                                     ChannelId::Channel(channel_number) => {
                                         let _ = api
@@ -176,7 +176,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                             .await;
                                     }
                                     ChannelId::Node(node_id) => {
-                                        match api
+                                        let _ = api
                                             .send_text(
                                                 &mut my_router,
                                                 text.clone(),
@@ -184,22 +184,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                                 true,
                                                 MeshChannel::default(),
                                             )
-                                            .await
-                                        {
-                                            Ok(_) => gui_sender
-                                                .send(MessageSent(text, channel_id))
-                                                .await
-                                                .unwrap_or_else(|e| eprintln!("Send error: {e}")),
-
-                                            Err(e) => gui_sender
-                                                .send(ConnectionError(
-                                                    device.clone(),
-                                                    "Failed to send text".to_string(),
-                                                    e.to_string(),
-                                                ))
-                                                .await
-                                                .unwrap_or_else(|e| eprintln!("Send error: {e}")),
-                                        }
+                                            .await;
                                     }
                                 }
                                 let _none = stream_api.replace(api);

@@ -199,9 +199,9 @@ impl DeviceView {
                 }
                 DevicePacket(packet) => self.handle_from_radio(packet),
                 DeviceMeshPacket(packet) => self.handle_mesh_packet(&packet),
-                MessageSent(msg_test, channel_id) => {
+                MessageSent(msg_text, channel_id, message_id) => {
                     if let Some(channel_view) = self.channel_views.get_mut(&channel_id) {
-                        channel_view.message_sent(msg_test);
+                        channel_view.message_sent(msg_text, message_id);
                     }
                     Task::none()
                 }
@@ -303,23 +303,38 @@ impl DeviceView {
         }
     }
 
+    fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
+        if mesh_packet.to == u32::MAX {
+            // Destined for a channel
+            ChannelId::Channel(mesh_packet.channel as i32)
+        } else {
+            // Destined for a Node
+            if Some(mesh_packet.from) == self.my_node_num {
+                // from me to a node - put it in that node's channel
+                ChannelId::Node(mesh_packet.to)
+            } else {
+                // from the other node, put it in that node's channel
+                ChannelId::Node(mesh_packet.from)
+            }
+        }
+    }
+
     fn handle_mesh_packet(&mut self, mesh_packet: &MeshPacket) -> Task<Message> {
         if let Some(Decoded(data)) = &mesh_packet.payload_variant {
             match PortNum::try_from(data.portnum) {
+                Ok(PortNum::RoutingApp) => {
+                    println!("Routing: {:?} from {}", data.payload, mesh_packet.from);
+                    println!("Request ID: {}", data.request_id);
+                }
                 Ok(PortNum::AlertApp) | Ok(PortNum::TextMessageApp) => {
-                    let channel_id = if mesh_packet.to == u32::MAX {
-                        // Destined for a channel
-                        ChannelId::Channel(mesh_packet.channel as i32)
-                    } else {
-                        ChannelId::Node(mesh_packet.from)
-                    };
-
+                    let channel_id = self.channel_id_from_packet(mesh_packet);
                     let name = self.source_name(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let seen = self.viewing_channel == Some(channel_id.clone());
                         let new_message = ChannelViewEntry::new(
                             TextMessage(String::from_utf8(data.payload.clone()).unwrap()),
                             mesh_packet.from,
+                            mesh_packet.id,
                             name,
                             seen,
                         );
@@ -332,13 +347,14 @@ impl DeviceView {
                 Ok(PortNum::PositionApp) => {
                     let position =
                         meshtastic::protobufs::Position::decode(&data.payload as &[u8]).unwrap();
-                    let channel_id = ChannelId::Node(mesh_packet.from);
+                    let channel_id = self.channel_id_from_packet(mesh_packet);
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     let name = self.source_name(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
                             Position(position.latitude_i.unwrap(), position.longitude_i.unwrap()),
                             mesh_packet.from,
+                            mesh_packet.id,
                             name,
                             seen,
                         );
@@ -355,13 +371,14 @@ impl DeviceView {
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
-                    let channel_id = ChannelId::Node(mesh_packet.from);
+                    let channel_id = self.channel_id_from_packet(mesh_packet);
                     let name = self.source_name(mesh_packet);
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
                             Ping(user.short_name),
                             mesh_packet.from,
+                            mesh_packet.id,
                             name,
                             seen,
                         );

@@ -14,6 +14,7 @@ pub enum Payload {
 #[derive(Serialize, Deserialize)]
 pub struct ChannelViewEntry {
     from: u32,
+    message_id: u32,
     rx_time: u64,
     payload: Payload,
     name: Option<String>,
@@ -23,7 +24,13 @@ pub struct ChannelViewEntry {
 impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(message: Payload, from: u32, name: Option<String>, seen: bool) -> Self {
+    pub fn new(
+        message: Payload,
+        from: u32,
+        message_id: u32,
+        name: Option<String>,
+        seen: bool,
+    ) -> Self {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())
@@ -32,6 +39,7 @@ impl ChannelViewEntry {
         ChannelViewEntry {
             payload: message,
             from,
+            message_id,
             rx_time,
             name,
             seen,
@@ -53,7 +61,7 @@ impl ChannelViewEntry {
         self.rx_time
     }
 
-    /// Return the optional name of the sender of this messag
+    /// Return the optional name of the sender of this message
     pub fn name(&self) -> &Option<String> {
         &self.name
     }
