@@ -4,8 +4,7 @@ use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent,
-    MessageSent, Ready,
+    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
@@ -199,12 +198,6 @@ impl DeviceView {
                 }
                 DevicePacket(packet) => self.handle_from_radio(packet),
                 DeviceMeshPacket(packet) => self.handle_mesh_packet(&packet),
-                MessageSent(msg_text, channel_id, message_id) => {
-                    if let Some(channel_view) = self.channel_views.get_mut(&channel_id) {
-                        channel_view.message_sent(msg_text, message_id);
-                    }
-                    Task::none()
-                }
                 ConnectionError(id, summary, detail) => {
                     self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                     Task::perform(empty(), |_| Navigation(View::DeviceList))
@@ -323,8 +316,14 @@ impl DeviceView {
         if let Some(Decoded(data)) = &mesh_packet.payload_variant {
             match PortNum::try_from(data.portnum) {
                 Ok(PortNum::RoutingApp) => {
-                    println!("Routing: {:?} from {}", data.payload, mesh_packet.from);
-                    println!("Request ID: {}", data.request_id);
+                    let channel_id = if mesh_packet.from == mesh_packet.to {
+                        ChannelId::Channel(mesh_packet.channel as i32)
+                    } else {
+                        ChannelId::Node(mesh_packet.to)
+                    };
+                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                        channel_view.ack(data.request_id)
+                    }
                 }
                 Ok(PortNum::AlertApp) | Ok(PortNum::TextMessageApp) => {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
@@ -337,6 +336,8 @@ impl DeviceView {
                             mesh_packet.id,
                             name,
                             seen,
+                            None,
+                            None,
                         );
 
                         channel_view.new_message(new_message);
@@ -357,6 +358,8 @@ impl DeviceView {
                             mesh_packet.id,
                             name,
                             seen,
+                            None,
+                            None,
                         );
                         channel_view.new_message(new_message);
                     } else {
@@ -381,6 +384,8 @@ impl DeviceView {
                             mesh_packet.id,
                             name,
                             seen,
+                            None,
+                            None,
                         );
                         channel_view.new_message(new_message);
                     } else {

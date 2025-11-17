@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Payload {
     TextMessage(String),
     Position(i32, i32),
@@ -11,7 +11,7 @@ pub enum Payload {
 
 /// An entry in the Channel View that represents some type of message sent to either this user on
 /// this device or to a channel this device can read. Can be any of [Payload] types.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ChannelViewEntry {
     from: u32,
     message_id: u32,
@@ -19,6 +19,9 @@ pub struct ChannelViewEntry {
     payload: Payload,
     name: Option<String>,
     seen: bool,
+    acked: bool,
+    emoji_reply: Option<String>,
+    reply_to: Option<u32>, // Another ChannelViewEntry.message_id
 }
 
 impl ChannelViewEntry {
@@ -30,6 +33,8 @@ impl ChannelViewEntry {
         message_id: u32,
         name: Option<String>,
         seen: bool,
+        emoji_reply: Option<String>,
+        reply_to: Option<u32>,
     ) -> Self {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -43,6 +48,9 @@ impl ChannelViewEntry {
             rx_time,
             name,
             seen,
+            acked: false,
+            emoji_reply,
+            reply_to,
         }
     }
 
@@ -54,6 +62,21 @@ impl ChannelViewEntry {
     /// Return true if this message was sent from the specified node id
     pub fn source_node(&self, node_id: u32) -> bool {
         self.from == node_id
+    }
+
+    /// Return the message_id
+    pub fn message_id(&self) -> u32 {
+        self.message_id
+    }
+
+    /// Mark the Entry as acknowledgeMd
+    pub fn ack(&mut self) {
+        self.acked = true;
+    }
+
+    /// Return true if the radio has acknowledged this message
+    pub fn acked(&self) -> bool {
+        self.acked
     }
 
     /// Return the time this message was received/sent as u64 seconds in EPOCH time

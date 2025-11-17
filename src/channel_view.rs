@@ -24,6 +24,7 @@ use sorted_vec::SortedVec;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
+use std::mem;
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -73,17 +74,15 @@ impl ChannelView {
         }
     }
 
-    /// When a message was sent, add it to the list of messages to display with the current time
-    pub fn message_sent(&mut self, msg_text: String, message_id: u32) {
-        self.entries.push(ChannelViewEntry::new(
-            TextMessage(msg_text),
-            self.my_source,
-            message_id,
-            None, // No name for my messages
-            true,
-        ));
-        // Until we have a queue of messages being sent pending confirmation
-        self.message = String::new();
+    pub fn ack(&mut self, request_id: u32) {
+        // Convert to Vec to allow mutable access, modify entries, then rebuild SortedVec
+        let mut entries_vec: Vec<ChannelViewEntry> = mem::take(&mut self.entries).into_iter().collect();
+        for entry in entries_vec.iter_mut() {
+            if entry.message_id() == request_id {
+                entry.ack();
+            }
+        }
+        self.entries = SortedVec::from_unsorted(entries_vec);
     }
 
     pub fn new_message(&mut self, new_message: ChannelViewEntry) {
@@ -250,6 +249,9 @@ impl ChannelView {
                 tooltip::Position::Top,
             ));
         }
+
+        let ack = if message.acked() { "ACK" } else { "" };
+
         let bubble = Container::new(
             col.push(
                 Row::new()
@@ -261,6 +263,7 @@ impl ChannelView {
                     )
                     .push(Space::with_width(10.0))
                     .push(Self::time_to_text(message.time()))
+                    .push(text(ack).size(14))
                     .align_y(Bottom),
             ),
         )

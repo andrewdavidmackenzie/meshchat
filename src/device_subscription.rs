@@ -31,7 +31,6 @@ pub enum SubscriptionEvent {
     DisconnectedEvent(BleDevice),
     DevicePacket(Box<FromRadio>),
     DeviceMeshPacket(Box<MeshPacket>),
-    MessageSent(String, ChannelId, u32), // Maybe add type for when we send emojis or something else
     ConnectionError(BleDevice, String, String),
 }
 
