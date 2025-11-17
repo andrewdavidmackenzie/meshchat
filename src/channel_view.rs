@@ -3,9 +3,9 @@ use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput};
 use crate::channel_view_entry::Payload::{Ping, Position, TextMessage};
 use crate::device_view::DeviceViewMessage::ChannelMsg;
 use crate::styles::{
-    name_box_style, text_input_style, COLOR_DICTIONARY, DAY_SEPARATOR_STYLE,
-    MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE,
-    TIME_TEXT_WIDTH,
+    name_box_style, text_input_style, COLOR_DICTIONARY, COLOR_GREEN,
+    DAY_SEPARATOR_STYLE, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
+    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
 };
 use crate::{channel_view_entry::ChannelViewEntry, Message};
 use chrono::prelude::DateTime;
@@ -76,7 +76,8 @@ impl ChannelView {
 
     pub fn ack(&mut self, request_id: u32) {
         // Convert to Vec to allow mutable access, modify entries, then rebuild SortedVec
-        let mut entries_vec: Vec<ChannelViewEntry> = mem::take(&mut self.entries).into_iter().collect();
+        let mut entries_vec: Vec<ChannelViewEntry> =
+            mem::take(&mut self.entries).into_iter().collect();
         for entry in entries_vec.iter_mut() {
             if entry.message_id() == request_id {
                 entry.ack();
@@ -250,25 +251,24 @@ impl ChannelView {
             ));
         }
 
-        let ack = if message.acked() { "ACK" } else { "" };
+        let mut row = Row::new()
+            .push(
+                text(msg)
+                    .style(|_| MESSAGE_TEXT_STYLE)
+                    .size(18)
+                    .shaping(text::Shaping::Advanced),
+            )
+            .push(Space::with_width(10.0))
+            .push(Self::time_to_text(message.time()))
+            .align_y(Bottom);
 
-        let bubble = Container::new(
-            col.push(
-                Row::new()
-                    .push(
-                        text(msg)
-                            .style(|_| MESSAGE_TEXT_STYLE)
-                            .size(18)
-                            .shaping(text::Shaping::Advanced),
-                    )
-                    .push(Space::with_width(10.0))
-                    .push(Self::time_to_text(message.time()))
-                    .push(text(ack).size(14))
-                    .align_y(Bottom),
-            ),
-        )
-        .padding([6, 8])
-        .style(move |_theme: &Theme| style);
+        if message.acked() {
+            row = row.push(text("✓").size(14).color(COLOR_GREEN))
+        };
+
+        let bubble = Container::new(col.push(row))
+            .padding([6, 8])
+            .style(move |_theme: &Theme| style);
 
         let mut row = Row::new().padding([6, 6]);
         // Put on the right-hand side if my message, on the left if from someone else
