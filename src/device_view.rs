@@ -319,7 +319,7 @@ impl DeviceView {
                     let channel_id = if mesh_packet.from == mesh_packet.to {
                         ChannelId::Channel(mesh_packet.channel as i32)
                     } else {
-                        ChannelId::Node(mesh_packet.to)
+                        ChannelId::Node(mesh_packet.from)
                     };
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         channel_view.ack(data.request_id)
