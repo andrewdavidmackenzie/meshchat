@@ -2,7 +2,7 @@ use iced::Point;
 use std::sync::OnceLock;
 
 use lyon_algorithms::measure::PathMeasurements;
-use lyon_algorithms::path::{builder::NoAttributes, path::BuilderImpl, Path};
+use lyon_algorithms::path::{Path, builder::NoAttributes, path::BuilderImpl};
 
 pub static STANDARD: OnceLock<Easing> = OnceLock::new();
 

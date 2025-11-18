@@ -1,5 +1,5 @@
-use crate::channel_view::ChannelId;
 use crate::Message;
+use crate::channel_view::ChannelId;
 use directories::ProjectDirs;
 use iced::Task;
 use meshtastic::utils::stream::BleDevice;

@@ -5,20 +5,20 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::device_view::DeviceViewMessage::ChannelMsg;
 use crate::styles::{
-    name_box_style, text_input_style, COLOR_DICTIONARY, COLOR_GREEN,
-    DAY_SEPARATOR_STYLE, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
-    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
+    COLOR_DICTIONARY, COLOR_GREEN, DAY_SEPARATOR_STYLE, MESSAGE_TEXT_STYLE,
+    MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE,
+    TIME_TEXT_WIDTH, name_box_style, text_input_style,
 };
-use crate::{channel_view_entry::ChannelViewEntry, Message};
+use crate::{Message, channel_view_entry::ChannelViewEntry};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
+use iced::Length::Fixed;
 use iced::font::Weight;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::{
-    container, scrollable, text, text_input, tooltip, Column, Container, Row, Space, Text,
+    Column, Container, Row, Space, Text, container, scrollable, text, text_input, tooltip,
 };
-use iced::Length::Fixed;
 use iced::{
     Bottom, Center, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Task, Theme,
 };

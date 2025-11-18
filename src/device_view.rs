@@ -1,3 +1,4 @@
+use crate::Message::{Device, Navigation};
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
 use crate::channel_view_entry::Payload::{
@@ -14,23 +15,22 @@ use crate::device_view::DeviceViewMessage::{
     ChannelMsg, ConnectRequest, DisconnectRequest, SearchInput, SendMessage, ShowChannel,
     SubscriptionMessage,
 };
-use crate::styles::{chip_style, text_input_style, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER};
-use crate::Message::{Device, Navigation};
-use crate::{device_subscription, Message, View};
+use crate::styles::{NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER, chip_style, text_input_style};
+use crate::{Message, View, device_subscription};
 use iced::widget::button::Status::Hovered;
 use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
-use iced::widget::{button, row, scrollable, text, text_input, Button, Column, Row, Space};
-use iced::{alignment, Background, Color, Element, Fill, Task, Theme};
+use iced::widget::{Button, Column, Row, Space, button, row, scrollable, text, text_input};
+use iced::{Background, Color, Element, Fill, Task, Theme, alignment};
 use iced_futures::Subscription;
+use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum};
 use meshtastic::utils::stream::BleDevice;
-use meshtastic::Message as _;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -528,7 +528,7 @@ impl DeviceView {
         }
 
         // If not viewing a channel/user, show the list of channels and users
-        let mut channels_view = Column::new();
+        let mut channels_list = Column::new();
 
         for (index, channel) in self.channels.iter().enumerate() {
             let channel_name = Self::channel_name(channel);
@@ -539,7 +539,7 @@ impl DeviceView {
             }
 
             let channel_id = ChannelId::Channel(index as i32);
-            let channel_row = Self::channel_row(
+            let channel_row = Self::channel_button(
                 channel_name,
                 self.channel_views
                     .get(&channel_id)
@@ -547,7 +547,7 @@ impl DeviceView {
                     .num_unseen_messages(),
                 channel_id,
             );
-            channels_view = channels_view.push(channel_row);
+            channels_list = channels_list.push(channel_row);
         }
 
         // We only store Nodes that have a valid user set
@@ -561,7 +561,7 @@ impl DeviceView {
 
             let channel_id = ChannelId::Node(*node_id);
 
-            channels_view = channels_view.push(Self::node_row(
+            channels_list = channels_list.push(Self::node_row(
                 user.long_name.clone(),
                 self.channel_views
                     .get(&channel_id)
@@ -572,7 +572,7 @@ impl DeviceView {
             // TODO mark as a favourite if has is_favorite set
         }
 
-        let channel_and_user_scroll = scrollable(channels_view)
+        let channel_and_user_scroll = scrollable(channels_list)
             .direction({
                 let scrollbar = Scrollbar::new().width(10.0);
                 scrollable::Direction::Vertical(scrollbar)
@@ -602,13 +602,13 @@ impl DeviceView {
         }
     }
 
-    fn channel_row(
+    /// Create a Button that represents either a Channel or a Node
+    fn channel_button(
         name: String,
         num_messages: usize,
         channel_id: ChannelId,
     ) -> Button<'static, Message> {
-        let row_text = format!("{} ({})", name, num_messages);
-        button(text(row_text))
+        button(text(format!("{} ({})", name, num_messages)))
             .on_press(Device(ShowChannel(Some(channel_id))))
             .width(Fill)
             .style(Self::view_button)

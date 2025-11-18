@@ -15,7 +15,7 @@ use crate::Message::{
 use crate::View::DeviceList;
 use iced::border::Radius;
 use iced::widget::container::Style;
-use iced::widget::{button, Column, Container, Row};
+use iced::widget::{button, Column, Container, Row, Space};
 use iced::{window, Border, Bottom, Color, Event, Subscription, Task, Theme};
 use iced::{Background, Element};
 use meshtastic::utils::stream::BleDevice;
@@ -140,45 +140,57 @@ impl MeshChat {
         self.notifications.retain(|item| item.0 != id);
     }
 
-    fn view(&self) -> Element<'_, Message> {
-        let state = self.device_view.connection_state();
+    fn header<'a>(&'a self, state: &'a ConnectionState, scanning: bool) -> Element<'a, Message> {
+        let mut header = Column::new();
 
         // Always add a button to allow navigating back to the list of devices
         let mut device_list_button = button("Devices").style(chip_style);
+
         // Activate it if we are not on the device list view
         if self.view != DeviceList {
             device_list_button = device_list_button.on_press(Navigation(DeviceList));
         }
-        let mut header = Row::new().align_y(Bottom).push(device_list_button);
 
-        // Add to the header from the view we are currently on
-        header = header.push(match self.view {
-            DeviceList => self.device_list_view.header(state),
-            View::Device => self.device_view.header(state),
-        });
+        // Create the navigation bar and add it to the header
+        let nav_bar = Row::new()
+            .align_y(Bottom)
+            .push(device_list_button)
+            .push(match self.view {
+                DeviceList => self.device_list_view.header(state),
+                View::Device => self.device_view.header(state),
+            });
+        header = header.push(nav_bar);
 
-        // Build the inner view
-        let (inner, mut busy) = match self.view {
-            DeviceList => (self.device_list_view.view(state), true),
-            View::Device => (self.device_view.view(), false),
-        };
-
-        // Also busy if we are connecting or disconnecting
-        busy = busy
+        // If busy of connecting or disconnecting, add a busy bar to the header
+        if scanning
             || matches!(
                 state,
                 ConnectionState::Connecting(_) | ConnectionState::Disconnecting(_)
-            );
-
-        let mut outer = Column::new().push(header);
-        if busy {
-            outer = outer.push(
+            )
+        {
+            header = header.push(Space::new(iced::Length::Fill, 2)).push(
                 Linear::new()
                     .easing(easing::emphasized_accelerate())
                     .cycle_duration(Duration::from_secs_f32(2.0))
                     .width(iced::Length::Fill),
             );
         }
+
+        header.into()
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        let state = self.device_view.connection_state();
+
+        // Build the inner view and show busy if in DeviceList which is in discovery mode
+        let (inner, scanning) = match self.view {
+            DeviceList => (self.device_list_view.view(state), true),
+            View::Device => (self.device_view.view(), false),
+        };
+
+        let header = self.header(state, scanning);
+
+        let mut outer = Column::new().push(header);
         outer = outer.push(self.notifications());
         outer = outer.push(inner);
 
