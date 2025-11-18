@@ -12,8 +12,7 @@ license = "LICENCE"
 meshtastic = { version = "0.1.7", git = "https://github.com/meshtastic/rust.git", default-features = false, features = ["serde", "tokio", "bluetooth-le"] }
 # GUI framework
 iced = { version = "0.13.1", features = ["tokio", "advanced", "canvas"] }
-iced_futures = { version = "0.13", default-features = false }
-# for saving config files in platform dependent directories
+# for saving config files in platform-dependent directories
 directories = { version = "6.0.0", default-features = false }
 # for serialization and deserialization of config struct
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
@@ -33,6 +32,10 @@ sorted-vec = { version = "0.8.10", default-features = false }
 lyon_algorithms = { version = "1.0", default-features = false }
 futures-channel = "0.3.31"
 chrono = "0.4.42"
+
+[features]
+default = []
+debug = ["iced/debug"] # use "... --features "debug" to enable this for Iced
 
 # With the standard release profile, binary size was: 10,756,272 (10.7MB)
 # With these changes the binary size reduced to: 5,596,848 (5.56MB)
