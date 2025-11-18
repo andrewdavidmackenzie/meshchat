@@ -92,11 +92,20 @@ impl MeshChat {
         (Self::default(), Task::batch(vec![load_config()]))
     }
 
+    /// Return the title of the app, which is used in the window title bar
+    /// This could vary with state, such as number of devices or unread messages or similar
     fn title(&self) -> String {
         // Can enhance with the number of unread messages or something
         "MeshChat".to_string()
     }
 
+    /// Update the app state based on a message received from the GUI.
+    /// This is the main function of the app, and it drives the GUI.
+    /// It is called every time a message is received from the GUI, and it updates the app state
+    /// accordingly.
+    /// It also handles window events like "minimize" and close buttons, and it handles navigation
+    /// between views.
+    /// It also handles the discovery of devices and the connection to them.
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Navigation(view) => self.navigate(view),
@@ -131,15 +140,8 @@ impl MeshChat {
         }
     }
 
-    fn add_notification(&mut self, notification: Notification) {
-        self.notifications.push((self.next_id, notification));
-        self.next_id += 1;
-    }
-
-    fn remove_notification(&mut self, id: usize) {
-        self.notifications.retain(|item| item.0 != id);
-    }
-
+    /// Create a header view for the top of the screen depending on the current state of the app
+    /// and whether we are in discovery mode or not.
     fn header<'a>(&'a self, state: &'a ConnectionState, scanning: bool) -> Element<'a, Message> {
         let mut header = Column::new();
 
@@ -179,6 +181,7 @@ impl MeshChat {
         header.into()
     }
 
+    /// Render the app view
     fn view(&self) -> Element<'_, Message> {
         let state = self.device_view.connection_state();
 
@@ -208,6 +211,7 @@ impl MeshChat {
         Subscription::batch(subscriptions)
     }
 
+    /// Navigate to show a different view, as defined by the [View] enum
     fn navigate(&mut self, view: View) -> Task<Message> {
         self.view = view;
         Task::none()
@@ -215,6 +219,7 @@ impl MeshChat {
 
     async fn empty() {}
 
+    /// Handle window events, like close button or minimize button
     fn window_handler(&mut self, event: Event) -> Task<Message> {
         if let Event::Window(window::Event::CloseRequested) = event {
             if let Connected(device) = self.device_view.connection_state().clone() {
@@ -229,6 +234,21 @@ impl MeshChat {
         }
     }
 
+    /// Add a notification to the list of notifications to display at the top of the screen.
+    /// Notifications are displayed in a list, with the most recent at the top.
+    /// Each notification has a unique id, which is used to remove it from the list.
+    fn add_notification(&mut self, notification: Notification) {
+        self.notifications.push((self.next_id, notification));
+        self.next_id += 1;
+    }
+
+    /// Remove a notification from the list of notifications displayed at the top of the screen.
+    /// Use the unique id to identify it
+    fn remove_notification(&mut self, id: usize) {
+        self.notifications.retain(|item| item.0 != id);
+    }
+
+    /// Render any notifications that are active into an element to display at the top of the screen
     fn notifications(&self) -> Element<'_, Message> {
         let mut notifications = Row::new().padding(10);
 
