@@ -124,7 +124,7 @@ impl ChannelView {
                 self.add_emoji_to(
                     *reply_to_id,
                     emoji_string.clone(),
-                    new_message.name().clone().unwrap(),
+                    new_message.name().clone().unwrap_or("".to_string()),
                 );
             }
         };

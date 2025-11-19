@@ -297,6 +297,8 @@ impl DeviceView {
         }
     }
 
+    /// Figure out which channel we should show a message in a [MeshPacket]
+    /// i.e. is a broadcast message in a channel, or a DM to/from my node.
     fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
         if mesh_packet.to == u32::MAX {
             // Destined for a channel
@@ -313,6 +315,7 @@ impl DeviceView {
         }
     }
 
+    /// Handle a packet we have received from the mesh, depending on the payload variant and portnum
     fn handle_mesh_packet(&mut self, mesh_packet: &MeshPacket) -> Task<Message> {
         if let Some(Decoded(data)) = &mesh_packet.payload_variant {
             match PortNum::try_from(data.portnum) {
@@ -489,19 +492,14 @@ impl DeviceView {
                 if let Some(channel) = self.channels.get(index) {
                     // TODO do this in channel_view code like in view() below.
                     let channel_name = Self::channel_name(channel);
-                    header = header.push(button(text(channel_name)).style(chip_style))
+                    header =
+                        header.push(button(text(channel_name).shaping(Advanced)).style(chip_style))
                 }
             }
             Some(ChannelId::Node(node_id)) => {
-                if let Some(node_info) = self.nodes.get(node_id) {
-                    header = header.push(
-                        button(
-                            text(node_info.user.as_ref().unwrap().long_name.clone())
-                                .shaping(Advanced),
-                        )
-                        .style(chip_style),
-                    )
-                }
+                header = header.push(
+                    button(text(self.node_name(*node_id)).shaping(Advanced)).style(chip_style),
+                )
             }
             None => {}
         }
@@ -550,18 +548,18 @@ impl DeviceView {
         }
 
         // We only store Nodes that have a valid user set
-        for (node_id, node_info) in &self.nodes {
-            let user = &node_info.user.as_ref().unwrap();
+        for node_id in self.nodes.keys() {
+            let node_name = self.node_name(*node_id);
 
             // If there is a filter and the Username does not contain it, don't show this row
-            if !self.filter.is_empty() && !user.long_name.contains(&self.filter) {
+            if !self.filter.is_empty() && !node_name.contains(&self.filter) {
                 continue;
             }
 
             let channel_id = ChannelId::Node(*node_id);
 
             channels_list = channels_list.push(Self::node_row(
-                user.long_name.clone(),
+                node_name,
                 self.channel_views
                     .get(&channel_id)
                     .unwrap()
@@ -585,12 +583,24 @@ impl DeviceView {
             .into()
     }
 
+    /// Return a name for the channel - prefixed with a node/device emoji
     fn channel_name(channel: &Channel) -> String {
-        channel
+        let name = channel
             .settings
             .as_ref()
             .map(|s| s.name.clone())
-            .unwrap_or("Unknown".to_string())
+            .unwrap_or("".to_string());
+        format!("🛜  {}", name)
+    }
+
+    /// Return a name for the node with id node_id - prefixed with a node/device emoji
+    fn node_name(&self, node_id: u32) -> String {
+        let name = self
+            .nodes
+            .get(&node_id)
+            .map(|node_info| node_info.user.as_ref().unwrap().long_name.as_ref())
+            .unwrap_or("");
+        format!("📱  {}", name)
     }
 
     fn view_button(_: &Theme, status: Status) -> Style {
@@ -607,7 +617,7 @@ impl DeviceView {
         num_messages: usize,
         channel_id: ChannelId,
     ) -> Button<'static, Message> {
-        button(text(format!("{} ({})", name, num_messages)))
+        button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
             .on_press(Device(ShowChannel(Some(channel_id))))
             .width(Fill)
             .style(Self::view_button)
