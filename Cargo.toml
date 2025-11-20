@@ -27,7 +27,7 @@ async-stream = { version = "0.3.6", default-features = false }
 # For mpsc sender/receiver and async file IO
 tokio = { version = "1.47.1", default-features = false }
 # For ordering messages in ChannelView
-sorted-vec = { version = "0.8.10", default-features = false }
+ringmap = "0.2"
 # For horizontal busy bar in easing.rs
 lyon_algorithms = { version = "1.0", default-features = false }
 futures-channel = "0.3.31"
