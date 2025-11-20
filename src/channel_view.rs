@@ -118,6 +118,8 @@ impl ChannelView {
     pub fn new_message(&mut self, new_message: ChannelViewEntry) {
         match &new_message.payload() {
             NewTextMessage(_) | Position(_, _) | Ping(_) | TextMessageReply(_, _) => {
+                // TODO manage the size of entries, with a limit (fixed or time?), and pushing
+                // the older ones to a disk store of messages
                 let _ = self.entries.push(new_message);
             }
             EmojiReply(reply_to_id, emoji_string) => {
