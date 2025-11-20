@@ -7,7 +7,7 @@ use crate::device_view::ConnectionState::Connected;
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::device_view::{ConnectionState, DeviceView, DeviceViewMessage};
 use crate::linear::Linear;
-use crate::styles::chip_style;
+use crate::styles::button_chip_style;
 use crate::Message::{
     AppError, AppNotification, Device, DeviceListEvent, Exit, Navigation, NewConfig,
     RemoveNotification, SaveConfig, WindowEvent,
@@ -143,10 +143,10 @@ impl MeshChat {
     /// Create a header view for the top of the screen depending on the current state of the app
     /// and whether we are in discovery mode or not.
     fn header<'a>(&'a self, state: &'a ConnectionState, scanning: bool) -> Element<'a, Message> {
-        let mut header = Column::new();
+        let mut header = Column::new().padding(4);
 
         // Always add a button to allow navigating back to the list of devices
-        let mut device_list_button = button("Devices").style(chip_style);
+        let mut device_list_button = button("Devices").style(button_chip_style);
 
         // Activate it if we are not on the device list view
         if self.view != DeviceList {

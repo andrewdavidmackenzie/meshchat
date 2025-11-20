@@ -14,7 +14,9 @@ use crate::device_view::DeviceViewMessage::{
     ChannelMsg, ConnectRequest, DisconnectRequest, SearchInput, SendMessage, ShowChannel,
     SubscriptionMessage,
 };
-use crate::styles::{chip_style, text_input_style, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER};
+use crate::styles::{
+    button_chip_style, text_input_style, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER,
+};
 use crate::Message::{Device, Navigation};
 use crate::{Message, View};
 use iced::widget::button::Status::Hovered;
@@ -22,7 +24,7 @@ use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::{button, row, scrollable, text, text_input, Button, Column, Row, Space};
-use iced::{alignment, Background, Color, Element, Fill, Task, Theme};
+use iced::{Background, Color, Element, Fill, Task, Theme};
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
@@ -448,25 +450,20 @@ impl DeviceView {
         let mut header: Row<Message> = Row::new();
 
         header = match connection_state {
-            Disconnected(_, _) => {
-                println!("Disconnected");
-                header.push(
-                    text("Disconnected")
-                        .width(Fill)
-                        .align_x(alignment::Horizontal::Right),
-                )
-            }
+            Disconnected(_, _) => header
+                .push(Space::with_width(Fill))
+                .push(button("Disconnected").style(button_chip_style)),
             Connecting(device) => {
-                let button = button(text(device.name.as_ref().unwrap())).style(chip_style);
-                header = header.push(button);
-                header.push(
-                    text("Connecting")
-                        .width(Fill)
-                        .align_x(alignment::Horizontal::Right),
-                )
+                let name_button =
+                    button(text(device.name.as_ref().unwrap())).style(button_chip_style);
+                header = header.push(name_button);
+                header
+                    .push(Space::with_width(Fill))
+                    .push(button("Connecting").style(button_chip_style))
             }
             Connected(device) => {
-                let mut button = button(text(device.name.as_ref().unwrap())).style(chip_style);
+                let mut button =
+                    button(text(device.name.as_ref().unwrap())).style(button_chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
                 if self.viewing_channel.is_some() {
                     button = button.on_press(Device(ShowChannel(None)));
@@ -475,14 +472,11 @@ impl DeviceView {
                 header.push(button)
             }
             Disconnecting(device) => {
-                let button = button(text(device.name.as_ref().unwrap())).style(chip_style);
+                let button = button(text(device.name.as_ref().unwrap())).style(button_chip_style);
                 header = header.push(button);
-
-                header.push(
-                    text("Disconnecting")
-                        .width(Fill)
-                        .align_x(alignment::Horizontal::Right),
-                )
+                header
+                    .push(Space::with_width(Fill))
+                    .push(iced::widget::button("Disconnecting").style(button_chip_style))
             }
         };
 
@@ -492,13 +486,14 @@ impl DeviceView {
                 if let Some(channel) = self.channels.get(index) {
                     // TODO do this in channel_view code like in view() below.
                     let channel_name = Self::channel_name(channel);
-                    header =
-                        header.push(button(text(channel_name).shaping(Advanced)).style(chip_style))
+                    header = header
+                        .push(button(text(channel_name).shaping(Advanced)).style(button_chip_style))
                 }
             }
             Some(ChannelId::Node(node_id)) => {
                 header = header.push(
-                    button(text(self.node_name(*node_id)).shaping(Advanced)).style(chip_style),
+                    button(text(self.node_name(*node_id)).shaping(Advanced))
+                        .style(button_chip_style),
                 )
             }
             None => {}
@@ -507,9 +502,9 @@ impl DeviceView {
         // Add a disconnect button on the right if we are connected
         if let Connected(device) = connection_state {
             header = header.push(Space::new(Fill, 1)).push(
-                iced::widget::button("Disconnect")
+                button("Disconnect")
                     .on_press(Device(DisconnectRequest(device.clone(), false)))
-                    .style(chip_style),
+                    .style(button_chip_style),
             )
         }
 

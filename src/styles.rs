@@ -177,7 +177,7 @@ const BUTTON_BORDER_ACTIVE: Border = Border {
     color: CYAN,
 };
 
-pub fn chip_style(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn button_chip_style(_theme: &Theme, status: button::Status) -> button::Style {
     match status {
         button::Status::Active => button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),

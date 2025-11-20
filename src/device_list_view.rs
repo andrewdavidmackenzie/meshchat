@@ -1,15 +1,15 @@
-use crate::Message::{Device, Navigation};
 use crate::device_list_view::DiscoveryEvent::{BLERadioFound, BLERadioLost, Error};
 use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
-use crate::styles::chip_style;
-use crate::{Message, View, name_from_id};
+use crate::styles::button_chip_style;
+use crate::Message::{Device, Navigation};
+use crate::{name_from_id, Message, View};
 use iced::futures::{SinkExt, Stream};
 use iced::stream;
-use iced::widget::{Column, Row, Space, button, container, text};
-use iced::{Element, Fill, Task, alignment};
-use meshtastic::utils::stream::{BleDevice, available_ble_devices};
+use iced::widget::{button, container, text, Column, Row, Space};
+use iced::{alignment, Element, Fill, Task};
+use meshtastic::utils::stream::{available_ble_devices, BleDevice};
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -49,16 +49,22 @@ impl DeviceListView {
 
     pub fn header<'a>(&'a self, connection_state: &'a ConnectionState) -> Element<'a, Message> {
         match connection_state {
-            Disconnected(_, _) => text("Disconnected")
-                .width(Fill)
-                .align_x(alignment::Horizontal::Right)
+            Disconnected(_, _) => Row::new()
+                .push(Space::with_width(Fill))
+                .push(iced::widget::button("Disconnected").style(button_chip_style))
                 .into(),
-            Connecting(device) => text(format!("Connecting to {}", device.name.as_ref().unwrap()))
-                .width(Fill)
-                .align_x(alignment::Horizontal::Right)
+            Connecting(device) => Row::new()
+                .push(Space::with_width(Fill))
+                .push(
+                    iced::widget::button(text(format!(
+                        "Connecting to {}",
+                        device.name.as_ref().unwrap()
+                    )))
+                    .style(button_chip_style),
+                )
                 .into(),
             Connected(device) => button(text(device.name.as_ref().unwrap()))
-                .style(chip_style)
+                .style(button_chip_style)
                 .on_press(Navigation(View::Device))
                 .into(),
             Disconnecting(device) => text(format!(
@@ -83,7 +89,7 @@ impl DeviceListView {
             device_row = device_row.push(
                 button("Disconnect")
                     .on_press(Device(DisconnectRequest(connected_device.clone(), false)))
-                    .style(chip_style),
+                    .style(button_chip_style),
             );
             main_col = main_col.push(device_row);
         }
@@ -99,7 +105,7 @@ impl DeviceListView {
                     device_row = device_row.push(
                         button("Connect")
                             .on_press(Device(ConnectRequest(device.clone(), None)))
-                            .style(chip_style),
+                            .style(button_chip_style),
                     );
                 }
                 Connecting(connecting_device) => {
