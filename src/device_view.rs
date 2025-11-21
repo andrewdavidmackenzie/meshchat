@@ -74,6 +74,9 @@ pub struct DeviceView {
     subscription_sender: Option<Sender<SubscriberMessage>>, // TODO Maybe combine with Disconnected state?
     my_node_num: Option<u32>,
     pub(crate) channels: Vec<Channel>,
+    // TODO elements of NodeInfo I could use
+    // DeviceMetrics: battery level - in device list
+    // User::long_name, User::short_name, User::hw_model
     nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
     pub(crate) viewing_channel: Option<ChannelId>,
     channel_views: HashMap<ChannelId, ChannelView>,
@@ -247,7 +250,8 @@ impl DeviceView {
                 // TODO maybe show if devices in outgoing queue?
             }
             Some(PayloadVariant::Metadata(_)) => {
-                // TODO could be interesting to get device_hardware value
+                // TODO could be interesting to get device_hardware value "hw_model"
+                // see https://docs.rs/meshtastic/0.1.7/meshtastic/protobufs/enum.HardwareModel.html
             }
             Some(PayloadVariant::ClientNotification(notification)) => {
                 return Task::perform(empty(), move |_| {
@@ -406,13 +410,14 @@ impl DeviceView {
                 Ok(PortNum::TelemetryApp) => {
                     let telemetry =
                         meshtastic::protobufs::Telemetry::decode(&data.payload as &[u8]).unwrap();
-                    if mesh_packet.from != self.my_node_num.unwrap() {
-                        println!("Telemetry: {telemetry:?} from {}", mesh_packet.from)
+                    if mesh_packet.from == self.my_node_num.unwrap() {
+                        println!("Telemetry: {telemetry:?}")
                     }
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
+                    // TODO could get hw_model here also for the device
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     let name = self.source_name(mesh_packet);
                     let seen = self.viewing_channel == Some(channel_id.clone());
