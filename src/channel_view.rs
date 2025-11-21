@@ -275,7 +275,7 @@ impl ChannelView {
                 let longitude = 0.0000001 * *long as f64;
                 format!("({}, {})", latitude, longitude)
             }
-            Ping(short_name) => format!("Ping from user '{}'", short_name),
+            Ping(_) => "Ping!".to_string(),
             EmojiReply(_, _) => "".to_string(), // Should never happen
         };
 
@@ -290,6 +290,7 @@ impl ChannelView {
                         weight: Weight::Bold,
                         ..Default::default()
                     }))
+                    .padding(0)
                     .on_press(Device(ShowChannel(Some(ChannelId::Node(message.from())))))
                     .style(move |theme, status| {
                         transparent_button_style(theme, status, text_color)
