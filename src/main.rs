@@ -67,6 +67,7 @@ pub enum Message {
     Exit,
     NewConfig(Config),
     SaveConfig(Config),
+    ShowLocation(f64, f64), // lat and long
     AppNotification(String, String),
     AppError(String, String),
     RemoveNotification(usize),
@@ -135,6 +136,11 @@ impl MeshChat {
             SaveConfig(config) => save_config(config),
             RemoveNotification(id) => {
                 self.remove_notification(id);
+                Task::none()
+            }
+            Message::ShowLocation(lat, long) => {
+                let maps_url = format!("https://maps.google.com/?q={},{}", lat, long);
+                let _ = webbrowser::open(&maps_url);
                 Task::none()
             }
         }

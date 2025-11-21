@@ -462,16 +462,16 @@ impl DeviceView {
                 .push(Space::with_width(Fill))
                 .push(button("Disconnected").style(button_chip_style)),
             Connecting(device) => {
-                let name_button =
-                    button(text(device.name.as_ref().unwrap())).style(button_chip_style);
+                let name_button = button(text(format!("📱 {}", device.name.as_ref().unwrap())))
+                    .style(button_chip_style);
                 header = header.push(name_button);
                 header
                     .push(Space::with_width(Fill))
                     .push(button("Connecting").style(button_chip_style))
             }
             Connected(device) => {
-                let mut button =
-                    button(text(device.name.as_ref().unwrap())).style(button_chip_style);
+                let mut button = button(text(format!("📱 {}", device.name.as_ref().unwrap())))
+                    .style(button_chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
                 if self.viewing_channel.is_some() {
                     button = button.on_press(Device(ShowChannel(None)));
@@ -480,7 +480,8 @@ impl DeviceView {
                 header.push(button)
             }
             Disconnecting(device) => {
-                let button = button(text(device.name.as_ref().unwrap())).style(button_chip_style);
+                let button = button(text(format!("📱 {}", device.name.as_ref().unwrap())))
+                    .style(button_chip_style);
                 header = header.push(button);
                 header
                     .push(Space::with_width(Fill))

@@ -9,7 +9,7 @@ use crate::styles::{
     COLOR_GREEN, DAY_SEPARATOR_STYLE, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE,
     OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
 };
-use crate::Message::Device;
+use crate::Message::{Device, ShowLocation};
 use crate::{channel_view_entry::ChannelViewEntry, Message};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
@@ -266,19 +266,6 @@ impl ChannelView {
             OTHERS_MESSAGE_BUBBLE_STYLE
         };
 
-        // TODO in the future we might change graphics based on type - just text for now
-        let msg = match message.payload() {
-            NewTextMessage(text_msg) => text_msg.clone(),
-            TextMessageReply(_, text_msg) => text_msg.clone(),
-            Position(lat, long) => {
-                let latitude = 0.0000001 * *lat as f64;
-                let longitude = 0.0000001 * *long as f64;
-                format!("({}, {})", latitude, longitude)
-            }
-            Ping(_) => "Ping!".to_string(),
-            EmojiReply(_, _) => "".to_string(), // Should never happen
-        };
-
         // Add the source node name if there is one
         // TODO try and show the full node name in the tooltip
         let mut message_content_column = Column::new();
@@ -312,14 +299,33 @@ impl ChannelView {
             message_content_column = message_content_column.push(quote_row);
         };
 
+        // TODO in the future we might change graphics based on type - just text for now
+        let content: Element<'static, Message> = match message.payload() {
+            NewTextMessage(text_msg) | TextMessageReply(_, text_msg) => text(text_msg.clone())
+                .style(|_| MESSAGE_TEXT_STYLE)
+                .size(18)
+                .shaping(Advanced)
+                .into(),
+            Position(lat, long) => {
+                let latitude = 0.0000001 * *lat as f64;
+                let longitude = 0.0000001 * *long as f64;
+                button(text(format!("({:.2}, {:.2}) 📌", latitude, longitude)).shaping(Advanced))
+                    .padding(0)
+                    .style(|theme, status| transparent_button_style(theme, status, COLOR_GREEN))
+                    .on_press(ShowLocation(latitude, longitude))
+                    .into()
+            }
+            Ping(_) => text("Ping!")
+                .style(|_| MESSAGE_TEXT_STYLE)
+                .size(18)
+                .shaping(Advanced)
+                .into(),
+            EmojiReply(_, _) => text("").into(), // Should never happen
+        };
+
         // Create the row with message text and time and maybe an ACK tick mark
         let mut text_and_time_row = Row::new()
-            .push(
-                text(msg)
-                    .style(|_| MESSAGE_TEXT_STYLE)
-                    .size(18)
-                    .shaping(Advanced),
-            )
+            .push(content)
             .push(Space::with_width(10.0))
             .push(Self::time_to_text(message.time()))
             .align_y(Bottom);
