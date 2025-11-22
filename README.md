@@ -44,6 +44,10 @@ If you successfully run it on other OS or variants of the above, drop me a messa
 [discussions](https://github.com/andrewdavidmackenzie/meshchat/discussions) with some details, and I will add to a list
 of known working OS.
 
+## CI Testing
+
+Tests are run in GitHub actions on macos-latest and ubuntu-latest.
+
 ## Supported Radios
 
 It should work with all Meshtastic radios that are supported by the Meshtastic rust crate.
