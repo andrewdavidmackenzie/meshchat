@@ -65,8 +65,8 @@ pub struct ChannelView {
 
 async fn empty() {}
 
-/// A view of a single channel and it's message, which maybe a real radio "Channel" or a chat channel
-/// with a specific [meshtastic:User]
+// A view of a single channel and it's message, which maybe a real radio "Channel" or a chat channel
+// with a specific [meshtastic:User]
 impl ChannelView {
     pub fn new(channel_id: ChannelId, source: u32) -> Self {
         Self {
@@ -108,11 +108,8 @@ impl ChannelView {
             NewTextMessage(_) | Position(_, _) | Ping(_) | TextMessageReply(_, _) => {
                 // TODO manage the size of entries, with a limit (fixed or time?), and pushing
                 // the older ones to a disk store of messages
-                self.entries.insert_sorted_by(
-                    new_message.message_id(),
-                    new_message,
-                    ChannelViewEntry::sort_by_rx_time,
-                );
+                self.entries
+                    .insert_sorted(new_message.message_id(), new_message);
             }
             EmojiReply(reply_to_id, emoji_string) => {
                 self.add_emoji_to(
@@ -468,7 +465,7 @@ mod test {
         println!("Entries: {:#?}", channel_view.entries);
 
         // Check the order is correct
-        let mut iter = channel_view.entries.values();
+        let mut iter = channel_view.entries.iter();
         assert_eq!(iter.next().unwrap(), &oldest_message);
         assert_eq!(iter.next().unwrap(), &middle_message);
         assert_eq!(iter.next().unwrap(), &newest_message);
