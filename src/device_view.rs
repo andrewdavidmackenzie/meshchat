@@ -16,15 +16,18 @@ use crate::device_view::DeviceViewMessage::{
     SubscriptionMessage,
 };
 use crate::styles::{
-    NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER, button_chip_style, text_input_style,
+    DAY_SEPARATOR_STYLE, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER, button_chip_style,
+    text_input_style,
 };
 use crate::{Message, View};
 use iced::widget::button::Status::Hovered;
 use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
-use iced::widget::{Button, Column, Row, Space, button, row, scrollable, text, text_input};
-use iced::{Background, Color, Element, Fill, Task, Theme};
+use iced::widget::{
+    Button, Column, Container, Row, Space, button, row, scrollable, text, text_input,
+};
+use iced::{Background, Center, Color, Element, Fill, Padding, Task, Theme};
 use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
@@ -536,6 +539,10 @@ impl DeviceView {
         // If not viewing a channel/user, show the list of channels and users
         let mut channels_list = Column::new();
 
+        if !self.channels.is_empty() {
+            channels_list = channels_list.push(self.section_header("Channels"));
+        }
+
         for (index, channel) in self.channels.iter().enumerate() {
             let channel_name = Self::channel_name(channel);
 
@@ -556,6 +563,9 @@ impl DeviceView {
             channels_list = channels_list.push(channel_row);
         }
 
+        if !self.nodes.is_empty() {
+            channels_list = channels_list.push(self.section_header("Nodes"));
+        }
         // We only store Nodes that have a valid user set
         for node_id in self.nodes.keys() {
             let node_name = self.node_name(*node_id);
@@ -589,6 +599,20 @@ impl DeviceView {
         Column::new()
             .push(self.search_box())
             .push(channel_and_user_scroll)
+            .into()
+    }
+
+    /// Add a section header between areas of the list of channels and users
+    fn section_header(&self, title: &'static str) -> Element<'static, Message> {
+        Column::new()
+            .push(
+                Container::new(text(title).size(16))
+                    .align_x(Center)
+                    .padding(Padding::from([6, 12]))
+                    .style(|_| DAY_SEPARATOR_STYLE),
+            )
+            .width(Fill)
+            .align_x(Center)
             .into()
     }
 
