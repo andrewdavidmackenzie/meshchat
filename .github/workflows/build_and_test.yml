@@ -2,9 +2,9 @@ name: Build and Test Matrix
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
   schedule: # Build every day at 5PM UTC
     - cron: '0 17 * * *'
 
