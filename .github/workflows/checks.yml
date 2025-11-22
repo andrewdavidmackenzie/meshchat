@@ -33,6 +33,8 @@ jobs:
           components: clippy
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Install dependencies
+        run: sudo apt install libdbus-1-dev pkg-config
       - name: run clippy
         uses: actions-rs/cargo@v1
         with:
