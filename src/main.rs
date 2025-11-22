@@ -1,23 +1,23 @@
 //! MeshChat is an iced GUI app that uses the meshtastic "rust" crate to discover and control
 //! meshtastic compatible radios connected to the host running it
 
-use crate::config::{load_config, save_config, Config};
-use crate::device_list_view::{ble_discovery, DeviceListView, DiscoveryEvent};
-use crate::device_view::ConnectionState::Connected;
-use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
-use crate::device_view::{ConnectionState, DeviceView, DeviceViewMessage};
-use crate::linear::Linear;
-use crate::styles::button_chip_style;
 use crate::Message::{
     AppError, AppNotification, Device, DeviceListEvent, Exit, Navigation, NewConfig,
     RemoveNotification, SaveConfig, WindowEvent,
 };
 use crate::View::DeviceList;
+use crate::config::{Config, load_config, save_config};
+use crate::device_list_view::{DeviceListView, DiscoveryEvent, ble_discovery};
+use crate::device_view::ConnectionState::Connected;
+use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
+use crate::device_view::{ConnectionState, DeviceView, DeviceViewMessage};
+use crate::linear::Linear;
+use crate::styles::button_chip_style;
 use iced::border::Radius;
 use iced::widget::container::Style;
-use iced::widget::{button, Column, Container, Row, Space};
-use iced::{window, Border, Bottom, Color, Event, Subscription, Task, Theme};
+use iced::widget::{Column, Container, Row, Space, button};
 use iced::{Background, Element};
+use iced::{Border, Bottom, Color, Event, Subscription, Task, Theme, window};
 use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;

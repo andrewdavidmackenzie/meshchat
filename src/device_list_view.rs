@@ -1,15 +1,15 @@
+use crate::Message::{Device, Navigation};
 use crate::device_list_view::DiscoveryEvent::{BLERadioFound, BLERadioLost, Error};
 use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::button_chip_style;
-use crate::Message::{Device, Navigation};
-use crate::{name_from_id, Message, View};
+use crate::{Message, View, name_from_id};
 use iced::futures::{SinkExt, Stream};
 use iced::stream;
-use iced::widget::{button, container, text, Column, Row, Space};
-use iced::{alignment, Element, Fill, Task};
-use meshtastic::utils::stream::{available_ble_devices, BleDevice};
+use iced::widget::{Column, Row, Space, button, container, text};
+use iced::{Element, Fill, Task, alignment};
+use meshtastic::utils::stream::{BleDevice, available_ble_devices};
 use std::time::Duration;
 
 #[derive(Debug, Clone)]

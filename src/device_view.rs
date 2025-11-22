@@ -1,3 +1,4 @@
+use crate::Message::{Device, Navigation};
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
 use crate::channel_view_entry::Payload::{
@@ -15,16 +16,16 @@ use crate::device_view::DeviceViewMessage::{
     SubscriptionMessage,
 };
 use crate::styles::{
-    button_chip_style, text_input_style, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER,
+    NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER, button_chip_style, text_input_style,
 };
-use crate::Message::{Device, Navigation};
 use crate::{Message, View};
 use iced::widget::button::Status::Hovered;
 use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
-use iced::widget::{button, row, scrollable, text, text_input, Button, Column, Row, Space};
+use iced::widget::{Button, Column, Row, Space, button, row, scrollable, text, text_input};
 use iced::{Background, Color, Element, Fill, Task, Theme};
+use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
@@ -32,7 +33,6 @@ use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum};
 use meshtastic::utils::stream::BleDevice;
-use meshtastic::Message as _;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 

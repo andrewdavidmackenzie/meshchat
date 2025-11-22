@@ -19,7 +19,7 @@ use meshtastic::utils;
 use meshtastic::utils::stream::BleDevice;
 use std::pin::Pin;
 use std::time::Duration;
-use tokio::sync::mpsc::{channel, Sender};
+use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::{Stream, StreamExt};
 
