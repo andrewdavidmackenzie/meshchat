@@ -303,7 +303,7 @@ impl DeviceView {
     }
 
     /// Figure out which channel we should show a message in a [MeshPacket]
-    /// i.e. is a broadcast message in a channel, or a DM to/from my node.
+    /// i.e., is a broadcast message in a channel, or a DM to/from my node.
     fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
         if mesh_packet.to == u32::MAX {
             // Destined for a channel
