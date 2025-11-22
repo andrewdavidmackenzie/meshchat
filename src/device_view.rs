@@ -411,10 +411,10 @@ impl DeviceView {
                 Ok(PortNum::TelemetryApp) => {
                     let telemetry =
                         meshtastic::protobufs::Telemetry::decode(&data.payload as &[u8]).unwrap();
-                    if mesh_packet.from == self.my_node_num.unwrap() {
-                        if let Some(DeviceMetrics(metrics)) = telemetry.variant {
-                            println!("My Battery Level: {}", metrics.battery_level.unwrap())
-                        }
+                    if mesh_packet.from == self.my_node_num.unwrap()
+                        && let Some(DeviceMetrics(metrics)) = telemetry.variant
+                    {
+                        println!("My Battery Level: {}", metrics.battery_level.unwrap())
                     }
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
