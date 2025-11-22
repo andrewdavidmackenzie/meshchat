@@ -34,6 +34,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install dependencies - Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt install libdbus-1-dev pkg-config
+          
       - name: debug build
         run: cargo build
 
@@ -50,6 +56,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install weston
           weston -Bheadless -Sweston &
+          sudo apt install libdbus-1-dev pkg-config
           cargo test
         env:
           WAYLAND_DISPLAY: weston
