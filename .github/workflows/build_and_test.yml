@@ -34,16 +34,22 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: build and test - non-Linux
-        if: runner.os != 'Linux'
-        run: make build test
+      - name: debug build
+        run: cargo build
 
-      - name: build and test - Linux
+      - name: release build
+        run: cargo build --release
+
+      - name: test - non-Linux
+        if: runner.os != 'Linux'
+        run: cargo test
+
+      - name: test - Linux
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install weston
           weston -Bheadless -Sweston &
-          make build test
+          cargo test
         env:
           WAYLAND_DISPLAY: weston
