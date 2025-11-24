@@ -53,7 +53,7 @@ enum Notification {
 
 #[derive(Default)]
 struct MeshChat {
-    view: View,
+    current_view: View,
     device_list_view: DeviceListView,
     device_view: DeviceView,
     notifications: Vec<(usize, Notification)>,
@@ -159,18 +159,19 @@ impl MeshChat {
         let mut device_list_button = button("Devices").style(button_chip_style);
 
         // Activate it if we are not on the device list view
-        if self.view != DeviceList {
+        if self.current_view != DeviceList {
             device_list_button = device_list_button.on_press(Navigation(DeviceList));
         }
 
         // Create the navigation bar and add it to the header
-        let nav_bar = Row::new()
-            .align_y(Bottom)
-            .push(device_list_button)
-            .push(match self.view {
-                DeviceList => self.device_list_view.header(state),
-                View::Device => self.device_view.header(state),
-            });
+        let nav_bar =
+            Row::new()
+                .align_y(Bottom)
+                .push(device_list_button)
+                .push(match self.current_view {
+                    DeviceList => self.device_list_view.header(state),
+                    View::Device => self.device_view.header(state),
+                });
         header = header.push(nav_bar);
 
         // If busy of connecting or disconnecting, add a busy bar to the header
@@ -196,7 +197,7 @@ impl MeshChat {
         let state = self.device_view.connection_state();
 
         // Build the inner view and show busy if in DeviceList which is in discovery mode
-        let (inner, scanning) = match self.view {
+        let (inner, scanning) = match self.current_view {
             DeviceList => (self.device_list_view.view(state), true),
             View::Device => (self.device_view.view(), false),
         };
@@ -226,7 +227,7 @@ impl MeshChat {
 
     /// Navigate to show a different view, as defined by the [View] enum
     fn navigate(&mut self, view: View) -> Task<Message> {
-        self.view = view;
+        self.current_view = view;
         Task::none()
     }
 

@@ -10,6 +10,7 @@ use iced::stream;
 use iced::widget::{Column, Row, Space, button, container, text};
 use iced::{Element, Fill, Task, alignment};
 use meshtastic::utils::stream::{BleDevice, available_ble_devices};
+use std::collections::HashSet;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -21,7 +22,7 @@ pub enum DiscoveryEvent {
 
 #[derive(Default)]
 pub struct DeviceListView {
-    discovered_devices: Vec<BleDevice>,
+    discovered_devices: HashSet<BleDevice>,
 }
 
 async fn empty() {}
@@ -31,12 +32,12 @@ impl DeviceListView {
         match discovery_event {
             BLERadioFound(device) => {
                 if !self.discovered_devices.contains(&device) {
-                    self.discovered_devices.push(device)
+                    self.discovered_devices.insert(device);
                 }
             }
-            BLERadioLost(device) => self
-                .discovered_devices
-                .retain(|other_id| other_id != &device),
+            BLERadioLost(device) => {
+                let _ = self.discovered_devices.remove(&device);
+            }
             Error(e) => {
                 return Task::perform(empty(), move |_| {
                     Message::AppError("Discovery Error".to_string(), e.to_string())
@@ -48,59 +49,60 @@ impl DeviceListView {
     }
 
     pub fn header<'a>(&'a self, connection_state: &'a ConnectionState) -> Element<'a, Message> {
-        match connection_state {
+        let mut header = match connection_state {
             Disconnected(_, _) => Row::new()
                 .push(Space::with_width(Fill))
-                .push(iced::widget::button("Disconnected").style(button_chip_style))
-                .into(),
-            Connecting(device) => Row::new()
-                .push(Space::with_width(Fill))
-                .push(
-                    iced::widget::button(text(format!(
-                        "Connecting to {}",
-                        device.name.as_ref().unwrap()
-                    )))
+                .push(iced::widget::button("Disconnected").style(button_chip_style)),
+            Connecting(device) => Row::new().push(Space::with_width(Fill)).push(
+                iced::widget::button(text(format!(
+                    "Connecting to {}",
+                    device.name.as_ref().unwrap()
+                )))
+                .style(button_chip_style),
+            ),
+            Connected(device) => Row::new().push(
+                button(text(device.name.as_ref().unwrap()))
+                    .style(button_chip_style)
+                    .on_press(Navigation(View::Device)),
+            ),
+            Disconnecting(device) => Row::new().push(
+                text(format!(
+                    "Disconnecting from {}",
+                    device.name.as_ref().unwrap()
+                ))
+                .width(Fill)
+                .align_x(alignment::Horizontal::Right),
+            ),
+        };
+
+        // Add a disconnect button on the right if we are connected
+        if let Connected(device) = connection_state {
+            header = header.push(Space::new(Fill, 1)).push(
+                button("Disconnect")
+                    .on_press(Device(DisconnectRequest(device.clone(), false)))
                     .style(button_chip_style),
-                )
-                .into(),
-            Connected(device) => button(text(device.name.as_ref().unwrap()))
-                .style(button_chip_style)
-                .on_press(Navigation(View::Device))
-                .into(),
-            Disconnecting(device) => text(format!(
-                "Disconnecting from {}",
-                device.name.as_ref().unwrap()
-            ))
-            .width(Fill)
-            .align_x(alignment::Horizontal::Right)
-            .into(),
+            )
         }
+
+        header.into()
     }
 
     pub fn view(&self, connection_state: &ConnectionState) -> Element<'static, Message> {
         let mut main_col = Column::new();
         // TODO add a scrollable area in case there are a lot of devices
 
-        // Ensure the connected device is listed, and first, even if not discovered
-        if let Connected(connected_device) = connection_state {
-            let mut device_row = Row::new().align_y(alignment::Vertical::Center);
-            device_row = device_row.push(text(name_from_id(connected_device)));
-            device_row = device_row.push(Space::new(6, 0));
-            device_row = device_row.push(
-                button("Disconnect")
-                    .on_press(Device(DisconnectRequest(connected_device.clone(), false)))
-                    .style(button_chip_style),
-            );
-            main_col = main_col.push(device_row);
-        }
-
         for device in &self.discovered_devices {
             let mut device_row = Row::new().align_y(alignment::Vertical::Center);
             device_row = device_row.push(text(name_from_id(device)));
             device_row = device_row.push(Space::new(6, 0));
             match &connection_state {
-                Connected(_) => {}
-                // TODO maybe show an error against it if present?
+                Connected(connected_device) => {
+                    device_row = device_row.push(
+                        button("Disconnect")
+                            .on_press(Device(DisconnectRequest(connected_device.clone(), false)))
+                            .style(button_chip_style),
+                    );
+                }
                 Disconnected(_id, _error) => {
                     device_row = device_row.push(
                         button("Connect")
