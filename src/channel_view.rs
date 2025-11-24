@@ -291,7 +291,7 @@ impl ChannelView {
                     .style(move |theme, status| {
                         transparent_button_style(theme, status, text_color)
                     }),
-                    text(format!("Click name to DM node '{name}'")).shaping(Advanced),
+                    text(format!("Click to DM node '{name}'")).shaping(Advanced),
                     tooltip::Position::Top,
                 )
                 .style(source_tooltip_style),
