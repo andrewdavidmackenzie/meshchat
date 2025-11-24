@@ -247,7 +247,7 @@ impl DeviceView {
             Some(PayloadVariant::MyInfo(my_node_info)) => {
                 self.my_node_num = Some(my_node_info.my_node_num);
             }
-            Some(PayloadVariant::NodeInfo(node_info)) => self.add_user_node(node_info),
+            Some(PayloadVariant::NodeInfo(node_info)) => self.add_node(node_info),
             // This Packet conveys information about a Channel that exists on the radio
             Some(PayloadVariant::Channel(channel)) => self.add_channel(channel),
             Some(PayloadVariant::QueueStatus(_)) => {
@@ -273,7 +273,7 @@ impl DeviceView {
     }
 
     // Add a new node to the list if it has the User info we want and is not marked to be ignored
-    fn add_user_node(&mut self, node_info: NodeInfo) {
+    fn add_node(&mut self, node_info: NodeInfo) {
         if let Some(my_node_num) = self.my_node_num
             && my_node_num != node_info.num
             && !node_info.is_ignored
@@ -328,9 +328,12 @@ impl DeviceView {
         if let Some(Decoded(data)) = &mesh_packet.payload_variant {
             match PortNum::try_from(data.portnum) {
                 Ok(PortNum::RoutingApp) => {
+                    // An ACK
                     let channel_id = if mesh_packet.from == mesh_packet.to {
+                        // To a channel broadcast message
                         ChannelId::Channel(mesh_packet.channel as i32)
                     } else {
+                        // To a DM to a Node
                         Node(mesh_packet.from)
                     };
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
