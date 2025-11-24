@@ -32,6 +32,7 @@ mod easing;
 mod linear;
 mod styles;
 
+#[rustfmt::skip]
 /// Icons generated as a font using iced_fontello
 mod icons;
 
