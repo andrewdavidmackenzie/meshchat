@@ -1,0 +1,4 @@
+module = "icons"
+
+[glyphs]
+send = "entypo-mail"

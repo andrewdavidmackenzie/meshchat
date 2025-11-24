@@ -8,20 +8,22 @@ use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, DAY_SEPARATOR_STYLE, MESSAGE_TEXT_STYLE,
     MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE,
-    TIME_TEXT_WIDTH, source_tooltip_style, text_input_style, transparent_button_style,
+    TIME_TEXT_WIDTH, button_chip_style, source_tooltip_style, text_input_style,
+    transparent_button_style,
 };
-use crate::{Message, channel_view_entry::ChannelViewEntry};
+use crate::{Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
 use iced::Length::Fixed;
 use iced::font::Weight;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
+use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
     Column, Container, Row, Space, Text, button, scrollable, text, text_input, tooltip,
 };
 use iced::{
-    Bottom, Center, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Task, Theme,
+    Bottom, Center, Color, Element, Fill, Font, Left, Padding, Pixels, Renderer, Right, Task, Theme,
 };
 use ringmap::RingMap;
 use serde::{Deserialize, Serialize};
@@ -142,15 +144,19 @@ impl ChannelView {
                 Task::none()
             }
             ChannelViewMessage::SendMessage => {
-                let msg = self.message.clone();
-                self.message = String::new();
-                let channel_id = self.channel_id.clone();
-                Task::perform(empty(), move |_| {
-                    Device(crate::device_view::DeviceViewMessage::SendMessage(
-                        msg.clone(),
-                        channel_id.clone(),
-                    ))
-                })
+                if !self.message.is_empty() {
+                    let msg = self.message.clone();
+                    self.message = String::new();
+                    let channel_id = self.channel_id.clone();
+                    Task::perform(empty(), move |_| {
+                        Device(crate::device_view::DeviceViewMessage::SendMessage(
+                            msg.clone(),
+                            channel_id.clone(),
+                        ))
+                    })
+                } else {
+                    Task::none()
+                }
             }
         }
     }
@@ -230,26 +236,33 @@ impl ChannelView {
             .into()
     }
 
-    // TODO set an icon,
-    // TODO Add to messages in the channel for display, or wait for packet back from radio
-    // as a confirmation? Maybe add as sending status?
-    // Display it just above the text input until confirmed by arriving in channel?
-    // for now only sent to the subscription
-    // TODO add an id to the message, or get it back from the subscription to be
-    // able to handle replies to it later. Get a timestamp and maybe sender id
-    // when TextSent then add to the UI list of messages, interleaved with
-    // those received using the timestamp
-    // TODO add an icon for sending a message
-    // TODO add a method (button?) to clear the text and maybe keyboard short cuts
-
     fn input_box(&self) -> Element<'static, Message> {
-        // TODO move styles to constants
+        let mut send_button = button(icons::send().size(18))
+            .style(button_chip_style)
+            .padding(Padding::from([6, 6]));
 
-        text_input("Send Message", &self.message)
-            .style(text_input_style)
-            .on_input(|s| Device(ChannelMsg(MessageInput(s))))
-            .on_submit(Device(ChannelMsg(ChannelViewMessage::SendMessage)))
-            .padding([6, 6])
+        if !self.message.is_empty() {
+            send_button = send_button.on_press(Device(ChannelMsg(ChannelViewMessage::SendMessage)));
+        }
+
+        Row::new()
+            .align_y(Center)
+            .push(
+                text_input("Send Message", &self.message)
+                    .style(text_input_style)
+                    .on_input(|s| Device(ChannelMsg(MessageInput(s))))
+                    .on_submit(Device(ChannelMsg(ChannelViewMessage::SendMessage)))
+                    .padding([6, 6])
+                    .icon(Icon {
+                        font: Font::with_name("icons"),
+                        code_point: '\u{2709}',
+                        size: Some(Pixels(18.0)),
+                        spacing: 4.0,
+                        side: Side::Left,
+                    }),
+            )
+            .push(Space::with_width(4.0))
+            .push(send_button)
             .into()
     }
 

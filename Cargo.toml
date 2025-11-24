@@ -6,10 +6,12 @@ edition = "2024"
 readme = "README.md"
 repository = "https://github.com/andrewdavidmackenzie/meshchat"
 license = "LICENCE"
+include = ["assets/fonts/icons.ttf"]
+exclude = ["assets/fonts/icons.toml"]
 
 [dependencies]
 # For communications with BLE connected radios running meshtastic firmware
-meshtastic = { version = "0.1.7", git = "https://github.com/meshtastic/rust.git", branch = "oncecell", default-features = false, features = ["serde", "tokio", "bluetooth-le"] }
+meshtastic = { version = "0.1.7", git = "https://github.com/meshtastic/rust.git", default-features = false, features = ["serde", "tokio", "bluetooth-le"] }
 # GUI framework
 iced = { version = "0.13.1", features = ["wgpu", "tokio", "advanced", "canvas"] }
 # for saving config files in platform-dependent directories
@@ -33,6 +35,9 @@ lyon_algorithms = { version = "1.0", default-features = false }
 futures-channel = { version = "0.3.31", default-features = false }
 chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 webbrowser = { version = "1.0", default-features = false }
+
+[build-dependencies]
+iced_fontello = "0.13"
 
 [features]
 default = []

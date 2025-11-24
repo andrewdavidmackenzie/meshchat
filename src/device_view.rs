@@ -669,7 +669,7 @@ impl DeviceView {
     }
 
     fn search_box(&self) -> Element<'static, Message> {
-        row([text_input("Search for Channel or User", &self.filter)
+        row([text_input("Search for Channel or Node", &self.filter)
             .style(text_input_style)
             .padding([6, 6])
             .on_input(|s| Device(SearchInput(s)))

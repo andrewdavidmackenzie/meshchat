@@ -190,6 +190,12 @@ const BUTTON_BORDER_ACTIVE: Border = Border {
     color: CYAN,
 };
 
+const BUTTON_BORDER_DISABLED: Border = Border {
+    radius: TEXT_INPUT_RADIUS, // rounded corners
+    width: 2.0,
+    color: Color::TRANSPARENT,
+};
+
 pub fn source_tooltip_style(_theme: &Theme) -> Style {
     Style {
         text_color: Some(Color::WHITE),
@@ -258,7 +264,7 @@ pub fn button_chip_style(_theme: &Theme, status: button::Status) -> button::Styl
         button::Status::Disabled => button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
-            border: BUTTON_BORDER_ACTIVE,
+            border: BUTTON_BORDER_DISABLED,
             shadow: NO_SHADOW,
         },
     }
