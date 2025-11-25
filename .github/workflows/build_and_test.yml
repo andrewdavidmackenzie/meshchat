@@ -44,7 +44,7 @@ jobs:
         run: cargo build
 
       - name: CHeck release build via publish dry-run
-        run: cargo publish --dry-run --no-verify
+        run: cargo publish --dry-run --allow-dirty --no-verify
 
       - name: test - non-Linux
         if: runner.os != 'Linux'
