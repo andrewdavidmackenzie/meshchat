@@ -39,12 +39,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt install libdbus-1-dev pkg-config
-          
+
       - name: debug build
         run: cargo build
 
-      - name: release build
-        run: cargo build --release
+      - name: CHeck release build via publish dry-run
+        run: cargo publish --dry-run
 
       - name: test - non-Linux
         if: runner.os != 'Linux'
