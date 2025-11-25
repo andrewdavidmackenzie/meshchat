@@ -16,6 +16,7 @@ use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
 use iced::Length::Fixed;
 use iced::font::Weight;
+use iced::padding::right;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::text_input::{Icon, Side};
@@ -165,7 +166,7 @@ impl ChannelView {
 
     /// Construct an Element that displays the channel view
     pub fn view(&self) -> Element<'static, Message> {
-        let mut channel_view = Column::new();
+        let mut channel_view = Column::new().padding(right(10));
 
         let mut previous_day = u32::MIN;
 
