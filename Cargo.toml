@@ -39,7 +39,7 @@ chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 webbrowser = { version = "1.0", default-features = false }
 
 [build-dependencies]
-iced_fontello = "0.13"
+iced_fontello = "0.13.2"
 
 # With the standard release profile, binary size was: 10,756,272 (10.7MB)
 # With these changes the binary size reduced to: 5,596,848 (5.56MB)
