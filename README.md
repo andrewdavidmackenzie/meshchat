@@ -10,19 +10,13 @@ Meshchat ia an Iced cross-platform GUI application to interact with Meshtastic L
 
 ## Screenshots
 
-The Device view once you have connected to a BLE Radio, showing configured channels, a list of nodes
+The Device view, once you have connected to a BLE Radio, shows configured channels, a list of nodes
 found and nodes you have marked as a favorite.
+![Device View](assets/images/Device_View.png)
 
-<table cellspacing="0" cellpadding="0" border="0">
-  <tr>
-    <td valign="top">
-      <img alt="Device View" src="assets/images/Device_View.png" width="400" align="top" />
-    </td>
-    <td valign="top">
-      <img alt="Channel View" src="assets/images/Channel_View.png" width="400" align="top" />
-    </td>
-  </tr>
-</table>
+The Channel view, Once you have clicked on a channel or a node, shows you the ongoing chat messages with it,
+with your messages on the right and others on the left.
+![Channel View](assets/images/Channel_View.png)
 
 ## Disclaimer
 
