@@ -8,12 +8,28 @@ Meshchat ia an Iced cross-platform GUI application to interact with Meshtastic L
 - it saves the last device connected to (and channel if applicable), and on re-start it will try to
   automatically reconnect to that and continue chatting
 
+## Screenshots
+
+The Device view once you have connected to a BLE Radio, showing configured channels, a list of nodes
+found and nodes you have marked as a favorite.
+
+<table cellspacing="0" cellpadding="0" border="0">
+  <tr>
+    <td valign="top">
+      <img alt="Device View" src="assets/images/Device_View.png" width="400" align="top" />
+    </td>
+    <td valign="top">
+      <img alt="Channel View" src="assets/images/Channel_View.png" width="400" align="top" />
+    </td>
+  </tr>
+</table>
+
 ## Disclaimer
 
-*** WARNING: Alpha quality, and no automated tests yet! ***
+*** WARNING: Alpha quality, and few automated tests! ***
 
 Since the app doesn't try to change the configuration of any attached radio, at most it tries to send
-messages, the risk from any bug is kind of low.
+messages, the risk of "damage" from any bug is kind of low.
 
 ## The Thinking
 
@@ -46,7 +62,7 @@ of known working OS.
 
 ## CI Testing
 
-Tests are run in GitHub actions on macos-latest and ubuntu-latest.
+Tests are run in GitHub actions on macos-15, ubuntu-latest and window-latest.
 
 ## Supported Radios
 
