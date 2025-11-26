@@ -302,7 +302,7 @@ pub fn button_chip_style(_theme: &Theme, status: button::Status) -> button::Styl
 const MESSAGE_BORDER: Border = Border {
     radius: RADIUS_12, // rounded corners
     width: 2.0,
-    color: Color::WHITE,
+    color: COLOR_GRAY_20,
 };
 
 const DAY_SEPARATOR_BORDER: Border = Border {

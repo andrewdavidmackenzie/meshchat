@@ -24,7 +24,8 @@ use iced::widget::{
     Column, Container, Row, Space, Text, button, scrollable, text, text_input, tooltip,
 };
 use iced::{
-    Bottom, Center, Color, Element, Fill, Font, Left, Padding, Pixels, Renderer, Right, Task, Theme,
+    Bottom, Center, Color, Element, Fill, Font, Left, Padding, Pixels, Renderer, Right, Task,
+    Theme, Top,
 };
 use ringmap::RingMap;
 use serde::{Deserialize, Serialize};
@@ -170,8 +171,8 @@ impl ChannelView {
 
         let mut previous_day = u32::MIN;
 
-        for message in self.entries.values() {
-            let datetime_utc = DateTime::<Utc>::from_timestamp_secs(message.time() as i64).unwrap();
+        for entry in self.entries.values() {
+            let datetime_utc = DateTime::<Utc>::from_timestamp_secs(entry.time() as i64).unwrap();
             let datetime_local = datetime_utc.with_timezone(&Local);
             let message_day = datetime_local.day();
 
@@ -180,7 +181,8 @@ impl ChannelView {
                 previous_day = message_day;
             }
 
-            channel_view = channel_view.push(self.message_box(message));
+            channel_view =
+                channel_view.push(self.message_box(entry, entry.source_node(self.my_source)));
         }
 
         let channel_scroll = scrollable(channel_view)
@@ -275,14 +277,7 @@ impl ChannelView {
     }
 
     /// Create an Element that contains a message received or sent
-    fn message_box(&self, message: &ChannelViewEntry) -> Element<'static, Message> {
-        let mine = message.source_node(self.my_source);
-        let style = if mine {
-            MY_MESSAGE_BUBBLE_STYLE
-        } else {
-            OTHERS_MESSAGE_BUBBLE_STYLE
-        };
-
+    fn message_box(&self, message: &ChannelViewEntry, mine: bool) -> Element<'static, Message> {
         // Add the source node name if there is one
         // TODO try and show the full node name in the tooltip
         let mut message_content_column = Column::new();
@@ -306,23 +301,28 @@ impl ChannelView {
             );
         }
 
-        // Add a row to the message we are replying to if there is one
-        if let TextMessageReply(reply_to_id, _) = message.payload()
-            && let Some(original_text) = self.text_from_id(*reply_to_id)
-        {
-            let quote_row = Row::new()
-                .push(text("Re: ").color(COLOR_GREEN).shaping(Advanced))
-                .push(text(original_text).color(COLOR_GREEN).shaping(Advanced));
-            message_content_column = message_content_column.push(quote_row);
-        };
-
         // TODO in the future we might change graphics based on type - just text for now
         let content: Element<'static, Message> = match message.payload() {
-            NewTextMessage(text_msg) | TextMessageReply(_, text_msg) => text(text_msg.clone())
+            NewTextMessage(text_msg) => text(text_msg.clone())
                 .style(|_| MESSAGE_TEXT_STYLE)
                 .size(18)
                 .shaping(Advanced)
                 .into(),
+            TextMessageReply(reply_to_id, text_msg) => {
+                // Add a row to the message we are replying to if there is one
+                if let Some(original_text) = self.text_from_id(*reply_to_id) {
+                    let quote_row = Row::new()
+                        .push(text("Re: ").color(COLOR_GREEN).shaping(Advanced))
+                        .push(text(original_text).color(COLOR_GREEN).shaping(Advanced));
+                    message_content_column = message_content_column.push(quote_row);
+                };
+
+                text(text_msg.clone())
+                    .style(|_| MESSAGE_TEXT_STYLE)
+                    .size(18)
+                    .shaping(Advanced)
+                    .into()
+            }
             Position(lat, long) => {
                 let latitude = 0.0000001 * *lat as f64;
                 let longitude = 0.0000001 * *long as f64;
@@ -354,12 +354,27 @@ impl ChannelView {
         // Add the message text and time row
         message_content_column = message_content_column.push(text_and_time_row);
 
+        let style = if mine {
+            MY_MESSAGE_BUBBLE_STYLE
+        } else {
+            OTHERS_MESSAGE_BUBBLE_STYLE
+        };
+
         // Create the container around the message content column and style it
         let message_bubble = Container::new(message_content_column)
             .padding([6, 8])
             .style(move |_theme: &Theme| style);
 
         let mut message_row = Row::new().padding([6, 6]);
+        if !message.emojis().is_empty() {
+            // But the emoji_row up against the bubble
+            message_row = message_row.padding(Padding {
+                top: 6.0,
+                right: 6.0,
+                bottom: 0.0,
+                left: 6.0,
+            });
+        }
 
         // The outer container object that spans the width of the view and justifies the message
         // row within it depending on who sent the message
@@ -382,15 +397,23 @@ impl ChannelView {
 
         // Add the emoji row outside the bubble, below it
         if !message.emojis().is_empty() {
-            let mut emoji_row = Row::new().padding([0, 6]);
+            let mut emoji_row = Row::new().padding(Padding {
+                top: -4.0,
+                right: 6.0,
+                bottom: 6.0,
+                left: 6.0,
+            });
             // TODO Style the tooltip
             for (emoji, sources) in message.emojis() {
-                let tooltip_element: Element<'_, Message> = self.list_of_nodes(sources);
-                emoji_row = emoji_row.push(tooltip(
-                    text(emoji.clone()).size(18).shaping(Advanced),
-                    tooltip_element,
-                    tooltip::Position::Bottom,
-                ));
+                let tooltip_element: Element<'_, Message> = Self::list_of_nodes(sources);
+                emoji_row = emoji_row.push(
+                    tooltip(
+                        text(emoji.clone()).size(18).align_y(Top).shaping(Advanced),
+                        tooltip_element,
+                        tooltip::Position::Bottom,
+                    )
+                    .padding(0),
+                );
             }
             message_column = message_column.push(emoji_row);
         }
@@ -411,7 +434,7 @@ impl ChannelView {
 
     /// Return an element (currently a Column) with a list of the names of the nodes that sent the
     /// given emoji.
-    fn list_of_nodes(&self, sources: &Vec<String>) -> Element<'static, Message> {
+    fn list_of_nodes(sources: &Vec<String>) -> Element<'static, Message> {
         let mut col = Column::new();
         for source in sources {
             col = col.push(
