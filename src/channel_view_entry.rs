@@ -17,13 +17,12 @@ use iced::font::Weight;
 use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use ringmap::RingMap;
-use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum Payload {
     NewTextMessage(String),
     /// TextMessageReply(reply_to_id, reply text)
@@ -36,11 +35,11 @@ pub enum Payload {
 
 /// An entry in the Channel View that represents some type of message sent to either this user on
 /// this device or to a channel this device can read. Can be any of [Payload] types.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct ChannelViewEntry {
     from: u32,
     message_id: u32,
-    rx_time: u64,
+    rx_daytime: DateTime<Local>,
     payload: Payload,
     name: Option<String>,
     seen: bool,
@@ -54,7 +53,7 @@ impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
     pub fn new(
-        message: Payload,
+        payload: Payload,
         from: u32,
         message_id: u32,
         name: Option<String>,
@@ -65,11 +64,14 @@ impl ChannelViewEntry {
             .map(|t| t.as_secs())
             .unwrap_or(0);
 
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
+        let rx_daytime = datetime_utc.with_timezone(&Local);
+
         ChannelViewEntry {
-            payload: message,
+            payload,
             from,
             message_id,
-            rx_time,
+            rx_daytime,
             name,
             seen,
             acked: false,
@@ -129,8 +131,8 @@ impl ChannelViewEntry {
     }
 
     /// Return the time this message was received/sent as u64 seconds in EPOCH time
-    pub fn time(&self) -> u64 {
-        self.rx_time
+    pub fn time(&self) -> DateTime<Local> {
+        self.rx_daytime
     }
 
     /// Return the optional name of the sender of this message
@@ -140,7 +142,7 @@ impl ChannelViewEntry {
 
     /// Order two messages - using the rx_time field.
     pub fn sort_by_rx_time(_: &u32, left: &Self, _: &u32, right: &Self) -> Ordering {
-        left.rx_time.cmp(&right.rx_time)
+        left.rx_daytime.cmp(&right.rx_daytime)
     }
 
     /// Return the text of a NewTextMessage that matches the given id, or None if not found
@@ -161,9 +163,7 @@ impl ChannelViewEntry {
 
     /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
     /// it occurs in. These will be separated by Day specifiers, so day is not needed.
-    fn time_to_text(time: u64) -> Text<'static, Theme, Renderer> {
-        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(time as i64).unwrap();
-        let datetime_local = datetime_utc.with_timezone(&Local);
+    fn time_to_text(datetime_local: DateTime<Local>) -> Text<'static, Theme, Renderer> {
         let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
         text(time_str)
             .color(TIME_TEXT_COLOR)
@@ -337,6 +337,6 @@ impl ChannelViewEntry {
 
 impl PartialEq<Self> for ChannelViewEntry {
     fn eq(&self, other: &Self) -> bool {
-        self.rx_time == other.rx_time
+        self.rx_daytime == other.rx_daytime
     }
 }

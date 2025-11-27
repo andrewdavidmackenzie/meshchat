@@ -8,7 +8,7 @@ use crate::device_view::DeviceViewMessage::ChannelMsg;
 use crate::styles::{DAY_SEPARATOR_STYLE, button_chip_style, text_input_style};
 use crate::{Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
-use chrono::{Datelike, Local, Utc};
+use chrono::{Datelike, Local};
 use iced::padding::right;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text_input::{Icon, Side};
@@ -145,13 +145,13 @@ impl ChannelView {
 
         let mut previous_day = u32::MIN;
 
+        // Add an view to the column for each of the entries in this Channel
         for entry in self.entries.values() {
-            let datetime_utc = DateTime::<Utc>::from_timestamp_secs(entry.time() as i64).unwrap();
-            let datetime_local = datetime_utc.with_timezone(&Local);
-            let message_day = datetime_local.day();
+            let message_day = entry.time().day();
 
+            // Add a day separator when the day of an entry changes
             if message_day != previous_day {
-                channel_view = channel_view.push(Self::day_separator(&datetime_local));
+                channel_view = channel_view.push(Self::day_separator(&entry.time()));
                 previous_day = message_day;
             }
 
@@ -159,6 +159,7 @@ impl ChannelView {
                 channel_view.push(entry.view(&self.entries, entry.source_node(self.my_source)));
         }
 
+        // Wrap the list of messages in a scrollable container, with a scrollbar
         let channel_scroll = scrollable(channel_view)
             .direction({
                 let scrollbar = Scrollbar::new().width(10.0);
@@ -167,6 +168,7 @@ impl ChannelView {
             .width(Fill)
             .height(Fill);
 
+        // Place the scrollable in a column, with an input box at the bottom
         Column::new()
             .padding(4)
             .push(channel_scroll)
