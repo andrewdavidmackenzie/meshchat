@@ -141,7 +141,7 @@ impl ChannelViewEntry {
         &self.name
     }
 
-    /// Order two messages - using the rx_time field.
+    /// Order two messages - using the rx_daytime field.
     pub fn sort_by_rx_time(_: &u32, left: &Self, _: &u32, right: &Self) -> Ordering {
         left.rx_daytime.cmp(&right.rx_daytime)
     }
@@ -335,6 +335,7 @@ impl ChannelViewEntry {
     }
 }
 
+#[cfg(test)]
 impl PartialEq<Self> for ChannelViewEntry {
     fn eq(&self, other: &Self) -> bool {
         self.rx_daytime == other.rx_daytime
