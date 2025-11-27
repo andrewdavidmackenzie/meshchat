@@ -118,7 +118,6 @@ impl ChannelView {
                 Task::none()
             }
             ClearMessage => {
-                // TODO add a button to clear message entered so far
                 self.message = String::new();
                 Task::none()
             }
