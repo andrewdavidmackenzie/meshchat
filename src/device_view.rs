@@ -538,21 +538,17 @@ impl DeviceView {
     /// Create a header view for the top of the screen depending on the current state of the app
     /// and whether we are in discovery mode or not.
     pub fn header<'a>(&'a self, state: &'a ConnectionState) -> Element<'a, Message> {
-        let mut header = Column::new().padding(4);
-
         // Always add a button to allow navigating back to the list of devices
         let device_list_button = button("Devices")
             .style(button_chip_style)
             .on_press(Navigation(DeviceList));
 
         // Create the navigation bar and add it to the header
-        let nav_bar = Row::new()
+        Row::new()
             .align_y(Bottom)
             .push(device_list_button)
-            .push(self.device_view_header(state));
-        header = header.push(nav_bar);
-
-        header.into()
+            .push(self.device_view_header(state))
+            .into()
     }
 
     pub fn view(&self, config: &Config) -> Element<'_, Message> {
