@@ -507,6 +507,7 @@ impl DeviceView {
             }
         };
 
+        // possibly add a channel name button next
         match &self.viewing_channel {
             Some(ChannelId::Channel(channel_index)) => {
                 let index = *channel_index as usize;
