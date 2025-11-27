@@ -13,12 +13,11 @@ use crate::device_view::ConnectionState::Connected;
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::device_view::{ConnectionState, DeviceView, DeviceViewMessage};
 use crate::linear::Linear;
+use crate::notification::{Notification, Notifications};
 use crate::styles::button_chip_style;
-use iced::border::Radius;
-use iced::widget::container::Style;
-use iced::widget::{Column, Container, Row, Space, button};
-use iced::{Background, Element};
-use iced::{Border, Bottom, Color, Event, Subscription, Task, Theme, window};
+use iced::Element;
+use iced::widget::{Column, Row, Space, button};
+use iced::{Bottom, Event, Subscription, Task, window};
 use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;
@@ -36,6 +35,7 @@ mod styles;
 #[rustfmt::skip]
 /// Icons generated as a font using iced_fontello
 mod icons;
+mod notification;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
@@ -44,22 +44,13 @@ pub enum View {
     Device,
 }
 
-/// A [Notification] can be one of two notification types:
-/// - Error(summary, detail)
-/// - Info(summary, detail)
-enum Notification {
-    Error(String, String),
-    Info(String, String),
-}
-
 #[derive(Default)]
 struct MeshChat {
     config: Config,
     current_view: View,
     device_list_view: DeviceListView,
     device_view: DeviceView,
-    notifications: Vec<(usize, Notification)>,
-    next_id: usize,
+    notifications: Notifications,
 }
 
 #[derive(Debug, Clone)]
@@ -127,11 +118,11 @@ impl MeshChat {
             Device(device_event) => self.device_view.update(device_event),
             Exit => window::get_latest().and_then(window::close),
             AppNotification(summary, detail) => {
-                self.add_notification(Notification::Info(summary, detail));
+                self.notifications.add(Notification::Info(summary, detail));
                 Task::none()
             }
             AppError(summary, detail) => {
-                self.add_notification(Notification::Error(summary, detail));
+                self.notifications.add(Notification::Error(summary, detail));
                 Task::none()
             }
             Message::None => Task::none(),
@@ -158,7 +149,7 @@ impl MeshChat {
                 save_config(self.config.clone())
             }
             RemoveNotification(id) => {
-                self.remove_notification(id);
+                self.notifications.remove(id);
                 Task::none()
             }
             Message::ShowLocation(lat, long) => {
@@ -231,11 +222,11 @@ impl MeshChat {
 
         let header = self.header(state, scanning);
 
-        let mut outer = Column::new().push(header);
-        outer = outer.push(self.notifications());
-        outer = outer.push(inner);
-
-        outer.into()
+        Column::new()
+            .push(header)
+            .push(self.notifications.view())
+            .push(inner)
+            .into()
     }
 
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
@@ -273,81 +264,5 @@ impl MeshChat {
         } else {
             Task::none()
         }
-    }
-
-    /// Add a notification to the list of notifications to display at the top of the screen.
-    /// Notifications are displayed in a list, with the most recent at the top.
-    /// Each notification has a unique id, which is used to remove it from the list.
-    fn add_notification(&mut self, notification: Notification) {
-        self.notifications.push((self.next_id, notification));
-        self.next_id += 1;
-    }
-
-    /// Remove a notification from the list of notifications displayed at the top of the screen.
-    /// Use the unique id to identify it
-    fn remove_notification(&mut self, id: usize) {
-        self.notifications.retain(|item| item.0 != id);
-    }
-
-    /// Render any notifications that are active into an element to display at the top of the screen
-    fn notifications(&self) -> Element<'_, Message> {
-        let mut notifications = Row::new().padding(10);
-
-        // TODO a box with color and a cancel button that removes this error
-        // larger font for summary, detail can be unfolded
-        for (id, notification) in &self.notifications {
-            match notification {
-                Notification::Error(summary, details) => {
-                    notifications =
-                        notifications.push(Self::error_box(*id, summary.clone(), details.clone()));
-                }
-                Notification::Info(summary, details) => {
-                    notifications =
-                        notifications.push(Self::info_box(*id, summary.clone(), details.clone()));
-                }
-            }
-        }
-
-        notifications.into()
-    }
-
-    // TODO accept detail and make it in an expandable box
-    fn error_box(id: usize, summary: String, _detail: String) -> Element<'static, Message> {
-        let row = Row::new().push(iced::widget::text(summary));
-        let row = row.push(button("OK").on_press(RemoveNotification(id)));
-
-        Container::new(row)
-            .padding([6, 12]) // adjust to taste
-            .style(|_theme: &Theme| Style {
-                text_color: Some(Color::WHITE),
-                background: Some(Background::Color(Color::from_rgb8(0xE5, 0x2D, 0x2C))), // red
-                border: Border {
-                    radius: Radius::from(12.0), // rounded corners
-                    width: 2.0,
-                    color: Color::from_rgb8(0xFF, 0xD7, 0x00), // yellow
-                },
-                ..Default::default()
-            })
-            .into()
-    }
-
-    // TODO accept detail and make it in an expandable box
-    fn info_box(id: usize, summary: String, _detail: String) -> Element<'static, Message> {
-        let row = Row::new().push(iced::widget::text(summary));
-        let row = row.push(button("OK").on_press(RemoveNotification(id)));
-
-        Container::new(row)
-            .padding([6, 12]) // adjust to taste
-            .style(|_theme: &Theme| Style {
-                text_color: Some(Color::WHITE),
-                background: Some(Background::Color(Color::from_rgb8(0x00, 0x00, 0x00))), // black
-                border: Border {
-                    radius: Radius::from(12.0), // rounded corners
-                    width: 2.0,
-                    color: Color::WHITE,
-                },
-                ..Default::default()
-            })
-            .into()
     }
 }
