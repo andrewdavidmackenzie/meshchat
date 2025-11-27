@@ -1,5 +1,5 @@
 use crate::Message;
-use crate::Message::{Device, ShowLocation};
+use crate::Message::{DeviceViewEvent, ShowLocation};
 use crate::channel_view::ChannelId;
 use crate::channel_view_entry::Payload::{
     EmojiReply, NewTextMessage, Ping, Position, TextMessageReply,
@@ -204,7 +204,9 @@ impl ChannelViewEntry {
                         ..Default::default()
                     }))
                     .padding(0)
-                    .on_press(Device(ShowChannel(Some(ChannelId::Node(self.from())))))
+                    .on_press(DeviceViewEvent(ShowChannel(Some(ChannelId::Node(
+                        self.from(),
+                    )))))
                     .style(move |theme, status| {
                         transparent_button_style(theme, status, text_color)
                     }),

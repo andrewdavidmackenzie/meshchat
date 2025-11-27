@@ -1,4 +1,4 @@
-use crate::Message::Device;
+use crate::Message::DeviceViewEvent;
 use crate::channel_view::ChannelId::Channel;
 use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput, SendMessage};
 use crate::channel_view_entry::Payload::{
@@ -127,7 +127,7 @@ impl ChannelView {
                     self.message = String::new();
                     let channel_id = self.channel_id.clone();
                     Task::perform(empty(), move |_| {
-                        Device(crate::device_view::DeviceViewMessage::SendMessage(
+                        DeviceViewEvent(crate::device_view::DeviceViewMessage::SendMessage(
                             msg.clone(),
                             channel_id.clone(),
                         ))
@@ -225,8 +225,8 @@ impl ChannelView {
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
         if !self.message.is_empty() {
-            send_button = send_button.on_press(Device(ChannelMsg(SendMessage)));
-            clear_button = clear_button.on_press(Device(ChannelMsg(ClearMessage)));
+            send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(SendMessage)));
+            clear_button = clear_button.on_press(DeviceViewEvent(ChannelMsg(ClearMessage)));
         }
 
         Row::new()
@@ -234,8 +234,8 @@ impl ChannelView {
             .push(
                 text_input("Send Message", &self.message)
                     .style(text_input_style)
-                    .on_input(|s| Device(ChannelMsg(MessageInput(s))))
-                    .on_submit(Device(ChannelMsg(SendMessage)))
+                    .on_input(|s| DeviceViewEvent(ChannelMsg(MessageInput(s))))
+                    .on_submit(DeviceViewEvent(ChannelMsg(SendMessage)))
                     .padding([6, 6])
                     .icon(Icon {
                         font: Font::with_name("icons"),

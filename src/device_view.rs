@@ -1,5 +1,5 @@
 use crate::ConfigChangeMessage::DeviceAndChannel;
-use crate::Message::{Device, Navigation, ToggleNodeFavourite};
+use crate::Message::{DeviceViewEvent, Navigation, ToggleNodeFavourite};
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId::Node;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
@@ -186,7 +186,7 @@ impl DeviceView {
                         Some(channel_id) => {
                             let channel_id = channel_id.clone();
                             Task::perform(empty(), move |_| {
-                                Device(ShowChannel(Some(channel_id.clone())))
+                                DeviceViewEvent(ShowChannel(Some(channel_id.clone())))
                             })
                         }
                     }
@@ -491,7 +491,7 @@ impl DeviceView {
                         .style(button_chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
                 if self.viewing_channel.is_some() {
-                    button = button.on_press(Device(ShowChannel(None)));
+                    button = button.on_press(DeviceViewEvent(ShowChannel(None)));
                 }
 
                 header.push(button)
@@ -531,7 +531,7 @@ impl DeviceView {
         if let Connected(device) = state {
             header = header.push(Space::new(Fill, 1)).push(
                 button("Disconnect")
-                    .on_press(Device(DisconnectRequest(device.clone(), false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(device.clone(), false)))
                     .style(button_chip_style),
             )
         }
@@ -540,10 +540,10 @@ impl DeviceView {
     }
 
     pub fn view(&self, config: &Config) -> Element<'_, Message> {
-        if let Some(channel_number) = &self.viewing_channel {
-            if let Some(channel_view) = self.channel_views.get(channel_number) {
-                return channel_view.view();
-            }
+        if let Some(channel_number) = &self.viewing_channel
+            && let Some(channel_view) = self.channel_views.get(channel_number)
+        {
+            return channel_view.view();
         }
 
         // If not viewing a channel/user, show the list of channels and users
@@ -689,7 +689,7 @@ impl DeviceView {
         Row::new()
             .push(
                 button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
-                    .on_press(Device(ShowChannel(Some(channel_id))))
+                    .on_press(DeviceViewEvent(ShowChannel(Some(channel_id))))
                     .width(Fill)
                     .style(Self::view_button),
             )
@@ -705,7 +705,7 @@ impl DeviceView {
     ) -> Element<'static, Message> {
         let row = Row::new().push(
             button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
-                .on_press(Device(ShowChannel(Some(Node(node_id)))))
+                .on_press(DeviceViewEvent(ShowChannel(Some(Node(node_id)))))
                 .width(Fill)
                 .style(Self::view_button),
         );
@@ -731,7 +731,7 @@ impl DeviceView {
         row([text_input("Search for Channel or Node", &self.filter)
             .style(text_input_style)
             .padding([6, 6])
-            .on_input(|s| Device(SearchInput(s)))
+            .on_input(|s| DeviceViewEvent(SearchInput(s)))
             .into()])
         .padding([0, 4]) // 6 pixels spacing minus the 2-pixel border width
         .into()

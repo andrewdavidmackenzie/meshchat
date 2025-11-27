@@ -1,10 +1,10 @@
 use crate::channel_view::ChannelId;
+use crate::device_name;
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, RadioPacket, SendText};
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent,
 };
-use crate::name_from_id;
 use futures::SinkExt;
 use iced::stream;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
@@ -135,7 +135,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 gui_sender
                                     .send(ConnectionError(
                                         device.clone(),
-                                        format!("Failed to connect to {}", name_from_id(&device)),
+                                        format!("Failed to connect to {}", device_name(&device)),
                                         e.to_string(),
                                     ))
                                     .await

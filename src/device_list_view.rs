@@ -1,10 +1,10 @@
-use crate::Message::{Device, Navigation};
+use crate::Message::{DeviceViewEvent, Navigation};
 use crate::device_list_view::DiscoveryEvent::{BLERadioFound, BLERadioLost, Error};
 use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::button_chip_style;
-use crate::{Message, View, name_from_id};
+use crate::{Message, View, device_name};
 use iced::futures::{SinkExt, Stream};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{Column, Row, Space, button, container, scrollable, text};
@@ -86,7 +86,7 @@ impl DeviceListView {
         if let Connected(device) = state {
             header = header.push(Space::new(Fill, 1)).push(
                 button("Disconnect")
-                    .on_press(Device(DisconnectRequest(device.clone(), false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(device.clone(), false)))
                     .style(button_chip_style),
             )
         }
@@ -99,20 +99,23 @@ impl DeviceListView {
 
         for device in &self.discovered_devices {
             let mut device_row = Row::new().align_y(alignment::Vertical::Center);
-            device_row = device_row.push(text(name_from_id(device)));
+            device_row = device_row.push(text(device_name(device)));
             device_row = device_row.push(Space::new(6, 0));
             match &connection_state {
                 Connected(connected_device) => {
                     device_row = device_row.push(
                         button("Disconnect")
-                            .on_press(Device(DisconnectRequest(connected_device.clone(), false)))
+                            .on_press(DeviceViewEvent(DisconnectRequest(
+                                connected_device.clone(),
+                                false,
+                            )))
                             .style(button_chip_style),
                     );
                 }
                 Disconnected(_id, _error) => {
                     device_row = device_row.push(
                         button("Connect")
-                            .on_press(Device(ConnectRequest(device.clone(), None)))
+                            .on_press(DeviceViewEvent(ConnectRequest(device.clone(), None)))
                             .style(button_chip_style),
                     );
                 }
