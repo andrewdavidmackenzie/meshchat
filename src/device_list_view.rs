@@ -6,8 +6,8 @@ use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::button_chip_style;
 use crate::{Message, View, name_from_id};
 use iced::futures::{SinkExt, Stream};
-use iced::stream;
 use iced::widget::{Column, Row, Space, button, container, text};
+use iced::{Bottom, stream};
 use iced::{Element, Fill, Task, alignment};
 use meshtastic::utils::stream::{BleDevice, available_ble_devices};
 use std::collections::HashSet;
@@ -48,8 +48,14 @@ impl DeviceListView {
         Task::none()
     }
 
-    pub fn header<'a>(&'a self, connection_state: &'a ConnectionState) -> Element<'a, Message> {
-        let mut header = match connection_state {
+    /// Create a header view for the top of the screen
+    pub fn header<'a>(&'a self, state: &'a ConnectionState) -> Element<'a, Message> {
+        let mut header = Row::new()
+            .padding(4)
+            .align_y(Bottom)
+            .push(button("Devices").style(button_chip_style));
+
+        header = header.push(match state {
             Disconnected(_, _) => Row::new()
                 .push(Space::with_width(Fill))
                 .push(iced::widget::button("Disconnected").style(button_chip_style)),
@@ -73,10 +79,10 @@ impl DeviceListView {
                 .width(Fill)
                 .align_x(alignment::Horizontal::Right),
             ),
-        };
+        });
 
         // Add a disconnect button on the right if we are connected
-        if let Connected(device) = connection_state {
+        if let Connected(device) = state {
             header = header.push(Space::new(Fill, 1)).push(
                 button("Disconnect")
                     .on_press(Device(DisconnectRequest(device.clone(), false)))

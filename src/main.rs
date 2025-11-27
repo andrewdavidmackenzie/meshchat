@@ -3,21 +3,20 @@
 
 use crate::Message::{
     AppError, AppNotification, ConfigChange, Device, DeviceListEvent, Exit, Navigation, NewConfig,
-    RemoveNotification, ToggleNodeFavourite, WindowEvent,
+    RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId;
 use crate::config::{Config, load_config, save_config};
 use crate::device_list_view::{DeviceListView, DiscoveryEvent, ble_discovery};
-use crate::device_view::ConnectionState::Connected;
+use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
-use crate::device_view::{ConnectionState, DeviceView, DeviceViewMessage};
+use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::linear::Linear;
 use crate::notification::{Notification, Notifications};
-use crate::styles::button_chip_style;
-use iced::Element;
-use iced::widget::{Column, Row, Space, button};
-use iced::{Bottom, Event, Subscription, Task, window};
+use iced::widget::{Column, Space};
+use iced::{Element, Fill};
+use iced::{Event, Subscription, Task, window};
 use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;
@@ -152,7 +151,7 @@ impl MeshChat {
                 self.notifications.remove(id);
                 Task::none()
             }
-            Message::ShowLocation(lat, long) => {
+            ShowLocation(lat, long) => {
                 let maps_url = format!("https://maps.google.com/?q={},{}", lat, long);
                 let _ = webbrowser::open(&maps_url);
                 Task::none()
@@ -168,49 +167,7 @@ impl MeshChat {
         }
     }
 
-    /// Create a header view for the top of the screen depending on the current state of the app
-    /// and whether we are in discovery mode or not.
-    fn header<'a>(&'a self, state: &'a ConnectionState, scanning: bool) -> Element<'a, Message> {
-        let mut header = Column::new().padding(4);
-
-        // Always add a button to allow navigating back to the list of devices
-        let mut device_list_button = button("Devices").style(button_chip_style);
-
-        // Activate it if we are not on the device list view
-        if self.current_view != DeviceList {
-            device_list_button = device_list_button.on_press(Navigation(DeviceList));
-        }
-
-        // Create the navigation bar and add it to the header
-        let nav_bar =
-            Row::new()
-                .align_y(Bottom)
-                .push(device_list_button)
-                .push(match self.current_view {
-                    DeviceList => self.device_list_view.header(state),
-                    View::Device => self.device_view.header(state),
-                });
-        header = header.push(nav_bar);
-
-        // If busy of connecting or disconnecting, add a busy bar to the header
-        if scanning
-            || matches!(
-                state,
-                ConnectionState::Connecting(_) | ConnectionState::Disconnecting(_)
-            )
-        {
-            header = header.push(Space::new(iced::Length::Fill, 2)).push(
-                Linear::new()
-                    .easing(easing::emphasized_accelerate())
-                    .cycle_duration(Duration::from_secs_f32(2.0))
-                    .width(iced::Length::Fill),
-            );
-        }
-
-        header.into()
-    }
-
-    /// Render the app view
+    /// Render the main app view
     fn view(&self) -> Element<'_, Message> {
         let state = self.device_view.connection_state();
 
@@ -220,13 +177,23 @@ impl MeshChat {
             View::Device => (self.device_view.view(&self.config), false),
         };
 
-        let header = self.header(state, scanning);
+        let header = match self.current_view {
+            DeviceList => self.device_list_view.header(state),
+            View::Device => self.device_view.header(state),
+        };
 
-        Column::new()
-            .push(header)
-            .push(self.notifications.view())
-            .push(inner)
-            .into()
+        let mut stack = Column::new().push(header);
+
+        // If busy of connecting or disconnecting, add a busy bar to the header
+        if scanning || matches!(state, Connecting(_) | Disconnecting(_)) {
+            stack = stack.push(Space::new(Fill, 2)).push(
+                Linear::new()
+                    .easing(easing::emphasized_accelerate())
+                    .cycle_duration(Duration::from_secs_f32(2.0))
+                    .width(Fill),
+            );
+        }
+        stack.push(self.notifications.view()).push(inner).into()
     }
 
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
