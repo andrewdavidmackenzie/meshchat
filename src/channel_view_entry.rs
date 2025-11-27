@@ -1,7 +1,26 @@
-use crate::channel_view_entry::Payload::NewTextMessage;
+use crate::Message;
+use crate::Message::{Device, ShowLocation};
+use crate::channel_view::ChannelId;
+use crate::channel_view_entry::Payload::{
+    EmojiReply, NewTextMessage, Ping, Position, TextMessageReply,
+};
+use crate::device_view::DeviceViewMessage::ShowChannel;
+use crate::styles::{
+    COLOR_DICTIONARY, COLOR_GREEN, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE,
+    OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
+    source_tooltip_style, transparent_button_style,
+};
+use chrono::{DateTime, Local, Utc};
+use iced::Length::Fixed;
+use iced::advanced::text::Shaping::Advanced;
+use iced::font::Weight;
+use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
+use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
+use ringmap::RingMap;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -122,6 +141,197 @@ impl ChannelViewEntry {
     /// Order two messages - using the rx_time field.
     pub fn sort_by_rx_time(_: &u32, left: &Self, _: &u32, right: &Self) -> Ordering {
         left.rx_time.cmp(&right.rx_time)
+    }
+
+    /// Return the text of a NewTextMessage that matches the given id, or None if not found
+    fn text_from_id(entries: &RingMap<u32, ChannelViewEntry>, id: u32) -> Option<&String> {
+        entries.get(&id).and_then(|entry| entry.as_new_message())
+    }
+
+    /// Hash the node name into a color index - to be able to assign a consistent color to the text
+    /// name for a node in the UI
+    fn color_from_name(name: &String) -> Color {
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        let index = (hash % COLOR_DICTIONARY.len() as u64) as usize;
+        COLOR_DICTIONARY[index]
+    }
+
+    /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
+    /// it occurs in. These will be separated by Day specifiers, so day is not needed.
+    fn time_to_text(time: u64) -> Text<'static, Theme, Renderer> {
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(time as i64).unwrap();
+        let datetime_local = datetime_utc.with_timezone(&Local);
+        let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
+        text(time_str)
+            .color(TIME_TEXT_COLOR)
+            .size(TIME_TEXT_SIZE)
+            .width(Fixed(TIME_TEXT_WIDTH))
+    }
+
+    /// Return an element (currently a Column) with a list of the names of the nodes that sent the
+    /// given emoji.
+    fn list_of_nodes(sources: &Vec<String>) -> Element<'static, Message> {
+        let mut col = Column::new();
+        for source in sources {
+            col = col.push(
+                text(source.clone())
+                    .color(Self::color_from_name(source))
+                    .shaping(Advanced),
+            );
+        }
+        col.into()
+    }
+
+    /// Create an Element that contains a message received or sent
+    pub fn view<'a>(
+        &'a self,
+        entries: &'a RingMap<u32, ChannelViewEntry>,
+        mine: bool,
+    ) -> Element<'a, Message> {
+        // Add the source node name if there is one
+        // TODO try and show the full node name in the tooltip
+        let mut message_content_column = Column::new();
+        if let Some(name) = self.name() {
+            let text_color = Self::color_from_name(name);
+            message_content_column = message_content_column.push(
+                tooltip(
+                    button(text(name.clone()).shaping(Advanced).font(Font {
+                        weight: Weight::Bold,
+                        ..Default::default()
+                    }))
+                    .padding(0)
+                    .on_press(Device(ShowChannel(Some(ChannelId::Node(self.from())))))
+                    .style(move |theme, status| {
+                        transparent_button_style(theme, status, text_color)
+                    }),
+                    text(format!("Click to DM node '{name}'")).shaping(Advanced),
+                    tooltip::Position::Top,
+                )
+                .style(source_tooltip_style),
+            );
+        }
+
+        // TODO in the future we might change graphics based on type - just text for now
+        let content: Element<'static, Message> = match self.payload() {
+            NewTextMessage(text_msg) => text(text_msg.clone())
+                .style(|_| MESSAGE_TEXT_STYLE)
+                .size(18)
+                .shaping(Advanced)
+                .into(),
+            TextMessageReply(reply_to_id, text_msg) => {
+                // Add a row to the message we are replying to if there is one
+                if let Some(original_text) = Self::text_from_id(entries, *reply_to_id) {
+                    let quote_row = Row::new()
+                        .push(text("Re: ").color(COLOR_GREEN).shaping(Advanced))
+                        .push(text(original_text).color(COLOR_GREEN).shaping(Advanced));
+                    message_content_column = message_content_column.push(quote_row);
+                };
+
+                text(text_msg.clone())
+                    .style(|_| MESSAGE_TEXT_STYLE)
+                    .size(18)
+                    .shaping(Advanced)
+                    .into()
+            }
+            Position(lat, long) => {
+                let latitude = 0.0000001 * *lat as f64;
+                let longitude = 0.0000001 * *long as f64;
+                button(text(format!("({:.2}, {:.2}) 📌", latitude, longitude)).shaping(Advanced))
+                    .padding(0)
+                    .style(|theme, status| transparent_button_style(theme, status, COLOR_GREEN))
+                    .on_press(ShowLocation(latitude, longitude))
+                    .into()
+            }
+            Ping(user_name) => text(format!("Ping from {}", user_name))
+                .style(|_| MESSAGE_TEXT_STYLE)
+                .size(18)
+                .shaping(Advanced)
+                .into(),
+            EmojiReply(_, _) => text("").into(), // Should never happen
+        };
+
+        // Create the row with message text and time and maybe an ACK tick mark
+        let mut text_and_time_row = Row::new()
+            .push(content)
+            .push(Space::with_width(10.0))
+            .push(Self::time_to_text(self.time()))
+            .align_y(Bottom);
+
+        if self.acked() {
+            text_and_time_row = text_and_time_row.push(text("✓").size(14).color(COLOR_GREEN))
+        };
+
+        // Add the message text and time row
+        message_content_column = message_content_column.push(text_and_time_row);
+
+        let style = if mine {
+            MY_MESSAGE_BUBBLE_STYLE
+        } else {
+            OTHERS_MESSAGE_BUBBLE_STYLE
+        };
+
+        // Create the container around the message content column and style it
+        let message_bubble = Container::new(message_content_column)
+            .padding([6, 8])
+            .style(move |_theme: &Theme| style);
+
+        let mut message_row = Row::new().padding([6, 6]);
+        if !self.emojis().is_empty() {
+            // But the emoji_row up against the bubble
+            message_row = message_row.padding(Padding {
+                top: 6.0,
+                right: 6.0,
+                bottom: 0.0,
+                left: 6.0,
+            });
+        }
+
+        // The outer container object that spans the width of the view and justifies the message
+        // row within it depending on who sent the message
+        let mut message_column = Column::new().width(Fill);
+
+        // Put on the right-hand side if my message, on the left if from someone else
+        if mine {
+            // Avoid very wide messages from me extending all the way to the left edge of the screen
+            message_row = message_row
+                .push(Space::with_width(100.0))
+                .push(message_bubble);
+            message_column = message_column.align_x(Right).push(message_row);
+        } else {
+            // Avoid very wide messages from others extending all the way to the right edge
+            message_row = message_row
+                .push(message_bubble)
+                .push(Space::with_width(100.0));
+            message_column = message_column.align_x(Left).push(message_row);
+        };
+
+        // Add the emoji row outside the bubble, below it
+        if !self.emojis().is_empty() {
+            let mut emoji_row = Row::new().padding(Padding {
+                top: -4.0,
+                right: 6.0,
+                bottom: 6.0,
+                left: 6.0,
+            });
+            // TODO Style the tooltip
+            for (emoji, sources) in self.emojis() {
+                let tooltip_element: Element<'_, Message> = Self::list_of_nodes(sources);
+                emoji_row = emoji_row.push(
+                    tooltip(
+                        text(emoji.clone()).size(18).align_y(Top).shaping(Advanced),
+                        tooltip_element,
+                        tooltip::Position::Bottom,
+                    )
+                    .padding(0),
+                );
+            }
+            message_column = message_column.push(emoji_row);
+        }
+
+        message_column.into()
     }
 }
 
