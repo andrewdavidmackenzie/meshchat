@@ -1,5 +1,5 @@
 use crate::ConfigChangeMessage::DeviceAndChannel;
-use crate::Message::{DeviceViewEvent, Navigation, ToggleNodeFavourite};
+use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId::Node;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
@@ -587,7 +587,7 @@ impl DeviceView {
             let channel_name = Self::channel_name(channel);
 
             // If there is a filter and the channel name does not contain it, don't show this row
-            if !self.filter.is_empty() && !channel_name.contains(&self.filter) {
+            if !channel_name.contains(&self.filter) {
                 continue;
             }
 
@@ -621,7 +621,7 @@ impl DeviceView {
             for (fav_node_id, node_name) in fav_nodes {
                 let channel_id = Node(fav_node_id);
                 if let Some(channel_view) = self.channel_views.get(&channel_id) {
-                    channels_list = channels_list.push(Self::node_row(
+                    channels_list = channels_list.push(self.node_row(
                         node_name,
                         channel_view.num_unseen_messages(),
                         fav_node_id,
@@ -641,17 +641,23 @@ impl DeviceView {
 
             for node_id in node_list {
                 if let Some(node_name) = self.node_name(*node_id) {
+                    if !node_name.contains(&self.filter) {
+                        continue;
+                    }
+
                     let channel_id = Node(*node_id);
 
-                    channels_list = channels_list.push(Self::node_row(
-                        node_name,
-                        self.channel_views
-                            .get(&channel_id)
-                            .unwrap()
-                            .num_unseen_messages(),
-                        *node_id,
-                        false, // Not a Favourite
-                    ));
+                    channels_list = channels_list.push(
+                        self.node_row(
+                            node_name,
+                            self.channel_views
+                                .get(&channel_id)
+                                .unwrap()
+                                .num_unseen_messages(),
+                            *node_id,
+                            false, // Not a Favourite
+                        ),
+                    );
                 }
             }
         }
@@ -720,31 +726,45 @@ impl DeviceView {
     }
 
     fn node_row(
+        &self,
         name: String,
         num_messages: usize,
         node_id: u32,
         favourite: bool,
     ) -> Element<'static, Message> {
-        let row = Row::new().push(
+        let mut row = Row::new().push(
             button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
                 .on_press(DeviceViewEvent(ShowChannel(Some(Node(node_id)))))
                 .width(Fill)
                 .style(channel_row_style),
         );
 
-        if favourite {
+        row = if let Some(node) = self.nodes.get(&node_id)
+            && let Some(position) = &node.position
+        {
+            let latitude = 0.0000001 * position.latitude_i() as f64;
+            let longitude = 0.0000001 * position.longitude_i() as f64;
+
             row.push(
-                button(icons::star())
-                    .on_press(ToggleNodeFavourite(node_id))
-                    .style(fav_button_style),
+                button(text("📌").shaping(Advanced))
+                    .style(fav_button_style)
+                    .on_press(ShowLocation(latitude, longitude)),
             )
         } else {
-            row.push(
-                button(icons::star_empty())
-                    .on_press(ToggleNodeFavourite(node_id))
-                    .style(fav_button_style),
-            )
-        }
+            row.push(Space::with_width(30))
+        };
+
+        let icon = if favourite {
+            icons::star()
+        } else {
+            icons::star_empty()
+        };
+
+        row.push(
+            button(icon)
+                .on_press(ToggleNodeFavourite(node_id))
+                .style(fav_button_style),
+        )
         .push(Space::with_width(10))
         .into()
     }
