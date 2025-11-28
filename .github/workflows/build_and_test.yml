@@ -43,8 +43,8 @@ jobs:
       - name: debug build
         run: cargo build
 
-      - name: CHeck release build via publish dry-run
-        run: cargo publish --dry-run --allow-dirty --no-verify
+      - name: Publish dry-run
+        run: cargo build --release && cargo publish --dry-run --allow-dirty --no-verify
 
       - name: test - non-Linux
         if: runner.os != 'Linux'

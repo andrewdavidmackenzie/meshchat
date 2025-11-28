@@ -4,7 +4,7 @@ pr: checks tests
 
 checks: format clippy publish udeps
 
-tests: debug publish test
+tests: debug release publish test
 
 format:
 	cargo fmt --all -- --check
@@ -12,7 +12,7 @@ format:
 clippy:
 	cargo clippy --tests --no-deps --all-features --all-targets
 
-publish:
+publish: release
 	cargo publish --dry-run
 
 test:
