@@ -1,66 +1,56 @@
 use crate::ConfigChangeMessage::DeviceAndChannel;
-use crate::Message::{Device, Navigation, ToggleNodeFavourite};
+use crate::Message::{DeviceViewEvent, Navigation, ToggleNodeFavourite};
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId::Node;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
 use crate::channel_view_entry::Payload::{
-    EmojiReply, NewTextMessage, Ping, Position, TextMessageReply,
+    EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::config::Config;
-use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, SendText};
+use crate::device_subscription::SubscriberMessage::{
+    Connect, Disconnect, SendInfo, SendPosition, SendText,
+};
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
-    ChannelMsg, ConnectRequest, DisconnectRequest, SearchInput, SendMessage, ShowChannel,
-    SubscriptionMessage,
+    ChannelMsg, ConnectRequest, DisconnectRequest, SearchInput, SendInfoMessage,
+    SendPositionMessage, SendTextMessage, ShowChannel, SubscriptionMessage,
 };
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, NO_BORDER, NO_SHADOW, VIEW_BUTTON_BORDER, button_chip_style,
-    fav_button_style, text_input_style,
+    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, fav_button_style, text_input_style,
 };
 use crate::{Message, View, icons};
-use iced::widget::button::Status::Hovered;
-use iced::widget::button::{Status, Style};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::{Column, Container, Row, Space, button, row, scrollable, text, text_input};
-use iced::{Background, Bottom, Center, Color, Element, Fill, Padding, Task, Theme};
+use iced::{Bottom, Center, Element, Fill, Padding, Task};
 use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
-use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum};
+use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position};
 use meshtastic::utils::stream::BleDevice;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
-const VIEW_BUTTON_HOVER_STYLE: Style = Style {
-    background: Some(Background::Color(Color::from_rgba(0.0, 0.8, 0.8, 1.0))),
-    text_color: Color::BLACK,
-    border: VIEW_BUTTON_BORDER,
-    shadow: NO_SHADOW,
-};
-
-const VIEW_BUTTON_STYLE: Style = Style {
-    background: Some(Background::Color(Color::from_rgba(0.0, 1.0, 1.0, 0.0))),
-    text_color: Color::WHITE,
-    border: NO_BORDER,
-    shadow: NO_SHADOW,
-};
-
 #[derive(Clone, PartialEq)]
 pub enum ConnectionState {
-    #[allow(dead_code)] // Remove this when the optional error string is used
     Disconnected(Option<BleDevice>, Option<String>),
     Connecting(BleDevice),
     Connected(BleDevice),
     Disconnecting(BleDevice),
+}
+
+impl Default for ConnectionState {
+    fn default() -> Self {
+        Disconnected(None, None)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -70,14 +60,18 @@ pub enum DeviceViewMessage {
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
-    SendMessage(String, ChannelId),
+    SendTextMessage(String, ChannelId),
+    SendPositionMessage(ChannelId),
+    SendInfoMessage(ChannelId),
     SearchInput(String),
 }
 
+#[derive(Default)]
 pub struct DeviceView {
     connection_state: ConnectionState,
-    subscription_sender: Option<Sender<SubscriberMessage>>, // TODO Maybe combine with Disconnected state?
+    subscription_sender: Option<Sender<SubscriberMessage>>,
     my_node_num: Option<u32>,
+    my_position: Option<Position>,
     pub(crate) viewing_channel: Option<ChannelId>,
     channel_views: HashMap<ChannelId, ChannelView>,
     pub(crate) channels: Vec<Channel>,
@@ -97,33 +91,26 @@ async fn request_send(sender: Sender<SubscriberMessage>, text: String, channel_i
     let _ = sender.send(SendText(text, channel_id)).await;
 }
 
+async fn request_send_position(
+    sender: Sender<SubscriberMessage>,
+    channel_id: ChannelId,
+    position: Position,
+) {
+    let _ = sender.send(SendPosition(channel_id, position)).await;
+}
+
+async fn request_send_info(sender: Sender<SubscriberMessage>, channel_id: ChannelId) {
+    let _ = sender.send(SendInfo(channel_id)).await;
+}
+
 async fn request_disconnection(sender: Sender<SubscriberMessage>) {
     let _ = sender.send(Disconnect).await;
 }
 
 async fn empty() {}
 
-impl Default for DeviceView {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl DeviceView {
-    pub fn new() -> Self {
-        Self {
-            connection_state: Disconnected(None, None),
-            subscription_sender: None,
-            channels: vec![],
-            nodes: HashMap::new(),
-            my_node_num: None,
-            viewing_channel: None, // No channel is being shown by default
-            channel_views: HashMap::new(),
-            filter: String::default(),
-            exit_pending: false,
-        }
-    }
-
+    /// Get the current [ConnectionState] of this device
     pub fn connection_state(&self) -> &ConnectionState {
         &self.connection_state
     }
@@ -152,7 +139,7 @@ impl DeviceView {
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_disconnection(sender.unwrap()), |_| {
-                    Navigation(View::DeviceList)
+                    Navigation(DeviceList)
                 })
             }
             ShowChannel(channel_id) => {
@@ -170,54 +157,29 @@ impl DeviceView {
                     Task::none()
                 }
             }
-            SubscriptionMessage(subscription_event) => match subscription_event {
-                ConnectedEvent(device) => {
-                    self.connection_state = Connected(device.clone());
-                    match &self.viewing_channel {
-                        None => {
-                            let channel_id = self.viewing_channel.clone();
-                            Task::perform(empty(), move |_| {
-                                Message::ConfigChange(DeviceAndChannel(
-                                    Some(device.clone()),
-                                    channel_id.clone(),
-                                ))
-                            })
-                        }
-                        Some(channel_id) => {
-                            let channel_id = channel_id.clone();
-                            Task::perform(empty(), move |_| {
-                                Device(ShowChannel(Some(channel_id.clone())))
-                            })
-                        }
-                    }
-                }
-                DisconnectedEvent(id) => {
-                    if self.exit_pending {
-                        std::process::exit(0);
-                    }
-                    self.connection_state = Disconnected(Some(id), None);
-                    self.channel_views.clear();
-                    self.nodes.clear();
-                    self.channels.clear();
-                    self.my_node_num = None;
-                    self.viewing_channel = None;
-                    Task::perform(empty(), |_| Navigation(View::DeviceList))
-                }
-                Ready(sender) => {
-                    self.subscription_sender = Some(sender);
-                    Task::none()
-                }
-                DevicePacket(packet) => self.handle_from_radio(packet),
-                DeviceMeshPacket(packet) => self.handle_mesh_packet(&packet),
-                ConnectionError(id, summary, detail) => {
-                    self.connection_state = Disconnected(Some(id), Some(summary.clone()));
-                    Task::perform(empty(), |_| Navigation(View::DeviceList))
-                        .chain(Self::report_error(summary.clone(), detail.clone()))
-                }
-            },
-            SendMessage(message, index) => {
+            SubscriptionMessage(subscription_event) => {
+                self.process_subscription_event(subscription_event)
+            }
+            SendTextMessage(message, index) => {
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_send(sender.unwrap(), message, index), |_| {
+                    Message::None
+                })
+            }
+            SendPositionMessage(channel_id) => {
+                if let Some(position) = &self.my_position {
+                    let sender = self.subscription_sender.clone();
+                    Task::perform(
+                        request_send_position(sender.unwrap(), channel_id, *position),
+                        |_| Message::None,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            SendInfoMessage(channel_id) => {
+                let sender = self.subscription_sender.clone();
+                Task::perform(request_send_info(sender.unwrap(), channel_id), |_| {
                     Message::None
                 })
             }
@@ -239,6 +201,58 @@ impl DeviceView {
         }
     }
 
+    /// Process an event sent by the subscription connected to the radio
+    fn process_subscription_event(
+        &mut self,
+        subscription_event: SubscriptionEvent,
+    ) -> Task<Message> {
+        match subscription_event {
+            ConnectedEvent(device) => {
+                self.connection_state = Connected(device.clone());
+                match &self.viewing_channel {
+                    None => {
+                        let channel_id = self.viewing_channel.clone();
+                        Task::perform(empty(), move |_| {
+                            Message::ConfigChange(DeviceAndChannel(
+                                Some(device.clone()),
+                                channel_id.clone(),
+                            ))
+                        })
+                    }
+                    Some(channel_id) => {
+                        let channel_id = channel_id.clone();
+                        Task::perform(empty(), move |_| {
+                            DeviceViewEvent(ShowChannel(Some(channel_id.clone())))
+                        })
+                    }
+                }
+            }
+            DisconnectedEvent(id) => {
+                if self.exit_pending {
+                    std::process::exit(0);
+                }
+                self.connection_state = Disconnected(Some(id), None);
+                self.channel_views.clear();
+                self.nodes.clear();
+                self.channels.clear();
+                self.my_node_num = None;
+                self.viewing_channel = None;
+                Task::perform(empty(), |_| Navigation(DeviceList))
+            }
+            Ready(sender) => {
+                self.subscription_sender = Some(sender);
+                Task::none()
+            }
+            DevicePacket(packet) => self.handle_from_radio(packet),
+            DeviceMeshPacket(packet) => self.handle_mesh_packet(&packet),
+            ConnectionError(id, summary, detail) => {
+                self.connection_state = Disconnected(Some(id), Some(summary.clone()));
+                Task::perform(empty(), |_| Navigation(DeviceList))
+                    .chain(Self::report_error(summary.clone(), detail.clone()))
+            }
+        }
+    }
+
     /// Handle [FromRadio] packets coming from the radio, forwarded from the device_subscription
     fn handle_from_radio(&mut self, packet: Box<FromRadio>) -> Task<Message> {
         match packet.payload_variant {
@@ -248,7 +262,12 @@ impl DeviceView {
             Some(PayloadVariant::MyInfo(my_node_info)) => {
                 self.my_node_num = Some(my_node_info.my_node_num);
             }
-            Some(PayloadVariant::NodeInfo(node_info)) => self.add_node(node_info),
+            Some(PayloadVariant::NodeInfo(node_info)) => {
+                if Some(node_info.num) == self.my_node_num {
+                    self.my_position = node_info.position;
+                }
+                self.add_node(node_info)
+            }
             // This Packet conveys information about a Channel that exists on the radio
             Some(PayloadVariant::Channel(channel)) => self.add_channel(channel),
             Some(PayloadVariant::QueueStatus(_)) => {
@@ -403,14 +422,20 @@ impl DeviceView {
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     let name = self.source_name(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(
-                            Position(position.latitude_i.unwrap(), position.longitude_i.unwrap()),
-                            mesh_packet.from,
-                            mesh_packet.id,
-                            name,
-                            seen,
-                        );
-                        channel_view.new_message(new_message);
+                        if let Some(lat) = position.latitude_i
+                            && let Some(lon) = position.longitude_i
+                        {
+                            let new_message = ChannelViewEntry::new(
+                                PositionMessage(lat, lon),
+                                mesh_packet.from,
+                                mesh_packet.id,
+                                name,
+                                seen,
+                            );
+                            channel_view.new_message(new_message);
+                        } else {
+                            eprintln!("No lat/lon for Position: {:?}", position);
+                        }
                     } else {
                         eprintln!("No channel for ChannelId: {}", channel_id);
                     }
@@ -433,7 +458,7 @@ impl DeviceView {
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
-                            Ping(user.id),
+                            UserMessage(user.id),
                             mesh_packet.from,
                             mesh_packet.id,
                             name,
@@ -491,7 +516,7 @@ impl DeviceView {
                         .style(button_chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
                 if self.viewing_channel.is_some() {
-                    button = button.on_press(Device(ShowChannel(None)));
+                    button = button.on_press(DeviceViewEvent(ShowChannel(None)));
                 }
 
                 header.push(button)
@@ -531,7 +556,7 @@ impl DeviceView {
         if let Connected(device) = state {
             header = header.push(Space::new(Fill, 1)).push(
                 button("Disconnect")
-                    .on_press(Device(DisconnectRequest(device.clone(), false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(device.clone(), false)))
                     .style(button_chip_style),
             )
         }
@@ -540,11 +565,10 @@ impl DeviceView {
     }
 
     pub fn view(&self, config: &Config) -> Element<'_, Message> {
-        if let Some(channel_number) = &self.viewing_channel {
-            // && let Some((_channel, packets)) = &self.channels.get(channel_number as usize)
-            if let Some(channel_view) = self.channel_views.get(channel_number) {
-                return channel_view.view();
-            }
+        if let Some(channel_number) = &self.viewing_channel
+            && let Some(channel_view) = self.channel_views.get(channel_number)
+        {
+            return channel_view.view(self.my_position.is_some());
         }
 
         // If not viewing a channel/user, show the list of channels and users
@@ -673,14 +697,6 @@ impl DeviceView {
         Some(format!("📱  {}", &user.long_name))
     }
 
-    fn view_button(_: &Theme, status: Status) -> Style {
-        if status == Hovered {
-            VIEW_BUTTON_HOVER_STYLE
-        } else {
-            VIEW_BUTTON_STYLE
-        }
-    }
-
     /// Create a Button that represents either a Channel or a Node
     fn channel_button(
         name: String,
@@ -690,9 +706,9 @@ impl DeviceView {
         Row::new()
             .push(
                 button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
-                    .on_press(Device(ShowChannel(Some(channel_id))))
+                    .on_press(DeviceViewEvent(ShowChannel(Some(channel_id))))
                     .width(Fill)
-                    .style(Self::view_button),
+                    .style(channel_row_style),
             )
             .push(Space::with_width(10))
             .into()
@@ -706,9 +722,9 @@ impl DeviceView {
     ) -> Element<'static, Message> {
         let row = Row::new().push(
             button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
-                .on_press(Device(ShowChannel(Some(Node(node_id)))))
+                .on_press(DeviceViewEvent(ShowChannel(Some(Node(node_id)))))
                 .width(Fill)
-                .style(Self::view_button),
+                .style(channel_row_style),
         );
 
         if favourite {
@@ -732,7 +748,7 @@ impl DeviceView {
         row([text_input("Search for Channel or Node", &self.filter)
             .style(text_input_style)
             .padding([6, 6])
-            .on_input(|s| Device(SearchInput(s)))
+            .on_input(|s| DeviceViewEvent(SearchInput(s)))
             .into()])
         .padding([0, 4]) // 6 pixels spacing minus the 2-pixel border width
         .into()

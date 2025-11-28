@@ -1,6 +1,8 @@
 #![allow(dead_code)] // for extra colors we have generated but not used yet
 
 use iced::border::Radius;
+use iced::widget::button::Status;
+use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::{button, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
@@ -361,4 +363,26 @@ pub const NAME_BOX_STYLE: Style = Style {
 
 pub fn name_box_style(_theme: &Theme) -> Style {
     NAME_BOX_STYLE
+}
+
+pub const VIEW_BUTTON_HOVER_STYLE: button::Style = button::Style {
+    background: Some(Background::Color(Color::from_rgba(0.0, 0.8, 0.8, 1.0))),
+    text_color: Color::BLACK,
+    border: VIEW_BUTTON_BORDER,
+    shadow: NO_SHADOW,
+};
+
+pub const VIEW_BUTTON_STYLE: button::Style = button::Style {
+    background: Some(Background::Color(Color::from_rgba(0.0, 1.0, 1.0, 0.0))),
+    text_color: Color::WHITE,
+    border: NO_BORDER,
+    shadow: NO_SHADOW,
+};
+
+pub fn channel_row_style(_: &Theme, status: Status) -> iced::widget::button::Style {
+    if status == Hovered {
+        VIEW_BUTTON_HOVER_STYLE
+    } else {
+        VIEW_BUTTON_STYLE
+    }
 }

@@ -2,8 +2,8 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AppError, AppNotification, ConfigChange, Device, DeviceListEvent, Exit, Navigation, NewConfig,
-    RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
+    AppError, AppNotification, ConfigChange, DeviceListViewEvent, DeviceViewEvent, Exit,
+    Navigation, NewConfig, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId;
@@ -62,8 +62,8 @@ pub enum ConfigChangeMessage {
 pub enum Message {
     Navigation(View),
     WindowEvent(Event),
-    DeviceListEvent(DiscoveryEvent),
-    Device(DeviceViewMessage),
+    DeviceListViewEvent(DiscoveryEvent),
+    DeviceViewEvent(DeviceViewMessage),
     Exit,
     NewConfig(Config),
     ConfigChange(ConfigChangeMessage),
@@ -84,10 +84,11 @@ fn main() -> iced::Result {
         .run_with(MeshChat::new)
 }
 
-pub fn name_from_id(id: &BleDevice) -> String {
-    id.name
+pub fn device_name(device: &BleDevice) -> String {
+    device
+        .name
         .clone()
-        .unwrap_or_else(|| id.mac_address.to_string())
+        .unwrap_or_else(|| device.mac_address.to_string())
 }
 
 impl MeshChat {
@@ -113,8 +114,8 @@ impl MeshChat {
         match message {
             Navigation(view) => self.navigate(view),
             WindowEvent(event) => self.window_handler(event),
-            DeviceListEvent(discovery_event) => self.device_list_view.update(discovery_event),
-            Device(device_event) => self.device_view.update(device_event),
+            DeviceListViewEvent(discovery_event) => self.device_list_view.update(discovery_event),
+            DeviceViewEvent(device_event) => self.device_view.update(device_event),
             Exit => window::get_latest().and_then(window::close),
             AppNotification(summary, detail) => {
                 self.notifications.add(Notification::Info(summary, detail));
@@ -182,6 +183,7 @@ impl MeshChat {
             View::Device => self.device_view.header(state),
         };
 
+        // Create the stack of elements, starting with the header
         let mut stack = Column::new().push(header);
 
         // If busy of connecting or disconnecting, add a busy bar to the header
@@ -193,6 +195,8 @@ impl MeshChat {
                     .width(Fill),
             );
         }
+
+        // add the notification area and the inner view
         stack.push(self.notifications.view()).push(inner).into()
     }
 
@@ -202,9 +206,9 @@ impl MeshChat {
         //         iced::event::listen().map(ModalKeyEvent)
         let subscriptions = vec![
             iced::event::listen().map(WindowEvent),
-            Subscription::run(ble_discovery).map(DeviceListEvent),
+            Subscription::run(ble_discovery).map(DeviceListViewEvent),
             Subscription::run(device_subscription::subscribe)
-                .map(|m| Device(SubscriptionMessage(m))),
+                .map(|m| DeviceViewEvent(SubscriptionMessage(m))),
         ];
 
         Subscription::batch(subscriptions)
@@ -216,15 +220,12 @@ impl MeshChat {
         Task::none()
     }
 
-    async fn empty() {}
-
     /// Handle window events, like close button or minimize button
     fn window_handler(&mut self, event: Event) -> Task<Message> {
         if let Event::Window(window::Event::CloseRequested) = event {
             if let Connected(device) = self.device_view.connection_state().clone() {
-                Task::perform(Self::empty(), move |_| {
-                    Device(DisconnectRequest(device.clone(), true))
-                })
+                self.device_view
+                    .update(DisconnectRequest(device.clone(), true))
             } else {
                 window::get_latest().and_then(window::close)
             }

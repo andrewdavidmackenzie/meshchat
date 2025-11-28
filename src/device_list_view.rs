@@ -1,12 +1,13 @@
-use crate::Message::{Device, Navigation};
+use crate::Message::{DeviceViewEvent, Navigation};
 use crate::device_list_view::DiscoveryEvent::{BLERadioFound, BLERadioLost, Error};
 use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::button_chip_style;
-use crate::{Message, View, name_from_id};
+use crate::{Message, View, device_name};
 use iced::futures::{SinkExt, Stream};
-use iced::widget::{Column, Row, Space, button, container, text};
+use iced::widget::scrollable::Scrollbar;
+use iced::widget::{Column, Row, Space, button, container, scrollable, text};
 use iced::{Bottom, stream};
 use iced::{Element, Fill, Task, alignment};
 use meshtastic::utils::stream::{BleDevice, available_ble_devices};
@@ -85,7 +86,7 @@ impl DeviceListView {
         if let Connected(device) = state {
             header = header.push(Space::new(Fill, 1)).push(
                 button("Disconnect")
-                    .on_press(Device(DisconnectRequest(device.clone(), false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(device.clone(), false)))
                     .style(button_chip_style),
             )
         }
@@ -95,24 +96,26 @@ impl DeviceListView {
 
     pub fn view(&self, connection_state: &ConnectionState) -> Element<'static, Message> {
         let mut main_col = Column::new();
-        // TODO add a scrollable area in case there are a lot of devices
 
         for device in &self.discovered_devices {
             let mut device_row = Row::new().align_y(alignment::Vertical::Center);
-            device_row = device_row.push(text(name_from_id(device)));
+            device_row = device_row.push(text(device_name(device)));
             device_row = device_row.push(Space::new(6, 0));
             match &connection_state {
                 Connected(connected_device) => {
                     device_row = device_row.push(
                         button("Disconnect")
-                            .on_press(Device(DisconnectRequest(connected_device.clone(), false)))
+                            .on_press(DeviceViewEvent(DisconnectRequest(
+                                connected_device.clone(),
+                                false,
+                            )))
                             .style(button_chip_style),
                     );
                 }
                 Disconnected(_id, _error) => {
                     device_row = device_row.push(
                         button("Connect")
-                            .on_press(Device(ConnectRequest(device.clone(), None)))
+                            .on_press(DeviceViewEvent(ConnectRequest(device.clone(), None)))
                             .style(button_chip_style),
                     );
                 }
@@ -130,9 +133,18 @@ impl DeviceListView {
             main_col = main_col.push(device_row);
         }
 
-        container(main_col)
+        let scroll = scrollable(main_col)
+            .direction({
+                let scrollbar = Scrollbar::new().width(10.0);
+                scrollable::Direction::Vertical(scrollbar)
+            })
+            .width(Fill)
+            .height(Fill);
+
+        container(scroll)
             .height(Fill)
             .width(Fill)
+            .padding(4)
             .align_x(alignment::Horizontal::Left)
             .into()
     }

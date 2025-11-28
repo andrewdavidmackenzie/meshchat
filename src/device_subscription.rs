@@ -1,22 +1,25 @@
 use crate::channel_view::ChannelId;
+use crate::device_name;
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::device_subscription::SubscriberMessage::{Connect, Disconnect, RadioPacket, SendText};
+use crate::device_subscription::SubscriberMessage::{
+    Connect, Disconnect, RadioPacket, SendInfo, SendPosition, SendText,
+};
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent,
 };
-use crate::name_from_id;
 use futures::SinkExt;
 use iced::stream;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
 use meshtastic::errors::Error;
 use meshtastic::packet::{PacketDestination, PacketReceiver, PacketRouter};
+use meshtastic::protobufs::config::device_config::Role;
 use meshtastic::protobufs::from_radio::PayloadVariant::{
     Channel, ClientNotification, MyInfo, NodeInfo, Packet,
 };
-use meshtastic::protobufs::{FromRadio, MeshPacket};
-use meshtastic::types::{MeshChannel, NodeId};
-use meshtastic::utils;
+use meshtastic::protobufs::{Data, FromRadio, MeshPacket, PortNum, Position, User, mesh_packet};
+use meshtastic::types::NodeId;
 use meshtastic::utils::stream::BleDevice;
+use meshtastic::{Message, utils};
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::mpsc::{Sender, channel};
@@ -39,6 +42,8 @@ pub enum SubscriberMessage {
     Connect(BleDevice),
     Disconnect,
     SendText(String, ChannelId),
+    SendPosition(ChannelId, Position),
+    SendInfo(ChannelId),
     RadioPacket(Box<FromRadio>),
 }
 
@@ -135,7 +140,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 gui_sender
                                     .send(ConnectionError(
                                         device.clone(),
-                                        format!("Failed to connect to {}", name_from_id(&device)),
+                                        format!("Failed to connect to {}", device_name(&device)),
                                         e.to_string(),
                                     ))
                                     .await
@@ -161,31 +166,18 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             Disconnect => break,
                             SendText(text, channel_id) => {
                                 let mut api = stream_api.take().unwrap();
-                                // TODO handle errors
-                                match channel_id {
-                                    ChannelId::Channel(channel_number) => {
-                                        let _ = api
-                                            .send_text(
-                                                &mut my_router,
-                                                text,
-                                                PacketDestination::Broadcast,
-                                                true,
-                                                MeshChannel::from(channel_number as u32),
-                                            )
-                                            .await;
-                                    }
-                                    ChannelId::Node(node_id) => {
-                                        let _ = api
-                                            .send_text(
-                                                &mut my_router,
-                                                text.clone(),
-                                                PacketDestination::Node(NodeId::from(node_id)),
-                                                true,
-                                                MeshChannel::default(),
-                                            )
-                                            .await;
-                                    }
-                                }
+                                send_message(&mut api, &mut my_router, channel_id, text).await;
+                                let _none = stream_api.replace(api);
+                            }
+                            SendPosition(channel_id, position) => {
+                                let mut api = stream_api.take().unwrap();
+                                send_position(&mut api, &mut my_router, channel_id, position).await;
+                                let _none = stream_api.replace(api);
+                            }
+                            SendInfo(channel_id) => {
+                                let mut api = stream_api.take().unwrap();
+                                let user = my_user_info();
+                                send_info(&mut api, &mut my_router, channel_id, user).await;
                                 let _none = stream_api.replace(api);
                             }
                             RadioPacket(packet) => my_router.handle_from_radio(packet).unwrap(),
@@ -204,6 +196,97 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
             }
         }
     })
+}
+
+// TODO handle errors
+async fn send_message(
+    stream_api: &mut ConnectedStreamApi,
+    my_router: &mut MyRouter,
+    channel_id: ChannelId,
+    text: String,
+) {
+    let (destination, channel) = channel_id.to_destination();
+
+    let _ = stream_api
+        .send_text(my_router, text, destination, true, channel)
+        .await;
+}
+
+// TODO handle errors
+async fn send_position(
+    stream_api: &mut ConnectedStreamApi,
+    my_router: &mut MyRouter,
+    channel_id: ChannelId,
+    position: Position,
+) {
+    let (destination, channel) = channel_id.to_destination();
+
+    let _ = stream_api
+        .send_position(my_router, position, destination, true, channel)
+        .await;
+}
+
+fn my_user_info() -> User {
+    User {
+        id: "my id".to_string(),
+        long_name: "me myself".to_string(),
+        short_name: "me".to_string(),
+        #[allow(deprecated)]
+        macaddr: vec![],
+        hw_model: 0,
+        is_licensed: false,
+        role: Role::Client as i32,
+        public_key: vec![],
+        is_unmessagable: Some(true),
+    }
+}
+
+fn to_destination(packet_destination: PacketDestination) -> u32 {
+    match packet_destination {
+        PacketDestination::Broadcast => 0xffffffff,
+        PacketDestination::Node(node_id) => node_id.id(),
+        PacketDestination::Local => 0, // Not sure if this is correct - but shouldn't matter
+    }
+}
+
+// TODO handle errors
+async fn send_info(
+    stream_api: &mut ConnectedStreamApi,
+    my_router: &mut MyRouter,
+    channel_id: ChannelId,
+    user: User,
+) {
+    let (packet_destination, mesh_channel) = channel_id.to_destination();
+
+    // Create a user message data payload
+    let data = Data {
+        portnum: PortNum::NodeinfoApp as i32,
+        payload: user.encode_to_vec(),
+        want_response: false,
+        ..Default::default()
+    };
+
+    // Create a mesh packet for broadcast
+    let mesh_packet = MeshPacket {
+        to: to_destination(packet_destination),
+        from: my_router.source_node_id().id(),
+        channel: mesh_channel.channel(),
+        id: 0, // Will be assigned by the device
+        priority: mesh_packet::Priority::Default as i32,
+        payload_variant: Some(mesh_packet::PayloadVariant::Decoded(data)),
+        ..Default::default()
+    };
+
+    // Create the payload variant
+    let payload_variant = Some(meshtastic::protobufs::to_radio::PayloadVariant::Packet(
+        mesh_packet.clone(),
+    ));
+
+    // Send using the stream API's send_to_radio_packet method
+    let _ = stream_api.send_to_radio_packet(payload_variant).await;
+
+    // Inform GUI via my packet router that it was sent
+    let _ = my_router.handle_mesh_packet(mesh_packet);
 }
 
 async fn do_connect(device: &BleDevice) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
