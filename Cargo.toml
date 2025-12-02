@@ -59,3 +59,16 @@ codegen-units = 1
 panic = "abort"
 incremental = false
 overflow-checks = false
+
+# For creation of OS bundles
+[package.metadata.bundle]
+identifier = "meshchat.mackenzie-serres.net"
+icon = "assets/images/AppIcon.icns"
+#resources = ["assets/fonts/icons.ttf"]
+resources = []
+category = "public.app-category.social-networking" # would prefer to find a better category
+short_description = "An application for chatting on the Meshtastic LoRa MESH via connected Bluetooth LE radios"
+#osx_frameworks = ""
+osx_minimum_system_version = "10.11"
+#osx_url_schemes = ""
+#osx_info_plist_exts = ""

@@ -29,3 +29,6 @@ release:
 
 run:
 	cargo run --release
+
+bundle:
+	cargo bundle --release
