@@ -29,5 +29,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo bundle
+        uses: cargo install cargo-bundle
+
       - name: cargo bundle
         run: cargo bundle --release
