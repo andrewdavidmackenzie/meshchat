@@ -5,7 +5,8 @@ use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::{button, text, text_input};
-use iced::{Background, Border, Color, Shadow, Theme};
+use iced::{Background, Border, Color, Padding, Shadow, Theme};
+use iced_aw::menu;
 
 // Basic Colors
 pub const COLOR_RED: Color = Color::from_rgb(0.9, 0.2, 0.2);
@@ -111,7 +112,7 @@ pub const RADIUS_12: Radius = Radius {
 pub const TOOLTIP_BORDER: Border = Border {
     color: Color::WHITE,
     width: 1.0,
-    radius: RADIUS_4,
+    radius: RADIUS_12,
 };
 
 pub const VIEW_BUTTON_BORDER: Border = Border {
@@ -380,5 +381,20 @@ pub fn channel_row_style(_: &Theme, status: Status) -> iced::widget::button::Sty
         VIEW_BUTTON_HOVER_STYLE
     } else {
         VIEW_BUTTON_STYLE
+    }
+}
+
+pub fn menu_button_style(_theme: &iced::Theme, status: iced_aw::style::Status) -> menu::Style {
+    menu::Style {
+        bar_background: Background::Color(Color::TRANSPARENT),
+        bar_border: NO_BORDER,
+        bar_shadow: NO_SHADOW,
+        bar_background_expand: Padding::new(0.0),
+        menu_background: Background::Color(Color::TRANSPARENT),
+        menu_border: NO_BORDER,
+        menu_shadow: NO_SHADOW,
+        menu_background_expand: Padding::new(0.0),
+        path: Background::Color(Color::TRANSPARENT),
+        path_border: NO_BORDER,
     }
 }

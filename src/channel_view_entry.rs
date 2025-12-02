@@ -1,26 +1,34 @@
 use crate::Message;
-use crate::Message::{DeviceViewEvent, ShowLocation};
-use crate::channel_view::ChannelId;
+use crate::Message::ShowLocation;
 use crate::channel_view_entry::Payload::{
     EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
-use crate::device_view::DeviceViewMessage::ShowChannel;
 use crate::styles::{
     COLOR_BLUE, COLOR_DICTIONARY, COLOR_GREEN, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE,
     OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
-    source_tooltip_style, transparent_button_style,
+    button_chip_style, menu_button_style, transparent_button_style,
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::advanced::text::Shaping::Advanced;
+use iced::border::Radius;
 use iced::font::Weight;
-use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
-use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
+use iced::widget::{Button, Column, Container, Row, Space, Text, button, text, tooltip};
+use iced::{
+    Bottom, Color, Element, Fill, Font, Left, Length, Padding, Renderer, Right, Theme, Top,
+};
+use iced_aw::menu::{Item, Menu, MenuBar};
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use iced::Border;
+
+use iced_aw::menu::{self};
+use iced_aw::style::{Status, menu_bar::primary};
+use iced_aw::{menu_bar, menu_items};
 
 #[derive(Clone, Debug)]
 pub enum Payload {
@@ -86,11 +94,6 @@ impl ChannelViewEntry {
         } else {
             None
         }
-    }
-
-    /// Return the node id that sent the message
-    pub fn from(&self) -> u32 {
-        self.from
     }
 
     /// Get a reference to the payload of this message
@@ -192,29 +195,26 @@ impl ChannelViewEntry {
         entries: &'a RingMap<u32, ChannelViewEntry>,
         mine: bool,
     ) -> Element<'a, Message> {
-        // Add the source node name if there is one
-        // TODO try and show the full node name in the tooltip
         let mut message_content_column = Column::new();
+
+        // Add the source node name if there is one
         if let Some(name) = self.name() {
             let text_color = Self::color_from_name(name);
-            message_content_column = message_content_column.push(
-                tooltip(
-                    button(text(name.clone()).shaping(Advanced).font(Font {
+            let mut top_row = Row::new().padding(0).align_y(Top).push(
+                text(name.clone())
+                    .shaping(Advanced)
+                    .font(Font {
                         weight: Weight::Bold,
                         ..Default::default()
-                    }))
-                    .padding(0)
-                    .on_press(DeviceViewEvent(ShowChannel(Some(ChannelId::Node(
-                        self.from(),
-                    )))))
-                    .style(move |theme, status| {
-                        transparent_button_style(theme, status, text_color)
-                    }),
-                    text(format!("Click to DM node '{name}'")).shaping(Advanced),
-                    tooltip::Position::Top,
-                )
-                .style(source_tooltip_style),
+                    })
+                    .color(text_color),
             );
+
+            if !mine {
+                top_row = top_row.push(self.menu_bar());
+            }
+
+            message_content_column = message_content_column.push(top_row);
         }
 
         // TODO in the future we might change graphics based on type - just text for now
@@ -275,12 +275,6 @@ impl ChannelViewEntry {
         } else {
             OTHERS_MESSAGE_BUBBLE_STYLE
         };
-
-        // Create the container around the message content column and style it
-        let message_bubble = Container::new(message_content_column)
-            .padding([6, 8])
-            .style(move |_theme: &Theme| style);
-
         let mut message_row = Row::new().padding([6, 6]);
         if !self.emojis().is_empty() {
             // But the emoji_row up against the bubble
@@ -295,6 +289,10 @@ impl ChannelViewEntry {
         // The outer container object that spans the width of the view and justifies the message
         // row within it depending on who sent the message
         let mut message_column = Column::new().width(Fill);
+
+        let message_bubble = Container::new(message_content_column)
+            .padding([6, 8])
+            .style(move |_theme: &Theme| style);
 
         // Put on the right-hand side if my message, on the left if from someone else
         if mine {
@@ -335,6 +333,80 @@ impl ChannelViewEntry {
 
         message_column.into()
     }
+
+    fn menu_button(name: &'static str) -> Button<'static, Message> {
+        button(name)
+            .style(iced::widget::button::primary)
+            //            .style(button_chip_style)
+            .on_press(Message::None)
+            .width(Length::Fill)
+    }
+
+    fn popup_menu(&self) -> MenuBar<'_, Message, Theme, Renderer> {
+        let root_1 = Item::with_menu(
+            button("Options")
+                .on_press(Message::None)
+                .padding(0)
+                .style(iced::widget::button::primary)
+                //.style(|theme, status| transparent_button_style(theme, status, Color::WHITE))
+                .width(Length::Shrink),
+            Menu::new(
+                [
+                    Item::new(Self::menu_button("forward")),
+                    Item::new(Self::menu_button("copy")),
+                    Item::new(Self::menu_button("react")),
+                    Item::new(Self::menu_button("reply")),
+                    Item::new(Self::menu_button("DM with")),
+                ]
+                .into(),
+            ),
+        );
+
+        MenuBar::new(vec![root_1])
+            .draw_path(menu::DrawPath::Backdrop)
+            .style(|theme: &iced::Theme, status: Status| menu::Style {
+                path_border: Border {
+                    radius: Radius::new(6.0),
+                    ..Default::default()
+                },
+                ..primary(theme, status)
+            })
+    }
+
+    fn menu_bar(&self) -> iced::Element<'_, Message> {
+        let menu_tpl_1 = |items| Menu::new(items).max_width(180.0).spacing(2);
+
+        #[rustfmt::skip]
+        let mb = menu_bar!(
+            (menu_root_button("v"), {
+                menu_tpl_1(menu_items!(
+                    (menu_button("forward"))
+                    (menu_button("copy"))
+                    (menu_button("react"))
+                    (menu_button("reply"))
+                    (menu_button("DM with"))
+                )).width(100)
+            })
+        ).style(menu_button_style);
+
+        mb.into()
+    }
+}
+
+fn menu_button(label: &str) -> button::Button<'_, Message, iced::Theme, iced::Renderer> {
+    button(label)
+        .padding([4, 8])
+        .style(button_chip_style)
+        .on_press(Message::None)
+        .width(Length::Fill)
+}
+
+fn menu_root_button(label: &str) -> button::Button<'_, Message, iced::Theme, iced::Renderer> {
+    button(label)
+        .padding([4, 8])
+        .style(button_chip_style)
+        .on_press(Message::None)
+        .width(Length::Shrink)
 }
 
 #[cfg(test)]
