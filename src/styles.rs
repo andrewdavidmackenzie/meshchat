@@ -384,7 +384,7 @@ pub fn channel_row_style(_: &Theme, status: Status) -> iced::widget::button::Sty
     }
 }
 
-pub fn menu_button_style(_theme: &iced::Theme, status: iced_aw::style::Status) -> menu::Style {
+pub fn menu_button_style(_theme: &iced::Theme, _status: iced_aw::style::Status) -> menu::Style {
     menu::Style {
         bar_background: Background::Color(Color::TRANSPARENT),
         bar_border: NO_BORDER,

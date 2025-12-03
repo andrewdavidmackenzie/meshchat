@@ -1,5 +1,6 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
+use crate::channel_view_entry::ChannelViewEntry;
 use iced::border::Radius;
 use iced::widget::container::Style;
 use iced::widget::{Container, Row, button};
@@ -45,8 +46,10 @@ impl Notifications {
 
     // TODO accept detail and make it in an expandable box
     fn error_box(id: usize, summary: String, _detail: String) -> Element<'static, Message> {
-        let row = Row::new().push(iced::widget::text(summary));
-        let row = row.push(button("OK").on_press(RemoveNotification(id)));
+        let row = Row::new()
+            .push(iced::widget::text(summary))
+            .push(button("OK").on_press(RemoveNotification(id)))
+            .push(ChannelViewEntry::menu_bar());
 
         Container::new(row)
             .padding([6, 12]) // adjust to taste

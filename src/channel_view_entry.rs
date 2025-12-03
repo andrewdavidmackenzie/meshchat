@@ -211,7 +211,7 @@ impl ChannelViewEntry {
             );
 
             if !mine {
-                top_row = top_row.push(self.menu_bar());
+                top_row = top_row.push(Self::menu_bar());
             }
 
             message_content_column = message_content_column.push(top_row);
@@ -342,7 +342,7 @@ impl ChannelViewEntry {
             .width(Length::Fill)
     }
 
-    fn popup_menu(&self) -> MenuBar<'_, Message, Theme, Renderer> {
+    fn popup_menu() -> MenuBar<'static, Message, Theme, Renderer> {
         let root_1 = Item::with_menu(
             button("Options")
                 .on_press(Message::None)
@@ -373,7 +373,7 @@ impl ChannelViewEntry {
             })
     }
 
-    fn menu_bar(&self) -> iced::Element<'_, Message> {
+    pub fn menu_bar() -> iced::Element<'static, Message> {
         let menu_tpl_1 = |items| Menu::new(items).max_width(180.0).spacing(2);
 
         #[rustfmt::skip]
