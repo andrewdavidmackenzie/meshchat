@@ -11,24 +11,18 @@ use crate::styles::{
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::advanced::text::Shaping::Advanced;
-use iced::border::Radius;
 use iced::font::Weight;
-use iced::widget::{Button, Column, Container, Row, Space, Text, button, text, tooltip};
+use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
 use iced::{
     Bottom, Color, Element, Fill, Font, Left, Length, Padding, Renderer, Right, Theme, Top,
 };
-use iced_aw::menu::{Item, Menu, MenuBar};
+use iced_aw::menu::{Item, Menu};
+use iced_aw::{MenuBar, menu_bar, menu_items};
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use iced::Border;
-
-use iced_aw::menu::{self};
-use iced_aw::style::{Status, menu_bar::primary};
-use iced_aw::{menu_bar, menu_items};
 
 #[derive(Clone, Debug)]
 pub enum Payload {
@@ -198,10 +192,10 @@ impl ChannelViewEntry {
         let mut message_content_column = Column::new();
 
         // Add the source node name if there is one
-        if let Some(name) = self.name() {
+        if let Some(name) = &self.name {
             let text_color = Self::color_from_name(name);
             let mut top_row = Row::new().padding(0).align_y(Top).push(
-                text(name.clone())
+                text(name)
                     .shaping(Advanced)
                     .font(Font {
                         weight: Weight::Bold,
@@ -211,7 +205,7 @@ impl ChannelViewEntry {
             );
 
             if !mine {
-                top_row = top_row.push(Self::menu_bar());
+                top_row = top_row.push(self.menu_bar());
             }
 
             message_content_column = message_content_column.push(top_row);
@@ -334,78 +328,43 @@ impl ChannelViewEntry {
         message_column.into()
     }
 
-    fn menu_button(name: &'static str) -> Button<'static, Message> {
-        button(name)
-            .style(iced::widget::button::primary)
-            //            .style(button_chip_style)
-            .on_press(Message::None)
-            .width(Length::Fill)
-    }
-
-    fn popup_menu() -> MenuBar<'static, Message, Theme, Renderer> {
-        let root_1 = Item::with_menu(
-            button("Options")
-                .on_press(Message::None)
-                .padding(0)
-                .style(iced::widget::button::primary)
-                //.style(|theme, status| transparent_button_style(theme, status, Color::WHITE))
-                .width(Length::Shrink),
-            Menu::new(
-                [
-                    Item::new(Self::menu_button("forward")),
-                    Item::new(Self::menu_button("copy")),
-                    Item::new(Self::menu_button("react")),
-                    Item::new(Self::menu_button("reply")),
-                    Item::new(Self::menu_button("DM with")),
-                ]
-                .into(),
-            ),
-        );
-
-        MenuBar::new(vec![root_1])
-            .draw_path(menu::DrawPath::Backdrop)
-            .style(|theme: &iced::Theme, status: Status| menu::Style {
-                path_border: Border {
-                    radius: Radius::new(6.0),
-                    ..Default::default()
-                },
-                ..primary(theme, status)
-            })
-    }
-
-    pub fn menu_bar() -> iced::Element<'static, Message> {
+    fn menu_bar<'a>(&self) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_1 = |items| Menu::new(items).max_width(180.0).spacing(2);
 
+        let dm = format!("DM with {}", self.name.as_ref().unwrap_or(&"".to_string()));
         #[rustfmt::skip]
         let mb = menu_bar!(
-            (menu_root_button("v"), {
+            (menu_root_button("▼"), {
                 menu_tpl_1(menu_items!(
-                    (menu_button("forward"))
-                    (menu_button("copy"))
-                    (menu_button("react"))
-                    (menu_button("reply"))
-                    (menu_button("DM with"))
+                    (menu_button("forward".into(), Message::None))
+                    (menu_button("copy".into(), Message::None))
+                    (menu_button("react".into(), Message::None))
+                    (menu_button("reply".into(), Message::None))
+                    (menu_button(dm, Message::None))
                 )).width(100)
             })
         ).style(menu_button_style);
 
-        mb.into()
+        mb
     }
 }
 
-fn menu_button(label: &str) -> button::Button<'_, Message, iced::Theme, iced::Renderer> {
-    button(label)
+fn menu_button(
+    label: String,
+    message: Message,
+) -> button::Button<'static, Message, Theme, Renderer> {
+    button(text(label))
         .padding([4, 8])
         .style(button_chip_style)
-        .on_press(Message::None)
-        .width(Length::Fill)
+        .on_press(message)
+        .width(Fill)
 }
 
-fn menu_root_button(label: &str) -> button::Button<'_, Message, iced::Theme, iced::Renderer> {
-    button(label)
-        .padding([4, 8])
+fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer> {
+    button(text(label).size(14))
+        .padding([4, 10])
         .style(button_chip_style)
-        .on_press(Message::None)
+        .on_press(Message::None) // Needed for styling to work
         .width(Length::Shrink)
 }
 
