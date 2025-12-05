@@ -16,13 +16,13 @@ use meshtastic::protobufs::config::device_config::Role;
 use meshtastic::protobufs::from_radio::PayloadVariant::{
     Channel, ClientNotification, MyInfo, NodeInfo, Packet,
 };
-use meshtastic::protobufs::{Data, FromRadio, MeshPacket, PortNum, Position, User, mesh_packet};
+use meshtastic::protobufs::{mesh_packet, Data, FromRadio, MeshPacket, PortNum, Position, User};
 use meshtastic::types::NodeId;
 use meshtastic::utils::stream::BleDevice;
-use meshtastic::{Message, utils};
+use meshtastic::{utils, Message};
 use std::pin::Pin;
 use std::time::Duration;
-use tokio::sync::mpsc::{Sender, channel};
+use tokio::sync::mpsc::{channel, Sender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::{Stream, StreamExt};
 
@@ -41,7 +41,7 @@ pub enum SubscriptionEvent {
 pub enum SubscriberMessage {
     Connect(BleDevice),
     Disconnect,
-    SendText(String, ChannelId),
+    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
     SendPosition(ChannelId, Position),
     SendInfo(ChannelId),
     RadioPacket(Box<FromRadio>),
@@ -161,26 +161,52 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     let mut merged_stream = radio_stream.merge(&mut subscriber_receiver);
 
                     while let Some(message) = StreamExt::next(&mut merged_stream).await {
-                        match message {
-                            Connect(_) => eprintln!("Already connected!"),
+                        let result = match message {
+                            Connect(_) => {
+                                eprintln!("Cannot connect while already connected");
+                                Ok(())
+                            }
                             Disconnect => break,
-                            SendText(text, channel_id) => {
+                            SendText(text, channel_id, reply_to_id) => {
                                 let mut api = stream_api.take().unwrap();
-                                send_message(&mut api, &mut my_router, channel_id, text).await;
+                                let r = send_text_message(
+                                    &mut api,
+                                    &mut my_router,
+                                    channel_id,
+                                    reply_to_id,
+                                    text,
+                                )
+                                .await;
                                 let _none = stream_api.replace(api);
+                                r
                             }
                             SendPosition(channel_id, position) => {
                                 let mut api = stream_api.take().unwrap();
-                                send_position(&mut api, &mut my_router, channel_id, position).await;
+                                let r =
+                                    send_position(&mut api, &mut my_router, channel_id, position)
+                                        .await;
                                 let _none = stream_api.replace(api);
+                                r
                             }
                             SendInfo(channel_id) => {
                                 let mut api = stream_api.take().unwrap();
                                 let user = my_user_info();
-                                send_info(&mut api, &mut my_router, channel_id, user).await;
+                                let r = send_info(&mut api, &mut my_router, channel_id, user).await;
                                 let _none = stream_api.replace(api);
+                                r
                             }
-                            RadioPacket(packet) => my_router.handle_from_radio(packet).unwrap(),
+                            RadioPacket(packet) => my_router.handle_from_radio(packet),
+                        };
+
+                        if let Err(e) = result {
+                            gui_sender
+                                .send(ConnectionError(
+                                    device.clone(),
+                                    "Send error".to_string(),
+                                    e.to_string(),
+                                ))
+                                .await
+                                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                         }
                     }
 
@@ -198,34 +224,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     })
 }
 
-// TODO handle errors
-async fn send_message(
-    stream_api: &mut ConnectedStreamApi,
-    my_router: &mut MyRouter,
-    channel_id: ChannelId,
-    text: String,
-) {
-    let (destination, channel) = channel_id.to_destination();
-
-    let _ = stream_api
-        .send_text(my_router, text, destination, true, channel)
-        .await;
-}
-
-// TODO handle errors
-async fn send_position(
-    stream_api: &mut ConnectedStreamApi,
-    my_router: &mut MyRouter,
-    channel_id: ChannelId,
-    position: Position,
-) {
-    let (destination, channel) = channel_id.to_destination();
-
-    let _ = stream_api
-        .send_position(my_router, position, destination, true, channel)
-        .await;
-}
-
+// TODO complete this
 fn my_user_info() -> User {
     User {
         id: "my id".to_string(),
@@ -249,15 +248,46 @@ fn to_destination(packet_destination: PacketDestination) -> u32 {
     }
 }
 
-// TODO handle errors
+/// Send a Text Message to the other node or the channel, which is possibly a eply
+async fn send_text_message(
+    stream_api: &mut ConnectedStreamApi,
+    my_router: &mut MyRouter,
+    channel_id: ChannelId,
+    reply_to_id: Option<u32>,
+    text: String,
+) -> Result<(), Error> {
+    // Create a user message data payload
+    let data = Data {
+        portnum: PortNum::TextMessageApp as i32,
+        payload: text.encode_to_vec(),
+        want_response: false,
+        reply_id: reply_to_id.unwrap_or(0),
+        ..Default::default()
+    };
+
+    send_packet(stream_api, my_router, channel_id, data).await
+}
+
+async fn send_position(
+    stream_api: &mut ConnectedStreamApi,
+    my_router: &mut MyRouter,
+    channel_id: ChannelId,
+    position: Position,
+) -> Result<(), Error> {
+    let (destination, channel) = channel_id.to_destination();
+
+    stream_api
+        .send_position(my_router, position, destination, true, channel)
+        .await
+}
+
+/// Send a [User] info "ping" message to the channel or other node
 async fn send_info(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
     channel_id: ChannelId,
     user: User,
-) {
-    let (packet_destination, mesh_channel) = channel_id.to_destination();
-
+) -> Result<(), Error> {
     // Create a user message data payload
     let data = Data {
         portnum: PortNum::NodeinfoApp as i32,
@@ -265,6 +295,18 @@ async fn send_info(
         want_response: false,
         ..Default::default()
     };
+
+    send_packet(stream_api, my_router, channel_id, data).await
+}
+
+/// Send a packet to the radio on the specific channel id (Node or channel) with [Data]
+async fn send_packet(
+    stream_api: &mut ConnectedStreamApi,
+    my_router: &mut MyRouter,
+    channel_id: ChannelId,
+    data: Data,
+) -> Result<(), Error> {
+    let (packet_destination, mesh_channel) = channel_id.to_destination();
 
     // Create a mesh packet for broadcast
     let mesh_packet = MeshPacket {
@@ -274,6 +316,7 @@ async fn send_info(
         id: 0, // Will be assigned by the device
         priority: mesh_packet::Priority::Default as i32,
         payload_variant: Some(mesh_packet::PayloadVariant::Decoded(data)),
+        want_ack: true,
         ..Default::default()
     };
 
@@ -283,12 +326,14 @@ async fn send_info(
     ));
 
     // Send using the stream API's send_to_radio_packet method
-    let _ = stream_api.send_to_radio_packet(payload_variant).await;
+    stream_api.send_to_radio_packet(payload_variant).await?;
 
     // Inform GUI via my packet router that it was sent
-    let _ = my_router.handle_mesh_packet(mesh_packet);
+    my_router.handle_mesh_packet(mesh_packet)
 }
 
+/// Connect to a specific [BleDevice] and return a [PacketReceiver] that receives messages from the
+/// radio and a [ConnectedStreamApi] that can be used to send messages to the radio.
 async fn do_connect(device: &BleDevice) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
     let ble_stream =
         utils::stream::build_ble_stream::<BleDevice>(device.clone(), Duration::from_secs(4))
@@ -300,6 +345,7 @@ async fn do_connect(device: &BleDevice) -> Result<(PacketReceiver, ConnectedStre
     Ok((packet_receiver, stream_api))
 }
 
+/// Disconnect from the radio we are currently connected to using the [ConnectedStreamApi]
 async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Error> {
     stream_api.disconnect().await
 }

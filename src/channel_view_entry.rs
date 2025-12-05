@@ -218,7 +218,6 @@ impl ChannelViewEntry {
             message_content_column = message_content_column.push(top_row);
         }
 
-        // TODO in the future we might change graphics based on type - just text for now
         let content: Element<'static, Message> = match self.payload() {
             NewTextMessage(text_msg) => text(text_msg.clone())
                 .style(|_| MESSAGE_TEXT_STYLE)
@@ -338,7 +337,7 @@ impl ChannelViewEntry {
     // TODO differentiate if we are in a node or channel view
     // if a node view, don't show the DM menu item
     fn menu_bar<'a>(&self) -> MenuBar<'a, Message, Theme, Renderer> {
-        let menu_tpl_1 = |items| Menu::new(items).max_width(180.0).spacing(2);
+        let menu_tpl_1 = |items| Menu::new(items).spacing(3);
 
         let dm = format!("DM with {}", self.name.as_ref().unwrap_or(&"".to_string()));
         #[rustfmt::skip]
@@ -349,8 +348,10 @@ impl ChannelViewEntry {
             //(menu_button("react".into(), Message::None))
             (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
         );
+
+        // Create the menu bar with the root button and list of options
         menu_bar!((menu_root_button("▼"), {
-            menu_tpl_1(menu_items).width(100)
+            menu_tpl_1(menu_items).width(140)
         }))
         .style(menu_button_style)
     }
@@ -369,10 +370,8 @@ fn menu_button(
 
 fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer> {
     button(text(label).size(14))
-        .padding([4, 10])
         .style(button_chip_style)
         .on_press(Message::None) // Needed for styling to work
-        .width(Length::Shrink)
 }
 
 #[cfg(test)]

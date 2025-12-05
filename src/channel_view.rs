@@ -1,4 +1,3 @@
-use crate::Message::DeviceViewEvent;
 use crate::channel_view::ChannelId::{Channel, Node};
 use crate::channel_view::ChannelViewMessage::{
     ClearMessage, MessageInput, PrepareReply, SendMessage,
@@ -8,8 +7,9 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendInfoMessage, SendPositionMessage};
-use crate::styles::{DAY_SEPARATOR_STYLE, button_chip_style, reply_to_style, text_input_style};
-use crate::{Message, channel_view_entry::ChannelViewEntry, icons};
+use crate::styles::{button_chip_style, reply_to_style, text_input_style, DAY_SEPARATOR_STYLE};
+use crate::Message::DeviceViewEvent;
+use crate::{channel_view_entry::ChannelViewEntry, icons, Message};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local};
 use iced::font::Style::Italic;
@@ -18,7 +18,7 @@ use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
-    Column, Container, Row, Space, button, container, scrollable, text, text_input,
+    button, container, scrollable, text, text_input, Column, Container, Row, Space,
 };
 use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
 use meshtastic::packet::PacketDestination;
@@ -32,8 +32,8 @@ use std::hash::Hash;
 pub enum ChannelViewMessage {
     MessageInput(String),
     ClearMessage,
-    SendMessage,
-    PrepareReply(u32), // entry_id
+    SendMessage(Option<u32>), // optional message id if we are replying to that message
+    PrepareReply(u32),        // entry_id
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
@@ -148,7 +148,7 @@ impl ChannelView {
                 self.message = String::new();
                 Task::none()
             }
-            SendMessage => {
+            SendMessage(reply_to_id) => {
                 if !self.message.is_empty() {
                     let msg = self.message.clone();
                     self.message = String::new();
@@ -158,6 +158,7 @@ impl ChannelView {
                         DeviceViewEvent(DeviceViewMessage::SendTextMessage(
                             msg.clone(),
                             channel_id.clone(),
+                            reply_to_id,
                         ))
                     })
                 } else {
@@ -295,7 +296,9 @@ impl ChannelView {
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
         if !self.message.is_empty() {
-            send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(SendMessage)));
+            send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(SendMessage(
+                self.preparing_reply,
+            ))));
             clear_button = clear_button.on_press(DeviceViewEvent(ChannelMsg(ClearMessage)));
         }
 
@@ -305,7 +308,9 @@ impl ChannelView {
                 text_input("Send Message", &self.message)
                     .style(text_input_style)
                     .on_input(|s| DeviceViewEvent(ChannelMsg(MessageInput(s))))
-                    .on_submit(DeviceViewEvent(ChannelMsg(SendMessage)))
+                    .on_submit(DeviceViewEvent(ChannelMsg(SendMessage(
+                        self.preparing_reply,
+                    ))))
                     .padding([6, 6])
                     .icon(Icon {
                         font: Font::with_name("icons"),

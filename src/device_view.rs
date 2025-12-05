@@ -1,6 +1,3 @@
-use crate::ConfigChangeMessage::DeviceAndChannel;
-use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
-use crate::View::DeviceList;
 use crate::channel_view::ChannelId::Node;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
@@ -21,14 +18,16 @@ use crate::device_view::DeviceViewMessage::{
     SendPositionMessage, SendTextMessage, ShowChannel, SubscriptionMessage,
 };
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, fav_button_style, text_input_style,
+    button_chip_style, channel_row_style, fav_button_style, text_input_style, DAY_SEPARATOR_STYLE,
 };
-use crate::{Message, View, icons};
+use crate::ConfigChangeMessage::DeviceAndChannel;
+use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
+use crate::View::DeviceList;
+use crate::{icons, Message, View};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
-use iced::widget::{Column, Container, Row, Space, button, row, scrollable, text, text_input};
+use iced::widget::{button, row, scrollable, text, text_input, Column, Container, Row, Space};
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
-use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::config::device_config;
@@ -37,6 +36,7 @@ use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position};
 use meshtastic::utils::stream::BleDevice;
+use meshtastic::Message as _;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -61,7 +61,7 @@ pub enum DeviceViewMessage {
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
-    SendTextMessage(String, ChannelId),
+    SendTextMessage(String, ChannelId, Option<u32>), // optional reply to message id
     SendPositionMessage(ChannelId),
     SendInfoMessage(ChannelId),
     SearchInput(String),
@@ -88,8 +88,13 @@ async fn request_connection(sender: Sender<SubscriberMessage>, device: BleDevice
     let _ = sender.send(Connect(device)).await;
 }
 
-async fn request_send(sender: Sender<SubscriberMessage>, text: String, channel_id: ChannelId) {
-    let _ = sender.send(SendText(text, channel_id)).await;
+async fn request_send(
+    sender: Sender<SubscriberMessage>,
+    text: String,
+    channel_id: ChannelId,
+    reply_to_id: Option<u32>,
+) {
+    let _ = sender.send(SendText(text, channel_id, reply_to_id)).await;
 }
 
 async fn request_send_position(
@@ -161,11 +166,12 @@ impl DeviceView {
             SubscriptionMessage(subscription_event) => {
                 self.process_subscription_event(subscription_event)
             }
-            SendTextMessage(message, index) => {
+            SendTextMessage(message, index, reply_to_id) => {
                 let sender = self.subscription_sender.clone();
-                Task::perform(request_send(sender.unwrap(), message, index), |_| {
-                    Message::None
-                })
+                Task::perform(
+                    request_send(sender.unwrap(), message, index, reply_to_id),
+                    |_| Message::None,
+                )
             }
             SendPositionMessage(channel_id) => {
                 if let Some(position) = &self.my_position {
@@ -496,7 +502,7 @@ impl DeviceView {
     /// Create a header view for the top of the screen depending on the current state of the app
     /// and whether we are in discovery mode or not.
     pub fn header<'a>(&'a self, state: &'a ConnectionState) -> Element<'a, Message> {
-        let mut header = Row::new().align_y(Bottom).push(
+        let mut header = Row::new().padding(4).align_y(Bottom).push(
             button("Devices")
                 .style(button_chip_style)
                 .on_press(Navigation(DeviceList)),
