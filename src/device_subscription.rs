@@ -55,9 +55,32 @@ enum DeviceState {
 struct MyRouter {
     gui_sender: futures_channel::mpsc::Sender<SubscriptionEvent>,
     my_node_num: Option<u32>,
+    my_user: User,
 }
 
 impl MyRouter {
+    /// Create a ny [MyRouter] with the sender to use to send events to the GUI
+    /// Initialize it with unknown user data that won't be valid until we learn our own node if
+    /// and then receive a [NodeInfo] with our node_id
+    fn new(gui_sender: futures_channel::mpsc::Sender<SubscriptionEvent>) -> Self {
+        MyRouter {
+            gui_sender,
+            my_node_num: None,
+            my_user: User {
+                id: "Unknown".to_string(),
+                long_name: "Unknown".to_string(),
+                short_name: "UNKN".to_string(),
+                #[allow(deprecated)]
+                macaddr: vec![],
+                hw_model: 0,
+                is_licensed: false,
+                role: Role::Client as i32,
+                public_key: vec![],
+                is_unmessagable: Some(true),
+            },
+        }
+    }
+
     /// Handle [FromRadio] packets received from the radio, filter down to packets we know the App/Gui
     /// is interested in and forward those to the Gui using the provided `gui_sender`
     fn handle_from_radio(&mut self, packet: Box<FromRadio>) -> Result<(), Error> {
@@ -67,8 +90,17 @@ impl MyRouter {
             payload_variant,
             Packet(_) | MyInfo(_) | NodeInfo(_) | Channel(_) | ClientNotification(_)
         ) {
+            // Capture my own node number
             if let MyInfo(my_info) = &payload_variant {
                 self.my_node_num = Some(my_info.my_node_num);
+            }
+
+            // Once I know my own node id number then I can capture my own node's [User] info
+            if let NodeInfo(node_info) = &payload_variant
+                && Some(node_info.num) == self.my_node_num
+                && let Some(user) = &node_info.user
+            {
+                self.my_user = user.clone();
             }
 
             self.gui_sender
@@ -103,8 +135,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     stream::channel(100, move |mut gui_sender| async move {
         let mut device_state = Disconnected;
         let mut stream_api: Option<ConnectedStreamApi> = None;
-        //let router = MyRouter {};
-
+        let mut my_router = MyRouter::new(gui_sender.clone());
         let (subscriber_sender, mut subscriber_receiver) = channel::<SubscriberMessage>(100);
 
         // Send the event sender back to the GUI, so it can send messages
@@ -150,11 +181,6 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     }
                 }
                 Connected(device, packet_receiver) => {
-                    let mut my_router = MyRouter {
-                        gui_sender: gui_sender.clone(),
-                        my_node_num: None,
-                    };
-
                     let radio_stream = UnboundedReceiverStream::from(packet_receiver)
                         .map(|fr| RadioPacket(Box::new(fr)));
 
@@ -190,8 +216,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             }
                             SendInfo(channel_id) => {
                                 let mut api = stream_api.take().unwrap();
-                                let user = my_user_info();
-                                let r = send_info(&mut api, &mut my_router, channel_id, user).await;
+                                let r = send_info(&mut api, &mut my_router, channel_id).await;
                                 let _none = stream_api.replace(api);
                                 r
                             }
@@ -224,31 +249,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     })
 }
 
-// TODO complete this
-fn my_user_info() -> User {
-    User {
-        id: "my id".to_string(),
-        long_name: "me myself".to_string(),
-        short_name: "me".to_string(),
-        #[allow(deprecated)]
-        macaddr: vec![],
-        hw_model: 0,
-        is_licensed: false,
-        role: Role::Client as i32,
-        public_key: vec![],
-        is_unmessagable: Some(true),
-    }
-}
-
-fn to_destination(packet_destination: PacketDestination) -> u32 {
-    match packet_destination {
-        PacketDestination::Broadcast => 0xffffffff,
-        PacketDestination::Node(node_id) => node_id.id(),
-        PacketDestination::Local => 0, // Not sure if this is correct - but shouldn't matter
-    }
-}
-
-/// Send a Text Message to the other node or the channel, which is possibly a eply
+/// Send a Text Message to the other node or the channel, which is possibly a reply
 async fn send_text_message(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
@@ -256,11 +257,9 @@ async fn send_text_message(
     reply_to_id: Option<u32>,
     text: String,
 ) -> Result<(), Error> {
-    // Create a user message data payload
     let data = Data {
         portnum: PortNum::TextMessageApp as i32,
         payload: text.encode_to_vec(),
-        want_response: false,
         reply_id: reply_to_id.unwrap_or(0),
         ..Default::default()
     };
@@ -268,17 +267,20 @@ async fn send_text_message(
     send_packet(stream_api, my_router, channel_id, data).await
 }
 
+/// Send a [Position] message to the channel or other node
 async fn send_position(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
     channel_id: ChannelId,
     position: Position,
 ) -> Result<(), Error> {
-    let (destination, channel) = channel_id.to_destination();
+    let data = Data {
+        portnum: PortNum::PositionApp as i32,
+        payload: position.encode_to_vec(),
+        ..Default::default()
+    };
 
-    stream_api
-        .send_position(my_router, position, destination, true, channel)
-        .await
+    send_packet(stream_api, my_router, channel_id, data).await
 }
 
 /// Send a [User] info "ping" message to the channel or other node
@@ -286,13 +288,10 @@ async fn send_info(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
     channel_id: ChannelId,
-    user: User,
 ) -> Result<(), Error> {
-    // Create a user message data payload
     let data = Data {
         portnum: PortNum::NodeinfoApp as i32,
-        payload: user.encode_to_vec(),
-        want_response: false,
+        payload: my_router.my_user.encode_to_vec(),
         ..Default::default()
     };
 
@@ -308,13 +307,17 @@ async fn send_packet(
 ) -> Result<(), Error> {
     let (packet_destination, mesh_channel) = channel_id.to_destination();
 
-    // Create a mesh packet for broadcast
+    let to = match packet_destination {
+        PacketDestination::Broadcast => 0xffffffff,
+        PacketDestination::Node(node_id) => node_id.id(),
+        PacketDestination::Local => 0, // Not sure if this is correct - but shouldn't matter
+    };
+
+    // Create a mesh packet for sending, always request ACK
     let mesh_packet = MeshPacket {
-        to: to_destination(packet_destination),
         from: my_router.source_node_id().id(),
+        to,
         channel: mesh_channel.channel(),
-        id: 0, // Will be assigned by the device
-        priority: mesh_packet::Priority::Default as i32,
         payload_variant: Some(mesh_packet::PayloadVariant::Decoded(data)),
         want_ack: true,
         ..Default::default()

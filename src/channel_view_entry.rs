@@ -1,25 +1,23 @@
-use crate::Message;
-use crate::Message::{DeviceViewEvent, ShowLocation};
 use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
     EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel};
 use crate::styles::{
-    COLOR_BLUE, COLOR_DICTIONARY, COLOR_GREEN, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE,
-    OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
-    button_chip_style, menu_button_style, transparent_button_style,
+    button_chip_style, menu_button_style, transparent_button_style, COLOR_BLUE, COLOR_DICTIONARY,
+    COLOR_GREEN, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
+    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
 };
+use crate::Message;
+use crate::Message::{DeviceViewEvent, ShowLocation};
 use chrono::{DateTime, Local, Utc};
-use iced::Length::Fixed;
 use iced::advanced::text::Shaping::Advanced;
 use iced::font::Weight;
-use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
-use iced::{
-    Bottom, Color, Element, Fill, Font, Left, Length, Padding, Renderer, Right, Theme, Top,
-};
+use iced::widget::{button, text, tooltip, Column, Container, Row, Space, Text};
+use iced::Length::Fixed;
+use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use iced_aw::menu::{Item, Menu};
-use iced_aw::{MenuBar, menu_bar, menu_items};
+use iced_aw::{menu_bar, menu_items, MenuBar};
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -225,6 +223,8 @@ impl ChannelViewEntry {
                 .shaping(Advanced)
                 .into(),
             TextMessageReply(reply_to_id, text_msg) => {
+                // TODO 1) Cap the length of the quoted text
+                // TODO 2) Navigate to the original full message if the summary is clicked on
                 // Add a row to the message we are replying to if there is one
                 if let Some(original_text) = Self::text_from_id(entries, *reply_to_id) {
                     let quote_row = Row::new()
