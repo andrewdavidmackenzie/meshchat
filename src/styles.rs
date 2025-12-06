@@ -310,10 +310,11 @@ const DAY_SEPARATOR_BORDER: Border = Border {
     color: Color::TRANSPARENT,
 };
 
-// TODO make a closure that reacts to the theme
-pub const MESSAGE_TEXT_STYLE: text::Style = text::Style {
-    color: Some(Color::WHITE),
-};
+pub fn message_text_style(_theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(Color::WHITE),
+    }
+}
 
 pub const TIME_TEXT_COLOR: Color = Color::from_rgba(0.6, 0.6, 0.6, 1.0);
 pub const TIME_TEXT_SIZE: f32 = 11.0;

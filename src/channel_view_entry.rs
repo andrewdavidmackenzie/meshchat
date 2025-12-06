@@ -6,9 +6,9 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel};
 use crate::styles::{
-    COLOR_BLUE, COLOR_DICTIONARY, COLOR_GREEN, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE,
+    COLOR_BLUE, COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE,
     OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
-    button_chip_style, menu_button_style, transparent_button_style,
+    button_chip_style, menu_button_style, message_text_style, transparent_button_style,
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
@@ -219,7 +219,7 @@ impl ChannelViewEntry {
 
         let content: Element<'static, Message> = match self.payload() {
             NewTextMessage(text_msg) => text(text_msg.clone())
-                .style(|_| MESSAGE_TEXT_STYLE)
+                .style(message_text_style)
                 .size(18)
                 .shaping(Advanced)
                 .into(),
@@ -235,7 +235,7 @@ impl ChannelViewEntry {
                 };
 
                 text(text_msg.clone())
-                    .style(|_| MESSAGE_TEXT_STYLE)
+                    .style(message_text_style)
                     .size(18)
                     .shaping(Advanced)
                     .into()
@@ -250,7 +250,7 @@ impl ChannelViewEntry {
                     .into()
             }
             UserMessage(user) => text(format!("ⓘ {}", user.short_name))
-                .style(|_| MESSAGE_TEXT_STYLE)
+                .style(message_text_style)
                 .size(18)
                 .shaping(Advanced)
                 .into(),

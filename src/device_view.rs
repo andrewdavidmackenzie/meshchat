@@ -77,9 +77,6 @@ pub struct DeviceView {
     pub(crate) viewing_channel: Option<ChannelId>,
     channel_views: HashMap<ChannelId, ChannelView>,
     pub(crate) channels: Vec<Channel>,
-    // TODO elements of NodeInfo I could use
-    // DeviceMetrics: battery level - in device list
-    // User::long_name, User::short_name, User::hw_model
     nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
     filter: String,
     exit_pending: bool,
