@@ -98,7 +98,7 @@ impl DeviceListView {
         let mut main_col = Column::new();
 
         for device in &self.discovered_devices {
-            let mut device_row = Row::new().align_y(alignment::Vertical::Center);
+            let mut device_row = Row::new().align_y(alignment::Vertical::Center).padding(2);
             device_row = device_row.push(text(device_name(device)));
             device_row = device_row.push(Space::new(6, 0));
             match &connection_state {
