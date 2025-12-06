@@ -249,7 +249,6 @@ impl ChannelViewEntry {
                     .on_press(ShowLocation(latitude, longitude))
                     .into()
             }
-            // TODO expand what is shown when receiving a user message
             UserMessage(user) => text(format!("ⓘ {}", user.short_name))
                 .style(|_| MESSAGE_TEXT_STYLE)
                 .size(18)
