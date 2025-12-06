@@ -25,19 +25,16 @@ impl Notifications {
     pub fn view(&self) -> Element<'_, Message> {
         let mut notifications = Row::new().padding(10);
 
-        // TODO a box with color and a cancel button that removes this error
-        // larger font for summary, detail can be unfolded
+        // TODO larger font for summary, detail can be unfolded
         for (id, notification) in &self.inner {
-            match notification {
+            notifications = notifications.push(match notification {
                 Notification::Error(summary, details) => {
-                    notifications =
-                        notifications.push(Self::error_box(*id, summary.clone(), details.clone()));
+                    Self::error_box(*id, summary.clone(), details.clone())
                 }
                 Notification::Info(summary, details) => {
-                    notifications =
-                        notifications.push(Self::info_box(*id, summary.clone(), details.clone()));
+                    Self::info_box(*id, summary.clone(), details.clone())
                 }
-            }
+            });
         }
 
         notifications.into()
@@ -61,6 +58,7 @@ impl Notifications {
                 },
                 ..Default::default()
             })
+            .width(iced::Length::Fill)
             .into()
     }
 
@@ -81,6 +79,7 @@ impl Notifications {
                 },
                 ..Default::default()
             })
+            .width(iced::Length::Fill)
             .into()
     }
 
