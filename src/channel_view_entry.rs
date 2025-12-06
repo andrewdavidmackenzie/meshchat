@@ -1,23 +1,24 @@
+use crate::Message;
+use crate::Message::{DeviceViewEvent, ShowLocation};
 use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
     EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel};
 use crate::styles::{
-    button_chip_style, menu_button_style, transparent_button_style, COLOR_BLUE, COLOR_DICTIONARY,
-    COLOR_GREEN, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
-    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
+    COLOR_BLUE, COLOR_DICTIONARY, COLOR_GREEN, MESSAGE_TEXT_STYLE, MY_MESSAGE_BUBBLE_STYLE,
+    OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
+    button_chip_style, menu_button_style, transparent_button_style,
 };
-use crate::Message;
-use crate::Message::{DeviceViewEvent, ShowLocation};
 use chrono::{DateTime, Local, Utc};
+use iced::Length::Fixed;
 use iced::advanced::text::Shaping::Advanced;
 use iced::font::Weight;
-use iced::widget::{button, text, tooltip, Column, Container, Row, Space, Text};
-use iced::Length::Fixed;
+use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use iced_aw::menu::{Item, Menu};
-use iced_aw::{menu_bar, menu_items, MenuBar};
+use iced_aw::{MenuBar, menu_bar, menu_items};
+use meshtastic::protobufs::User;
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -32,7 +33,7 @@ pub enum Payload {
     /// EmojiReply(reply_to_id, emoji_code string)
     EmojiReply(u32, String),
     PositionMessage(i32, i32),
-    UserMessage(String), // Could add hw_model or similar if wanted
+    UserMessage(User),
 }
 
 /// An entry in the Channel View that represents some type of message sent to either this user on
@@ -242,13 +243,14 @@ impl ChannelViewEntry {
             PositionMessage(lat, long) => {
                 let latitude = 0.0000001 * *lat as f64;
                 let longitude = 0.0000001 * *long as f64;
-                button(text(format!("({:.2}, {:.2}) 📌", latitude, longitude)).shaping(Advanced))
+                button(text(format!("📌 ({:.2}, {:.2})", latitude, longitude)).shaping(Advanced))
                     .padding(0)
                     .style(|theme, status| transparent_button_style(theme, status, COLOR_BLUE))
                     .on_press(ShowLocation(latitude, longitude))
                     .into()
             }
-            UserMessage(user_name) => text(format!("Ping from {}", user_name))
+            // TODO expand what is shown when receiving a user message
+            UserMessage(user) => text(format!("ⓘ {}", user.short_name))
                 .style(|_| MESSAGE_TEXT_STYLE)
                 .size(18)
                 .shaping(Advanced)

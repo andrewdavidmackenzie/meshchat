@@ -1,3 +1,6 @@
+use crate::ConfigChangeMessage::DeviceAndChannel;
+use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
+use crate::View::DeviceList;
 use crate::channel_view::ChannelId::Node;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
@@ -18,16 +21,14 @@ use crate::device_view::DeviceViewMessage::{
     SendPositionMessage, SendTextMessage, ShowChannel, SubscriptionMessage,
 };
 use crate::styles::{
-    button_chip_style, channel_row_style, fav_button_style, text_input_style, DAY_SEPARATOR_STYLE,
+    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, fav_button_style, text_input_style,
 };
-use crate::ConfigChangeMessage::DeviceAndChannel;
-use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
-use crate::View::DeviceList;
-use crate::{icons, Message, View};
+use crate::{Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
-use iced::widget::{button, row, scrollable, text, text_input, Column, Container, Row, Space};
+use iced::widget::{Column, Container, Row, Space, button, row, scrollable, text, text_input};
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
+use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::config::device_config;
@@ -36,7 +37,6 @@ use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position};
 use meshtastic::utils::stream::BleDevice;
-use meshtastic::Message as _;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -73,6 +73,7 @@ pub struct DeviceView {
     subscription_sender: Option<Sender<SubscriberMessage>>,
     my_node_num: Option<u32>,
     my_position: Option<Position>,
+    my_info: bool,
     pub(crate) viewing_channel: Option<ChannelId>,
     channel_views: HashMap<ChannelId, ChannelView>,
     pub(crate) channels: Vec<Channel>,
@@ -299,6 +300,7 @@ impl DeviceView {
     fn add_node(&mut self, node_info: NodeInfo) {
         if Some(node_info.num) == self.my_node_num {
             self.my_position = node_info.position;
+            self.my_info = true;
         } else if !node_info.is_ignored
             && node_info.user.is_some()
             && node_info.user.as_ref().unwrap().role() == device_config::Role::Client
@@ -462,7 +464,7 @@ impl DeviceView {
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
-                            UserMessage(user.id),
+                            UserMessage(user),
                             mesh_packet.from,
                             mesh_packet.id,
                             name,
@@ -579,7 +581,7 @@ impl DeviceView {
         if let Some(channel_number) = &self.viewing_channel
             && let Some(channel_view) = self.channel_views.get(channel_number)
         {
-            return channel_view.view(self.my_position.is_some());
+            return channel_view.view(self.my_position.is_some(), self.my_info);
         }
 
         // If not viewing a channel/user, show the list of channels and users

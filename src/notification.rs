@@ -45,7 +45,7 @@ impl Notifications {
         notifications.into()
     }
 
-    fn notification_box<'a>(
+    fn notification_box(
         id: usize,
         summary: String,
         detail: String,
