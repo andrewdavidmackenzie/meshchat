@@ -5,4 +5,4 @@ target
 .idea
 
 # MacOS files
-.DS_Store
+**/.DS_Store
