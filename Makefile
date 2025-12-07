@@ -13,7 +13,7 @@ clippy:
 	cargo clippy --tests --no-deps --all-features --all-targets
 
 publish: release
-	cargo publish --dry-run --no-verify
+	cargo publish --dry-run --no-verify --allow-dirty
 
 test:
 	cargo test
