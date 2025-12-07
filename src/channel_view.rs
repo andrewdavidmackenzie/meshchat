@@ -1,20 +1,25 @@
 use crate::Message::DeviceViewEvent;
 use crate::channel_view::ChannelId::{Channel, Node};
-use crate::channel_view::ChannelViewMessage::{ClearMessage, MessageInput, SendMessage};
+use crate::channel_view::ChannelViewMessage::{
+    ClearMessage, MessageInput, PrepareReply, SendMessage,
+};
 use crate::channel_view_entry::Payload::{
     EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendInfoMessage, SendPositionMessage};
-use crate::styles::{DAY_SEPARATOR_STYLE, button_chip_style, text_input_style};
+use crate::styles::{DAY_SEPARATOR_STYLE, button_chip_style, reply_to_style, text_input_style};
 use crate::{Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local};
+use iced::font::Style::Italic;
 use iced::padding::right;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::text_input::{Icon, Side};
-use iced::widget::{Column, Container, Row, Space, button, scrollable, text, text_input};
+use iced::widget::{
+    Column, Container, Row, Space, button, container, scrollable, text, text_input,
+};
 use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
 use meshtastic::packet::PacketDestination;
 use meshtastic::types::{MeshChannel, NodeId};
@@ -27,7 +32,8 @@ use std::hash::Hash;
 pub enum ChannelViewMessage {
     MessageInput(String),
     ClearMessage,
-    SendMessage,
+    SendMessage(Option<u32>), // optional message id if we are replying to that message
+    PrepareReply(u32),        // entry_id
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
@@ -70,6 +76,7 @@ pub struct ChannelView {
     message: String,                         // text message typed in so far
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
     my_source: u32,
+    preparing_reply: Option<u32>,
 }
 
 async fn empty() {}
@@ -83,6 +90,7 @@ impl ChannelView {
             message: String::new(),
             entries: RingMap::new(),
             my_source: source,
+            preparing_reply: None,
         }
     }
 
@@ -104,8 +112,6 @@ impl ChannelView {
     pub fn new_message(&mut self, new_message: ChannelViewEntry) {
         match &new_message.payload() {
             NewTextMessage(_) | PositionMessage(_, _) | UserMessage(_) | TextMessageReply(_, _) => {
-                // TODO manage the size of entries, with a limit (fixed or time?), and pushing
-                // the older ones to a disk store of messages
                 self.entries.insert_sorted_by(
                     new_message.message_id(),
                     new_message,
@@ -140,26 +146,32 @@ impl ChannelView {
                 self.message = String::new();
                 Task::none()
             }
-            SendMessage => {
+            SendMessage(reply_to_id) => {
                 if !self.message.is_empty() {
                     let msg = self.message.clone();
                     self.message = String::new();
                     let channel_id = self.channel_id.clone();
+                    self.preparing_reply = None;
                     Task::perform(empty(), move |_| {
                         DeviceViewEvent(DeviceViewMessage::SendTextMessage(
                             msg.clone(),
                             channel_id.clone(),
+                            reply_to_id,
                         ))
                     })
                 } else {
                     Task::none()
                 }
             }
+            PrepareReply(entry_id) => {
+                self.preparing_reply = Some(entry_id);
+                Task::none()
+            }
         }
     }
 
     /// Construct an Element that displays the channel view
-    pub fn view(&self, enable_position: bool) -> Element<'_, Message> {
+    pub fn view(&self, enable_position: bool, enable_my_info: bool) -> Element<'_, Message> {
         let mut channel_view = Column::new().padding(right(10));
 
         let mut previous_day = u32::MIN;
@@ -196,22 +208,46 @@ impl ChannelView {
                 SendPositionMessage(self.channel_id.clone()),
             ));
         }
+
+        let mut send_info_button =
+            button(text("Send Info ⓘ").shaping(Advanced)).style(button_chip_style);
+        if enable_my_info {
+            send_info_button = send_info_button
+                .on_press(DeviceViewEvent(SendInfoMessage(self.channel_id.clone())));
+        }
+
         let channel_buttons = Row::new()
+            .padding([2, 0])
             .push(send_position_button)
             .push(Space::with_width(6))
-            .push(
-                button(text("Send Info"))
-                    .style(button_chip_style)
-                    .on_press(DeviceViewEvent(SendInfoMessage(self.channel_id.clone()))),
-            );
+            .push(send_info_button);
 
-        // Place the scrollable in a column, with an input box at the bottom
-        Column::new()
+        // Place the scrollable in a column, with a row of buttons at the bottom
+        let mut column = Column::new()
             .padding(4)
             .push(channel_scroll)
-            .push(channel_buttons)
-            .push(self.input_box())
-            .into()
+            .push(channel_buttons);
+
+        // If we are replying to a message, add a row at the bottom of the channel view with the original text
+        if let Some(entry_id) = &self.preparing_reply {
+            let original_text = match self.entries.get(entry_id).unwrap().payload() {
+                NewTextMessage(original_text) => original_text.clone(),
+                TextMessageReply(_, original_text) => original_text.clone(),
+                EmojiReply(_, original_text) => original_text.clone(),
+                PositionMessage(lat, lon) => format!("📌 ({:.2}, {:.2})", lat, lon),
+                UserMessage(user) => user.short_name.clone(),
+            };
+            column = column.push(
+                container(text(format!("Replying to: {}", original_text)).font(Font {
+                    style: Italic,
+                    ..Default::default()
+                }))
+                .style(reply_to_style),
+            );
+        }
+
+        // Add the input box at the bottom of the channel view
+        column.push(self.input_box()).into()
     }
 
     /// Return an Element that displays a day separator
@@ -259,11 +295,13 @@ impl ChannelView {
         let mut send_button = button(icons::send().size(18))
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
-        let mut clear_button = button(text("X").size(18))
+        let mut clear_button = button(text("⨂").shaping(Advanced).size(18))
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
         if !self.message.is_empty() {
-            send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(SendMessage)));
+            send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(SendMessage(
+                self.preparing_reply,
+            ))));
             clear_button = clear_button.on_press(DeviceViewEvent(ChannelMsg(ClearMessage)));
         }
 
@@ -273,7 +311,9 @@ impl ChannelView {
                 text_input("Send Message", &self.message)
                     .style(text_input_style)
                     .on_input(|s| DeviceViewEvent(ChannelMsg(MessageInput(s))))
-                    .on_submit(DeviceViewEvent(ChannelMsg(SendMessage)))
+                    .on_submit(DeviceViewEvent(ChannelMsg(SendMessage(
+                        self.preparing_reply,
+                    ))))
                     .padding([6, 6])
                     .icon(Icon {
                         font: Font::with_name("icons"),

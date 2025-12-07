@@ -1,9 +1,9 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
-use iced::border::Radius;
+use crate::styles::{button_chip_style, error_notification_style, info_notification_style};
 use iced::widget::container::Style;
-use iced::widget::{Container, Row, button};
-use iced::{Background, Border, Color, Element, Theme};
+use iced::widget::{Container, Row, button, text};
+use iced::{Element, Theme};
 
 /// A [Notification] can be one of two notification types:
 /// - Error(summary, detail)
@@ -25,61 +25,46 @@ impl Notifications {
     pub fn view(&self) -> Element<'_, Message> {
         let mut notifications = Row::new().padding(10);
 
-        // TODO a box with color and a cancel button that removes this error
-        // larger font for summary, detail can be unfolded
         for (id, notification) in &self.inner {
-            match notification {
-                Notification::Error(summary, details) => {
-                    notifications =
-                        notifications.push(Self::error_box(*id, summary.clone(), details.clone()));
-                }
-                Notification::Info(summary, details) => {
-                    notifications =
-                        notifications.push(Self::info_box(*id, summary.clone(), details.clone()));
-                }
-            }
+            notifications = notifications.push(match notification {
+                Notification::Error(summary, details) => Self::notification_box(
+                    *id,
+                    summary.clone(),
+                    details.clone(),
+                    error_notification_style,
+                ),
+                Notification::Info(summary, details) => Self::notification_box(
+                    *id,
+                    summary.clone(),
+                    details.clone(),
+                    info_notification_style,
+                ),
+            });
         }
 
         notifications.into()
     }
 
-    // TODO accept detail and make it in an expandable box
-    fn error_box(id: usize, summary: String, _detail: String) -> Element<'static, Message> {
-        let row = Row::new().push(iced::widget::text(summary));
-        let row = row.push(button("OK").on_press(RemoveNotification(id)));
+    fn notification_box(
+        id: usize,
+        summary: String,
+        detail: String,
+        style: impl Fn(&Theme) -> Style + 'static,
+    ) -> Element<'static, Message> {
+        let row = Row::new()
+            .width(iced::Length::Fill)
+            .push(text(summary).size(16))
+            .push(
+                button("OK")
+                    .style(button_chip_style)
+                    .on_press(RemoveNotification(id)),
+            )
+            .push(text(detail).size(14));
 
         Container::new(row)
-            .padding([6, 12]) // adjust to taste
-            .style(|_theme: &Theme| Style {
-                text_color: Some(Color::WHITE),
-                background: Some(Background::Color(Color::from_rgb8(0xE5, 0x2D, 0x2C))), // red
-                border: Border {
-                    radius: Radius::from(12.0), // rounded corners
-                    width: 2.0,
-                    color: Color::from_rgb8(0xFF, 0xD7, 0x00), // yellow
-                },
-                ..Default::default()
-            })
-            .into()
-    }
-
-    // TODO accept detail and make it in an expandable box
-    fn info_box(id: usize, summary: String, _detail: String) -> Element<'static, Message> {
-        let row = Row::new().push(iced::widget::text(summary));
-        let row = row.push(button("OK").on_press(RemoveNotification(id)));
-
-        Container::new(row)
-            .padding([6, 12]) // adjust to taste
-            .style(|_theme: &Theme| Style {
-                text_color: Some(Color::WHITE),
-                background: Some(Background::Color(Color::from_rgb8(0x00, 0x00, 0x00))), // black
-                border: Border {
-                    radius: Radius::from(12.0), // rounded corners
-                    width: 2.0,
-                    color: Color::WHITE,
-                },
-                ..Default::default()
-            })
+            .padding([6, 12])
+            .style(style)
+            .width(iced::Length::Fill)
             .into()
     }
 

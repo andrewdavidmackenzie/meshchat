@@ -5,7 +5,8 @@ use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::{button, text, text_input};
-use iced::{Background, Border, Color, Shadow, Theme};
+use iced::{Background, Border, Color, Padding, Shadow, Theme};
+use iced_aw::menu;
 
 // Basic Colors
 pub const COLOR_RED: Color = Color::from_rgb(0.9, 0.2, 0.2);
@@ -111,7 +112,7 @@ pub const RADIUS_12: Radius = Radius {
 pub const TOOLTIP_BORDER: Border = Border {
     color: Color::WHITE,
     width: 1.0,
-    radius: RADIUS_4,
+    radius: RADIUS_12,
 };
 
 pub const VIEW_BUTTON_BORDER: Border = Border {
@@ -239,7 +240,7 @@ pub fn transparent_button_style(_theme: &Theme, status: Status, color: Color) ->
     style
 }
 
-pub fn fav_button_style(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn fav_button_style(_theme: &Theme, status: Status) -> button::Style {
     match status {
         Status::Active => button::Style {
             background: Some(Background::Color(Color::TRANSPARENT)),
@@ -247,7 +248,7 @@ pub fn fav_button_style(_theme: &Theme, status: button::Status) -> button::Style
             border: NO_BORDER,
             shadow: NO_SHADOW,
         },
-        Status::Hovered => button::Style {
+        Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
@@ -268,7 +269,7 @@ pub fn fav_button_style(_theme: &Theme, status: button::Status) -> button::Style
     }
 }
 
-pub fn button_chip_style(_theme: &Theme, status: button::Status) -> button::Style {
+pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
     match status {
         Status::Active => button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
@@ -276,7 +277,7 @@ pub fn button_chip_style(_theme: &Theme, status: button::Status) -> button::Styl
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
         },
-        Status::Hovered => button::Style {
+        Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
@@ -309,10 +310,11 @@ const DAY_SEPARATOR_BORDER: Border = Border {
     color: Color::TRANSPARENT,
 };
 
-// TODO make a closure that reacts to the theme
-pub const MESSAGE_TEXT_STYLE: text::Style = text::Style {
-    color: Some(Color::WHITE),
-};
+pub fn message_text_style(_theme: &Theme) -> text::Style {
+    text::Style {
+        color: Some(Color::WHITE),
+    }
+}
 
 pub const TIME_TEXT_COLOR: Color = Color::from_rgba(0.6, 0.6, 0.6, 1.0);
 pub const TIME_TEXT_SIZE: f32 = 11.0;
@@ -361,6 +363,17 @@ pub fn name_box_style(_theme: &Theme) -> Style {
     NAME_BOX_STYLE
 }
 
+const REPLY_TO_STYLE: Style = Style {
+    text_color: Some(Color::WHITE),
+    background: Some(Background::Color(Color::from_rgba(0.08, 0.3, 0.22, 1.0))),
+    border: MESSAGE_BORDER,
+    shadow: NO_SHADOW,
+};
+
+pub fn reply_to_style(_theme: &Theme) -> Style {
+    REPLY_TO_STYLE
+}
+
 pub const VIEW_BUTTON_HOVER_STYLE: button::Style = button::Style {
     background: Some(Background::Color(Color::from_rgba(0.0, 0.8, 0.8, 1.0))),
     text_color: Color::BLACK,
@@ -375,10 +388,51 @@ pub const VIEW_BUTTON_STYLE: button::Style = button::Style {
     shadow: NO_SHADOW,
 };
 
-pub fn channel_row_style(_: &Theme, status: Status) -> iced::widget::button::Style {
+pub fn channel_row_style(_: &Theme, status: Status) -> button::Style {
     if status == Hovered {
         VIEW_BUTTON_HOVER_STYLE
     } else {
         VIEW_BUTTON_STYLE
+    }
+}
+
+pub fn error_notification_style(_theme: &Theme) -> Style {
+    Style {
+        text_color: Some(Color::WHITE),
+        background: Some(Background::Color(COLOR_RED)),
+        border: Border {
+            radius: Radius::from(12.0), // rounded corners
+            width: 2.0,
+            color: COLOR_YELLOW,
+        },
+        ..Default::default()
+    }
+}
+
+pub fn info_notification_style(_theme: &Theme) -> Style {
+    Style {
+        text_color: Some(Color::WHITE),
+        background: Some(Background::Color(Color::from_rgb8(0x00, 0x00, 0x00))), // black
+        border: Border {
+            radius: Radius::from(12.0), // rounded corners
+            width: 2.0,
+            color: Color::WHITE,
+        },
+        ..Default::default()
+    }
+}
+
+pub fn menu_button_style(_theme: &Theme, _status: iced_aw::style::Status) -> menu::Style {
+    menu::Style {
+        bar_background: Background::Color(Color::TRANSPARENT),
+        bar_border: NO_BORDER,
+        bar_shadow: NO_SHADOW,
+        bar_background_expand: Padding::new(0.0),
+        menu_background: Background::Color(Color::TRANSPARENT),
+        menu_border: NO_BORDER,
+        menu_shadow: NO_SHADOW,
+        menu_background_expand: Padding::new(0.0),
+        path: Background::Color(Color::TRANSPARENT),
+        path_border: NO_BORDER,
     }
 }

@@ -202,8 +202,6 @@ impl MeshChat {
 
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
     fn subscription(&self) -> Subscription<Message> {
-        // TODO keyboard navigation
-        //         iced::event::listen().map(ModalKeyEvent)
         let subscriptions = vec![
             iced::event::listen().map(WindowEvent),
             Subscription::run(ble_discovery).map(DeviceListViewEvent),

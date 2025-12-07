@@ -294,7 +294,7 @@ impl StyleSheet for iced::Theme {
 
         Appearance {
             track_color: palette.background.weak.color,
-            bar_color: CYAN, // TODO pass in through style?
+            bar_color: CYAN,
         }
     }
 }

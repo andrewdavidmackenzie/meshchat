@@ -40,3 +40,9 @@ jobs:
         with:
           command: clippy
           args: --tests --no-deps --all-features --all-targets
+
+  todo-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Grep for TODOS
+        run: find . -name "*.rs" -exec grep "TODO" {} \; -print

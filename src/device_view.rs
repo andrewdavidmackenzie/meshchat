@@ -61,7 +61,7 @@ pub enum DeviceViewMessage {
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
-    SendTextMessage(String, ChannelId),
+    SendTextMessage(String, ChannelId, Option<u32>), // optional reply to message id
     SendPositionMessage(ChannelId),
     SendInfoMessage(ChannelId),
     SearchInput(String),
@@ -73,12 +73,10 @@ pub struct DeviceView {
     subscription_sender: Option<Sender<SubscriberMessage>>,
     my_node_num: Option<u32>,
     my_position: Option<Position>,
+    my_info: bool,
     pub(crate) viewing_channel: Option<ChannelId>,
     channel_views: HashMap<ChannelId, ChannelView>,
     pub(crate) channels: Vec<Channel>,
-    // TODO elements of NodeInfo I could use
-    // DeviceMetrics: battery level - in device list
-    // User::long_name, User::short_name, User::hw_model
     nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
     filter: String,
     exit_pending: bool,
@@ -88,8 +86,13 @@ async fn request_connection(sender: Sender<SubscriberMessage>, device: BleDevice
     let _ = sender.send(Connect(device)).await;
 }
 
-async fn request_send(sender: Sender<SubscriberMessage>, text: String, channel_id: ChannelId) {
-    let _ = sender.send(SendText(text, channel_id)).await;
+async fn request_send(
+    sender: Sender<SubscriberMessage>,
+    text: String,
+    channel_id: ChannelId,
+    reply_to_id: Option<u32>,
+) {
+    let _ = sender.send(SendText(text, channel_id, reply_to_id)).await;
 }
 
 async fn request_send_position(
@@ -128,7 +131,7 @@ impl DeviceView {
             ConnectRequest(device, channel_id) => {
                 // save the desired channel to show for when the connection is completed later
                 self.viewing_channel = channel_id;
-                self.connection_state = Connecting(device.clone()); // TODO make state change depend on message back from subscription
+                self.connection_state = Connecting(device.clone());
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_connection(sender.unwrap(), device.clone()), |_| {
                     Navigation(View::Device)
@@ -136,7 +139,7 @@ impl DeviceView {
             }
             DisconnectRequest(name, exit) => {
                 self.exit_pending = exit;
-                self.connection_state = Disconnecting(name); // TODO make state change depend on message back from subscription
+                self.connection_state = Disconnecting(name);
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
                 Task::perform(request_disconnection(sender.unwrap()), |_| {
@@ -161,11 +164,12 @@ impl DeviceView {
             SubscriptionMessage(subscription_event) => {
                 self.process_subscription_event(subscription_event)
             }
-            SendTextMessage(message, index) => {
+            SendTextMessage(message, index, reply_to_id) => {
                 let sender = self.subscription_sender.clone();
-                Task::perform(request_send(sender.unwrap(), message, index), |_| {
-                    Message::None
-                })
+                Task::perform(
+                    request_send(sender.unwrap(), message, index, reply_to_id),
+                    |_| Message::None,
+                )
             }
             SendPositionMessage(channel_id) => {
                 if let Some(position) = &self.my_position {
@@ -263,13 +267,10 @@ impl DeviceView {
             Some(PayloadVariant::MyInfo(my_node_info)) => {
                 self.my_node_num = Some(my_node_info.my_node_num);
             }
+            // Information about a Node that exists on the radio - which could be myself
             Some(PayloadVariant::NodeInfo(node_info)) => self.add_node(node_info),
             // This Packet conveys information about a Channel that exists on the radio
             Some(PayloadVariant::Channel(channel)) => self.add_channel(channel),
-            Some(PayloadVariant::Metadata(_)) => {
-                // TODO could be interesting to get device_hardware value "hw_model" and "role"
-                // see https://docs.rs/meshtastic/0.1.7/meshtastic/protobufs/enum.HardwareModel.html
-            }
             Some(PayloadVariant::ClientNotification(notification)) => {
                 // A notification message from the device to the client To be used for important
                 // messages that should to be displayed to the user in the form of push
@@ -292,6 +293,7 @@ impl DeviceView {
     fn add_node(&mut self, node_info: NodeInfo) {
         if Some(node_info.num) == self.my_node_num {
             self.my_position = node_info.position;
+            self.my_info = true;
         } else if !node_info.is_ignored
             && node_info.user.is_some()
             && node_info.user.as_ref().unwrap().role() == device_config::Role::Client
@@ -358,9 +360,8 @@ impl DeviceView {
                     }
                 }
                 Ok(PortNum::AlertApp) => {
-                    // TODO something special for an Alert message!
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let name = self.source_name(mesh_packet);
+                    let name = self.short_name(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let seen = self.viewing_channel == Some(channel_id.clone());
                         let new_message = ChannelViewEntry::new(
@@ -378,7 +379,7 @@ impl DeviceView {
                 }
                 Ok(PortNum::TextMessageApp) => {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let name = self.source_name(mesh_packet);
+                    let name = self.short_name(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let message = if data.reply_id == 0 {
                             NewTextMessage(String::from_utf8(data.payload.clone()).unwrap())
@@ -416,7 +417,7 @@ impl DeviceView {
                     let position = Position::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     let seen = self.viewing_channel == Some(channel_id.clone());
-                    let name = self.source_name(mesh_packet);
+                    let name = self.short_name(mesh_packet);
                     self.update_node_position(mesh_packet.from, &position);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         if let Some(lat) = position.latitude_i
@@ -434,7 +435,7 @@ impl DeviceView {
                             eprintln!("No lat/lon for Position: {:?}", position);
                         }
                     } else {
-                        eprintln!("No channel for ChannelId: {}", channel_id);
+                        eprintln!("No channel for: {}", channel_id);
                     }
                 }
                 Ok(PortNum::TelemetryApp) => {
@@ -449,13 +450,12 @@ impl DeviceView {
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
-                    // TODO could get hw_model here also for the device
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let name = self.source_name(mesh_packet);
+                    let name = self.short_name(mesh_packet);
                     let seen = self.viewing_channel == Some(channel_id.clone());
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
-                            UserMessage(user.id),
+                            UserMessage(user),
                             mesh_packet.from,
                             mesh_packet.id,
                             name,
@@ -463,7 +463,7 @@ impl DeviceView {
                         );
                         channel_view.new_message(new_message);
                     } else {
-                        eprintln!("No channel for ChannelId: {}", channel_id);
+                        eprintln!("NodeInfoApp: No channel for: {}", user.long_name);
                     }
                 }
                 _ => eprintln!("Unexpected payload type from radio: {}", data.portnum),
@@ -475,7 +475,7 @@ impl DeviceView {
 
     /// Return an Optional name to display in the message box as the source of a message.
     /// If the message is from myself, then return None.
-    fn source_name(&self, mesh_packet: &MeshPacket) -> Option<String> {
+    fn short_name(&self, mesh_packet: &MeshPacket) -> Option<String> {
         if Some(mesh_packet.from) == self.my_node_num {
             return None;
         }
@@ -496,7 +496,7 @@ impl DeviceView {
     /// Create a header view for the top of the screen depending on the current state of the app
     /// and whether we are in discovery mode or not.
     pub fn header<'a>(&'a self, state: &'a ConnectionState) -> Element<'a, Message> {
-        let mut header = Row::new().align_y(Bottom).push(
+        let mut header = Row::new().padding(4).align_y(Bottom).push(
             button("Devices")
                 .style(button_chip_style)
                 .on_press(Navigation(DeviceList)),
@@ -537,22 +537,21 @@ impl DeviceView {
             }
         };
 
-        // possibly add a channel name button next
+        // possibly add a node/channel name button next
         match &self.viewing_channel {
             Some(ChannelId::Channel(channel_index)) => {
                 let index = *channel_index as usize;
                 if let Some(channel) = self.channels.get(index) {
-                    // TODO do this in channel_view code like in view() below.
                     let channel_name = Self::channel_name(channel);
                     header = header
                         .push(button(text(channel_name).shaping(Advanced)).style(button_chip_style))
                 }
             }
             Some(Node(node_id)) => {
-                header = header.push(
-                    button(text(self.node_name(*node_id).unwrap()).shaping(Advanced))
-                        .style(button_chip_style),
-                )
+                if let Some(node_name) = self.node_name(*node_id) {
+                    header = header
+                        .push(button(text(node_name).shaping(Advanced)).style(button_chip_style))
+                }
             }
             None => {}
         }
@@ -573,7 +572,7 @@ impl DeviceView {
         if let Some(channel_number) = &self.viewing_channel
             && let Some(channel_view) = self.channel_views.get(channel_number)
         {
-            return channel_view.view(self.my_position.is_some());
+            return channel_view.view(self.my_position.is_some(), self.my_info);
         }
 
         // If not viewing a channel/user, show the list of channels and users

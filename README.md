@@ -1,4 +1,4 @@
-# MeshChat
+# ![MeshChat Logo](assets/images/small_icon.png) MeshChat
 
 Meshchat ia an Iced cross-platform GUI application to interact with Meshtastic LoRa radios:
 
