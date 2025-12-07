@@ -2,8 +2,8 @@ use crate::Message;
 use crate::Message::RemoveNotification;
 use crate::styles::{button_chip_style, error_notification_style, info_notification_style};
 use iced::widget::container::Style;
-use iced::widget::{Container, Row, button, text};
-use iced::{Element, Theme};
+use iced::widget::{Column, Container, Row, button, text};
+use iced::{Element, Fill, Right, Theme};
 
 /// A [Notification] can be one of two notification types:
 /// - Error(summary, detail)
@@ -53,15 +53,16 @@ impl Notifications {
     ) -> Element<'static, Message> {
         let row = Row::new()
             .width(iced::Length::Fill)
-            .push(text(summary).size(16))
+            .push(text(summary).size(20))
             .push(
-                button("OK")
-                    .style(button_chip_style)
-                    .on_press(RemoveNotification(id)),
-            )
-            .push(text(detail).size(14));
+                Column::new().width(Fill).align_x(Right).push(
+                    button("OK")
+                        .style(button_chip_style)
+                        .on_press(RemoveNotification(id)),
+                ),
+            );
 
-        Container::new(row)
+        Container::new(Column::new().push(row).push(text(detail).size(14)))
             .padding([6, 12])
             .style(style)
             .width(iced::Length::Fill)
