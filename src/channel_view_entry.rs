@@ -6,9 +6,9 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel};
 use crate::styles::{
-    COLOR_BLUE, COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE,
-    OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
-    button_chip_style, menu_button_style, message_text_style, transparent_button_style,
+    COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
+    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, menu_button_style,
+    message_text_style,
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
@@ -242,9 +242,9 @@ impl ChannelViewEntry {
             PositionMessage(lat, long) => {
                 let latitude = 0.0000001 * *lat as f64;
                 let longitude = 0.0000001 * *long as f64;
-                button(text(format!("📌 ({:.2}, {:.2})", latitude, longitude)).shaping(Advanced))
-                    .padding(0)
-                    .style(|theme, status| transparent_button_style(theme, status, COLOR_BLUE))
+                button(text(format!("📌 {:.2}, {:.2}", latitude, longitude)).shaping(Advanced))
+                    .padding([1, 5])
+                    .style(button_chip_style)
                     .on_press(ShowLocation(latitude, longitude))
                     .into()
             }
