@@ -7,9 +7,9 @@ use crate::styles::button_chip_style;
 use crate::{Message, View, device_name};
 use iced::futures::{SinkExt, Stream};
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::{Column, Row, Space, button, container, scrollable, text};
+use iced::widget::{Column, Container, Row, Space, button, container, scrollable, text};
 use iced::{Bottom, stream};
-use iced::{Element, Fill, Task, alignment};
+use iced::{Center, Element, Fill, Task, alignment};
 use meshtastic::utils::stream::{BleDevice, available_ble_devices};
 use std::collections::HashSet;
 use std::time::Duration;
@@ -95,6 +95,10 @@ impl DeviceListView {
     }
 
     pub fn view(&self, connection_state: &ConnectionState) -> Element<'static, Message> {
+        if self.discovered_devices.is_empty() {
+            return empty_view();
+        }
+
         let mut main_col = Column::new();
 
         for device in &self.discovered_devices {
@@ -121,12 +125,13 @@ impl DeviceListView {
                 }
                 Connecting(connecting_device) => {
                     if connecting_device == device {
-                        device_row = device_row.push(text("Connecting"));
+                        device_row = device_row.push(button("Connecting").style(button_chip_style));
                     }
                 }
                 Disconnecting(disconnecting_device) => {
                     if disconnecting_device == device {
-                        device_row = device_row.push(text("Disconnecting"));
+                        device_row =
+                            device_row.push(button("Disconnecting").style(button_chip_style));
                     }
                 }
             }
@@ -149,6 +154,18 @@ impl DeviceListView {
             .into()
     }
 }
+
+/// SHow a message when there are no devices found
+fn empty_view() -> Element<'static, Message> {
+    Container::new(text("Searching for compatible Meshtastic radios").size(20))
+        .padding(10)
+        .width(Fill)
+        .align_y(Center)
+        .height(Fill)
+        .align_x(Center)
+        .into()
+}
+
 /// A stream of [DiscoveryEvent] announcing the discovery or loss of devices via BLE
 pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
     stream::channel(100, move |mut gui_sender| async move {
