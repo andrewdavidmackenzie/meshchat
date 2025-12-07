@@ -11,12 +11,12 @@ use futures::SinkExt;
 use iced::stream;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
 use meshtastic::errors::Error;
-use meshtastic::packet::{PacketDestination, PacketReceiver, PacketRouter};
+use meshtastic::packet::{PacketReceiver, PacketRouter};
 use meshtastic::protobufs::config::device_config::Role;
 use meshtastic::protobufs::from_radio::PayloadVariant::{
     Channel, ClientNotification, MyInfo, NodeInfo, Packet,
 };
-use meshtastic::protobufs::{Data, FromRadio, MeshPacket, PortNum, Position, User, mesh_packet};
+use meshtastic::protobufs::{FromRadio, MeshPacket, PortNum, Position, User};
 use meshtastic::types::NodeId;
 use meshtastic::utils::stream::BleDevice;
 use meshtastic::{Message, utils};
@@ -25,11 +25,6 @@ use std::time::Duration;
 use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::{Stream, StreamExt};
-
-// TODO it looks like message id is not being set correctly, as a new message overwrites previous
-// ones in the channel view
-// I think due to change in method used to send message
-// review the crate code to see how it calls the Router, where it gets message ID from
 
 #[derive(Debug, Clone)]
 pub enum SubscriptionEvent {
@@ -262,14 +257,22 @@ async fn send_text_message(
     reply_to_id: Option<u32>,
     text: String,
 ) -> Result<(), Error> {
-    let data = Data {
-        portnum: PortNum::TextMessageApp as i32,
-        payload: text.encode_to_vec(),
-        reply_id: reply_to_id.unwrap_or(0),
-        ..Default::default()
-    };
+    let (packet_destination, mesh_channel) = channel_id.to_destination();
 
-    send_packet(stream_api, my_router, channel_id, data).await
+    stream_api
+        .send_mesh_packet(
+            my_router,
+            text.into_bytes().into(),
+            PortNum::TextMessageApp,
+            packet_destination,
+            mesh_channel,
+            true, // want_ack
+            false,
+            true, // echo_response - via PacketRouter
+            reply_to_id,
+            None, // Used for emoji reply! https://github.com/andrewdavidmackenzie/meshchat/issues/91
+        )
+        .await
 }
 
 /// Send a [Position] message to the channel or other node
@@ -279,13 +282,22 @@ async fn send_position(
     channel_id: ChannelId,
     position: Position,
 ) -> Result<(), Error> {
-    let data = Data {
-        portnum: PortNum::PositionApp as i32,
-        payload: position.encode_to_vec(),
-        ..Default::default()
-    };
+    let (packet_destination, mesh_channel) = channel_id.to_destination();
 
-    send_packet(stream_api, my_router, channel_id, data).await
+    stream_api
+        .send_mesh_packet(
+            my_router,
+            position.encode_to_vec().into(),
+            PortNum::PositionApp,
+            packet_destination,
+            mesh_channel,
+            true, // want_ack
+            false,
+            true, // echo_response - via PacketRouter
+            None,
+            None,
+        )
+        .await
 }
 
 /// Send a [User] info "ping" message to the channel or other node
@@ -294,50 +306,22 @@ async fn send_info(
     my_router: &mut MyRouter,
     channel_id: ChannelId,
 ) -> Result<(), Error> {
-    let data = Data {
-        portnum: PortNum::NodeinfoApp as i32,
-        payload: my_router.my_user.encode_to_vec(),
-        ..Default::default()
-    };
-
-    send_packet(stream_api, my_router, channel_id, data).await
-}
-
-/// Send a packet to the radio on the specific channel id (Node or channel) with [Data]
-async fn send_packet(
-    stream_api: &mut ConnectedStreamApi,
-    my_router: &mut MyRouter,
-    channel_id: ChannelId,
-    data: Data,
-) -> Result<(), Error> {
     let (packet_destination, mesh_channel) = channel_id.to_destination();
 
-    let to = match packet_destination {
-        PacketDestination::Broadcast => 0xffffffff,
-        PacketDestination::Node(node_id) => node_id.id(),
-        PacketDestination::Local => 0, // Not sure if this is correct - but shouldn't matter
-    };
-
-    // Create a mesh packet for sending, always request ACK
-    let mesh_packet = MeshPacket {
-        from: my_router.source_node_id().id(),
-        to,
-        channel: mesh_channel.channel(),
-        payload_variant: Some(mesh_packet::PayloadVariant::Decoded(data)),
-        want_ack: true,
-        ..Default::default()
-    };
-
-    // Create the payload variant
-    let payload_variant = Some(meshtastic::protobufs::to_radio::PayloadVariant::Packet(
-        mesh_packet.clone(),
-    ));
-
-    // Send using the stream API's send_to_radio_packet method
-    stream_api.send_to_radio_packet(payload_variant).await?;
-
-    // Inform GUI via my packet router that it was sent
-    my_router.handle_mesh_packet(mesh_packet)
+    stream_api
+        .send_mesh_packet(
+            my_router,
+            my_router.my_user.encode_to_vec().into(),
+            PortNum::NodeinfoApp,
+            packet_destination,
+            mesh_channel,
+            true, // want_ack
+            false,
+            true, // echo_response - via PacketRouter
+            None,
+            None,
+        )
+        .await
 }
 
 /// Connect to a specific [BleDevice] and return a [PacketReceiver] that receives messages from the

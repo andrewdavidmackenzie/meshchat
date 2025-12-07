@@ -200,7 +200,13 @@ impl ChannelViewEntry {
         // Add the source node name if there is one
         if let Some(name) = &self.name {
             let text_color = Self::color_from_name(name);
-            let mut top_row = Row::new().padding(0).align_y(Top).push(
+            let mut top_row = Row::new().padding(0).align_y(Top);
+
+            if !mine {
+                top_row = top_row.push(self.menu_bar()).push(Space::with_width(2.0));
+            }
+
+            top_row = top_row.push(
                 text(name)
                     .shaping(Advanced)
                     .font(Font {
@@ -209,10 +215,6 @@ impl ChannelViewEntry {
                     })
                     .color(text_color),
             );
-
-            if !mine {
-                top_row = top_row.push(self.menu_bar());
-            }
 
             message_content_column = message_content_column.push(top_row);
         }
@@ -273,9 +275,10 @@ impl ChannelViewEntry {
         } else {
             OTHERS_MESSAGE_BUBBLE_STYLE
         };
+
         let mut message_row = Row::new().padding([6, 6]);
         if !self.emojis().is_empty() {
-            // But the emoji_row up against the bubble
+            // Butt the emoji_row up against the bubble
             message_row = message_row.padding(Padding {
                 top: 6.0,
                 right: 6.0,
@@ -368,6 +371,7 @@ fn menu_button(
 
 fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer> {
     button(text(label).size(14))
+        .padding([0, 4])
         .style(button_chip_style)
         .on_press(Message::None) // Needed for styling to work
 }

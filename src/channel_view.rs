@@ -217,11 +217,12 @@ impl ChannelView {
         }
 
         let channel_buttons = Row::new()
+            .padding([2, 0])
             .push(send_position_button)
             .push(Space::with_width(6))
             .push(send_info_button);
 
-        // Place the scrollable in a column, with an input box at the bottom
+        // Place the scrollable in a column, with a row of buttons at the bottom
         let mut column = Column::new()
             .padding(4)
             .push(channel_scroll)

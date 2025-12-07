@@ -435,7 +435,7 @@ impl DeviceView {
                             eprintln!("No lat/lon for Position: {:?}", position);
                         }
                     } else {
-                        eprintln!("No channel for ChannelId: {}", channel_id);
+                        eprintln!("No channel for: {}", channel_id);
                     }
                 }
                 Ok(PortNum::TelemetryApp) => {
@@ -463,7 +463,7 @@ impl DeviceView {
                         );
                         channel_view.new_message(new_message);
                     } else {
-                        eprintln!("No channel for ChannelId: {}", channel_id);
+                        eprintln!("NodeInfoApp: No channel for: {}", user.long_name);
                     }
                 }
                 _ => eprintln!("Unexpected payload type from radio: {}", data.portnum),
