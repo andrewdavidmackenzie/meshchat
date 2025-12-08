@@ -294,9 +294,10 @@ impl DeviceView {
         if Some(node_info.num) == self.my_node_num {
             self.my_position = node_info.position;
             self.my_info = true;
-        } else if !node_info.is_ignored
-            && node_info.user.is_some()
-            && node_info.user.as_ref().unwrap().role() == device_config::Role::Client
+        }
+
+        if !node_info.is_ignored
+            && node_info.user.as_ref().map(|u| u.role()) == Some(device_config::Role::Client)
         {
             let channel_id = Node(node_info.num);
             self.nodes.insert(node_info.num, node_info);
@@ -579,7 +580,8 @@ impl DeviceView {
         let mut channels_list = Column::new();
 
         if !self.channels.is_empty() {
-            channels_list = channels_list.push(self.section_header("Channels"));
+            channels_list = channels_list
+                .push(self.section_header(format!("Channels ({})", self.channels.len())));
         }
 
         for (index, channel) in self.channels.iter().enumerate() {
@@ -616,7 +618,8 @@ impl DeviceView {
 
         // If there are favourite nodes, show the header and list them
         if !fav_nodes.is_empty() {
-            channels_list = channels_list.push(self.section_header("Favourite Nodes"));
+            channels_list = channels_list
+                .push(self.section_header(format!("Favourite Nodes ({})", fav_nodes.len())));
             for (fav_node_id, node_name) in fav_nodes {
                 let channel_id = Node(fav_node_id);
                 if let Some(channel_view) = self.channel_views.get(&channel_id) {
@@ -633,10 +636,13 @@ impl DeviceView {
         let node_list = self
             .nodes
             .keys()
-            .filter(|node_id| !config.fav_nodes.contains(node_id))
+            .filter(|node_id| {
+                !config.fav_nodes.contains(node_id) && Some(**node_id) != self.my_node_num
+            })
             .collect::<Vec<_>>();
         if !node_list.is_empty() {
-            channels_list = channels_list.push(self.section_header("Nodes"));
+            channels_list =
+                channels_list.push(self.section_header(format!("Nodes ({})", node_list.len())));
 
             for node_id in node_list {
                 if let Some(node_name) = self.node_name(*node_id) {
@@ -676,7 +682,7 @@ impl DeviceView {
     }
 
     /// Add a section header between areas of the list
-    fn section_header(&self, title: &'static str) -> Element<'static, Message> {
+    fn section_header(&self, title: String) -> Element<'_, Message> {
         Column::new()
             .push(
                 Container::new(text(title).size(16))
