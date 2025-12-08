@@ -248,11 +248,17 @@ impl ChannelViewEntry {
                     .on_press(ShowLocation(latitude, longitude))
                     .into()
             }
-            UserMessage(user) => text(format!("ⓘ {}", user.short_name))
-                .style(message_text_style)
-                .size(18)
-                .shaping(Advanced)
-                .into(),
+            UserMessage(user) => text(format!(
+                "ⓘ from {} ({}), id = '{}', with hardware '{}'",
+                user.long_name,
+                user.short_name,
+                user.id,
+                user.hw_model().as_str_name()
+            ))
+            .style(message_text_style)
+            .size(18)
+            .shaping(Advanced)
+            .into(),
             EmojiReply(_, _) => text("").into(), // Should never happen
         };
 
