@@ -95,7 +95,7 @@ impl MyRouter {
                 self.my_node_num = Some(my_info.my_node_num);
             }
 
-            // Once I know my own node id number then I can capture my own node's [User] info
+            // Once I know my own node id number, then I can capture my own node's [User] info
             if let NodeInfo(node_info) = &payload_variant
                 && Some(node_info.num) == self.my_node_num
                 && let Some(user) = &node_info.user
