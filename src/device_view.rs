@@ -133,77 +133,72 @@ impl DeviceView {
                 self.viewing_channel = channel_id;
                 self.connection_state = Connecting(device.clone());
                 let sender = self.subscription_sender.clone();
-                Task::perform(request_connection(sender.unwrap(), device.clone()), |_| {
+                return Task::perform(request_connection(sender.unwrap(), device.clone()), |_| {
                     Navigation(View::Device)
-                })
+                });
             }
             DisconnectRequest(name, exit) => {
                 self.exit_pending = exit;
                 self.connection_state = Disconnecting(name);
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
-                Task::perform(request_disconnection(sender.unwrap()), |_| {
+                return Task::perform(request_disconnection(sender.unwrap()), |_| {
                     Navigation(DeviceList)
-                })
+                });
             }
             ShowChannel(channel_id) => {
                 if let Connected(device) = &self.connection_state {
                     let channel_id_clone = channel_id.clone();
                     let device_clone = device.clone();
                     self.viewing_channel = channel_id;
-                    Task::perform(empty(), move |_| {
+                    return Task::perform(empty(), move |_| {
                         Message::ConfigChange(DeviceAndChannel(
                             Some(device_clone.clone()),
                             channel_id_clone.clone(),
                         ))
-                    })
-                } else {
-                    Task::none()
+                    });
                 }
             }
             SubscriptionMessage(subscription_event) => {
-                self.process_subscription_event(subscription_event)
+                return self.process_subscription_event(subscription_event);
             }
             SendTextMessage(message, index, reply_to_id) => {
-                let sender = self.subscription_sender.clone();
-                Task::perform(
-                    request_send(sender.unwrap(), message, index, reply_to_id),
-                    |_| Message::None,
-                )
+                if let Some(sender) = self.subscription_sender.clone() {
+                    return Task::perform(
+                        request_send(sender, message, index, reply_to_id),
+                        |_| Message::None,
+                    );
+                }
             }
             SendPositionMessage(channel_id) => {
-                if let Some(position) = &self.my_position {
-                    let sender = self.subscription_sender.clone();
-                    Task::perform(
-                        request_send_position(sender.unwrap(), channel_id, *position),
+                if let Some(position) = &self.my_position
+                    && let Some(sender) = self.subscription_sender.clone()
+                {
+                    return Task::perform(
+                        request_send_position(sender, channel_id, *position),
                         |_| Message::None,
-                    )
-                } else {
-                    Task::none()
+                    );
                 }
             }
             SendInfoMessage(channel_id) => {
                 let sender = self.subscription_sender.clone();
-                Task::perform(request_send_info(sender.unwrap(), channel_id), |_| {
+                return Task::perform(request_send_info(sender.unwrap(), channel_id), |_| {
                     Message::None
-                })
+                });
             }
             ChannelMsg(msg) => {
-                if let Some(channel_id) = &self.viewing_channel {
-                    if let Some(channel_view) = self.channel_views.get_mut(channel_id) {
-                        channel_view.update(msg)
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    Task::none()
+                if let Some(channel_id) = &self.viewing_channel
+                    && let Some(channel_view) = self.channel_views.get_mut(channel_id)
+                {
+                    return channel_view.update(msg);
                 }
             }
             SearchInput(filter) => {
                 self.filter = filter;
-                Task::none()
             }
         }
+
+        Task::none()
     }
 
     /// Process an event sent by the subscription connected to the radio
@@ -700,8 +695,8 @@ impl DeviceView {
         let name = channel
             .settings
             .as_ref()
-            .map(|s| s.name.clone())
-            .unwrap_or("".to_string());
+            .map(|s| s.name.as_str())
+            .unwrap_or("");
         format!("🛜  {}", name)
     }
 
