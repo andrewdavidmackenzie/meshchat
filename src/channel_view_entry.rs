@@ -18,7 +18,7 @@ use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use iced_aw::menu::{Item, Menu};
 use iced_aw::{MenuBar, menu_bar, menu_items};
-use meshtastic::protobufs::User;
+use meshtastic::protobufs::{NodeInfo, User};
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -45,18 +45,17 @@ pub struct ChannelViewEntry {
     message_id: u32,
     rx_daytime: DateTime<Local>,
     payload: Payload,
-    name: String,
     seen: bool,
     acked: bool,
-    /// Map of emojis and for each emoji there is the string for it and a number of node ides
+    /// Map of emojis and for each emoji there is the string for it and a number of node ids
     /// who sent that emoji
-    emoji_reply: HashMap<String, Vec<String>>,
+    emoji_reply: HashMap<String, Vec<u32>>,
 }
 
 impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(payload: Payload, from: u32, message_id: u32, name: String, seen: bool) -> Self {
+    pub fn new(payload: Payload, from: u32, message_id: u32, seen: bool) -> Self {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())
@@ -70,7 +69,6 @@ impl ChannelViewEntry {
             from,
             message_id,
             rx_daytime,
-            name,
             seen,
             acked: false,
             emoji_reply: HashMap::new(),
@@ -111,11 +109,11 @@ impl ChannelViewEntry {
     }
 
     /// Add an emoji reply to this entry
-    pub fn add_emoji(&mut self, emoji_string: String, emoji_source: &str) {
+    pub fn add_emoji(&mut self, emoji_string: String, from: u32) {
         self.emoji_reply
             .entry(emoji_string)
-            .and_modify(|sender_vec| sender_vec.push(emoji_source.into()))
-            .or_insert(vec![emoji_source.into()]);
+            .and_modify(|sender_vec| sender_vec.push(from))
+            .or_insert(vec![from]);
     }
 
     /// Return true if the radio has acknowledged this message
@@ -124,18 +122,13 @@ impl ChannelViewEntry {
     }
 
     /// Return the emoji reply to this message, if any.
-    pub fn emojis(&self) -> &HashMap<String, Vec<String>> {
+    pub fn emojis(&self) -> &HashMap<String, Vec<u32>> {
         &self.emoji_reply
     }
 
     /// Return the time this message was received/sent as u64 seconds in EPOCH time
     pub fn time(&self) -> DateTime<Local> {
         self.rx_daytime
-    }
-
-    /// Return the optional name of the sender of this message
-    pub fn name(&self) -> &str {
-        &self.name
     }
 
     /// Order two messages - using the rx_daytime field.
@@ -150,7 +143,7 @@ impl ChannelViewEntry {
 
     /// Hash the node name into a color index - to be able to assign a consistent color to the text
     /// name for a node in the UI
-    fn color_from_name(name: &String) -> Color {
+    fn color_from_id(name: u32) -> Color {
         let mut hasher = DefaultHasher::new();
         name.hash(&mut hasher);
         let hash = hasher.finish();
@@ -171,14 +164,19 @@ impl ChannelViewEntry {
 
     /// Return an element (currently a Column) with a list of the names of the nodes that sent the
     /// given emoji.
-    fn list_of_nodes(sources: &Vec<String>) -> Element<'static, Message> {
+    fn list_of_nodes<'a>(
+        nodes: &'a HashMap<u32, NodeInfo>,
+        sources: &'a Vec<u32>,
+    ) -> Element<'a, Message> {
         let mut col = Column::new();
         for source in sources {
-            col = col.push(
-                text(source.clone())
-                    .color(Self::color_from_name(source))
-                    .shaping(Advanced),
-            );
+            if let Some(name) = Self::short_name(nodes, *source) {
+                col = col.push(
+                    text(name)
+                        .color(Self::color_from_id(*source))
+                        .shaping(Advanced),
+                );
+            }
         }
         col.into()
     }
@@ -187,12 +185,16 @@ impl ChannelViewEntry {
     pub fn view<'a>(
         &'a self,
         entries: &'a RingMap<u32, ChannelViewEntry>,
+        nodes: &'a HashMap<u32, NodeInfo>,
         mine: bool,
-    ) -> Element<'a, Message> {
+    ) -> Option<Element<'a, Message>> {
+        let name = Self::short_name(nodes, self.from)?;
+
         let mut message_content_column = Column::new();
 
-        // Add the top row with the source node name if there is one
-        message_content_column = self.top_row(message_content_column, mine);
+        if !mine {
+            message_content_column = self.top_row(message_content_column, name);
+        }
 
         let content: Element<'static, Message> = match self.payload() {
             NewTextMessage(text_msg) => text(text_msg.clone())
@@ -224,7 +226,7 @@ impl ChannelViewEntry {
                     .into()
             }
             UserMessage(user) => text(format!(
-                "ⓘ from {} ({}), id = '{}', with hardware '{}'",
+                "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
                 user.long_name,
                 user.short_name,
                 user.id,
@@ -292,27 +294,26 @@ impl ChannelViewEntry {
         };
 
         // Add the emoji row outside the bubble, below it
-        message_column = self.emoji_row(message_column);
+        message_column = self.emoji_row(nodes, message_column);
 
-        message_column.into()
+        Some(message_column.into())
     }
 
-    /// Add a row to the content column with the name of the source node, if any
+    /// Add a row to the content column with the name of the source node
     fn top_row<'a>(
         &'a self,
-        mut message_content_column: Column<'a, Message>,
-        mine: bool,
+        message_content_column: Column<'a, Message>,
+        name: &'a str,
     ) -> Column<'a, Message> {
-        // Add the source node name if there is one
-        let text_color = Self::color_from_name(&self.name);
+        let text_color = Self::color_from_id(self.from);
         let mut top_row = Row::new().padding(0).align_y(Top);
 
-        if !mine {
-            top_row = top_row.push(self.menu_bar()).push(Space::with_width(2.0));
-        }
+        top_row = top_row
+            .push(self.menu_bar(name))
+            .push(Space::with_width(2.0));
 
         top_row = top_row.push(
-            text(&self.name)
+            text(name)
                 .shaping(Advanced)
                 .font(Font {
                     weight: Weight::Bold,
@@ -321,13 +322,24 @@ impl ChannelViewEntry {
                 .color(text_color),
         );
 
-        message_content_column = message_content_column.push(top_row);
+        message_content_column.push(top_row)
+    }
 
-        message_content_column
+    /// Return an Optional name to display in the message box as the source of a message.
+    /// If the message is from myself, then return None.
+    fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> Option<&str> {
+        nodes
+            .get(&from)
+            .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
+            .map(|user: &User| user.short_name.as_ref())
     }
 
     /// Append an element to the column that contains the emoji replies for this message, if any.
-    fn emoji_row<'a>(&self, mut message_column: Column<'a, Message>) -> Column<'a, Message> {
+    fn emoji_row<'a>(
+        &'a self,
+        nodes: &'a HashMap<u32, NodeInfo>,
+        mut message_column: Column<'a, Message>,
+    ) -> Column<'a, Message> {
         if !self.emojis().is_empty() {
             let mut emoji_row = Row::new().padding(Padding {
                 top: -4.0,
@@ -336,7 +348,7 @@ impl ChannelViewEntry {
                 left: 6.0,
             });
             for (emoji, sources) in self.emojis() {
-                let tooltip_element: Element<'_, Message> = Self::list_of_nodes(sources);
+                let tooltip_element: Element<'_, Message> = Self::list_of_nodes(nodes, sources);
                 emoji_row = emoji_row.push(
                     tooltip(
                         text(emoji.clone()).size(18).align_y(Top).shaping(Advanced),
@@ -355,10 +367,10 @@ impl ChannelViewEntry {
 
     // TODO differentiate if we are in a node or channel view
     // if a node view, don't show the DM menu item
-    fn menu_bar<'a>(&self) -> MenuBar<'a, Message, Theme, Renderer> {
+    fn menu_bar<'a>(&self, name: &'a str) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);
 
-        let dm = format!("DM with {}", self.name);
+        let dm = format!("DM with {}", name);
         #[rustfmt::skip]
         let menu_items = menu_items!(
             //(menu_button("forward".into(), Message::None))

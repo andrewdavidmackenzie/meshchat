@@ -22,9 +22,11 @@ use iced::widget::{
 };
 use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
 use meshtastic::packet::PacketDestination;
+use meshtastic::protobufs::NodeInfo;
 use meshtastic::types::{MeshChannel, NodeId};
 use ringmap::RingMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
@@ -102,9 +104,9 @@ impl ChannelView {
     }
 
     /// Add an emoji reply to a message.
-    fn add_emoji_to(&mut self, request_id: u32, emoji_string: String, source_name: &str) {
+    fn add_emoji_to(&mut self, request_id: u32, emoji_string: String, from: u32) {
         if let Some(entry) = self.entries.get_mut(&request_id) {
-            entry.add_emoji(emoji_string, source_name);
+            entry.add_emoji(emoji_string, from);
         }
     }
 
@@ -119,7 +121,7 @@ impl ChannelView {
                 );
             }
             EmojiReply(reply_to_id, emoji_string) => {
-                self.add_emoji_to(*reply_to_id, emoji_string.clone(), new_message.name());
+                self.add_emoji_to(*reply_to_id, emoji_string.clone(), new_message.from());
             }
         };
     }
@@ -167,7 +169,12 @@ impl ChannelView {
     }
 
     /// Construct an Element that displays the channel view
-    pub fn view(&self, enable_position: bool, enable_my_info: bool) -> Element<'_, Message> {
+    pub fn view<'a>(
+        &'a self,
+        nodes: &'a HashMap<u32, NodeInfo>,
+        enable_position: bool,
+        enable_my_info: bool,
+    ) -> Element<'a, Message> {
         let mut channel_view = Column::new().padding(right(10));
 
         let mut previous_day = u32::MIN;
@@ -182,8 +189,11 @@ impl ChannelView {
                 previous_day = message_day;
             }
 
-            channel_view =
-                channel_view.push(entry.view(&self.entries, entry.source_node(self.my_source)));
+            if let Some(element) =
+                entry.view(&self.entries, nodes, entry.source_node(self.my_source))
+            {
+                channel_view = channel_view.push(element);
+            }
         }
 
         // Wrap the list of messages in a scrollable container, with a scrollbar
@@ -348,31 +358,16 @@ mod test {
 
         // create a set of messages with more than a second between them
         // message ids are not in order
-        let oldest_message = ChannelViewEntry::new(
-            NewTextMessage("Hello 1".to_string()),
-            1,
-            1,
-            "Source 1".to_string(),
-            false,
-        );
+        let oldest_message =
+            ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1, false);
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let middle_message = ChannelViewEntry::new(
-            NewTextMessage("Hello 2".to_string()),
-            2,
-            1000,
-            "Source 2".to_string(),
-            false,
-        );
+        let middle_message =
+            ChannelViewEntry::new(NewTextMessage("Hello 2".to_string()), 2, 1000, false);
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let newest_message = ChannelViewEntry::new(
-            NewTextMessage("Hello 3".to_string()),
-            1,
-            500,
-            "Source 1".to_string(),
-            false,
-        );
+        let newest_message =
+            ChannelViewEntry::new(NewTextMessage("Hello 3".to_string()), 1, 500, false);
 
         // Add them in order
         channel_view.new_message(oldest_message.clone());
