@@ -1,6 +1,4 @@
-use crate::ConfigChangeMessage::DeviceAndChannel;
-use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
-use crate::View::DeviceList;
+use crate::battery::{Battery, BatteryState};
 use crate::channel_view::ChannelId::Node;
 use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
@@ -20,6 +18,10 @@ use crate::device_view::DeviceViewMessage::{
     ChannelMsg, ConnectRequest, DisconnectRequest, SearchInput, SendInfoMessage,
     SendPositionMessage, SendTextMessage, ShowChannel, SubscriptionMessage,
 };
+
+use crate::ConfigChangeMessage::DeviceAndChannel;
+use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
+use crate::View::DeviceList;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, fav_button_style, text_input_style,
 };
@@ -81,6 +83,7 @@ pub struct DeviceView {
     nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
     filter: String,
     exit_pending: bool,
+    battery_level: Option<u32>,
 }
 
 async fn request_connection(sender: Sender<SubscriberMessage>, device: BleDevice) {
@@ -427,7 +430,7 @@ impl DeviceView {
                     if mesh_packet.from == self.my_node_num.unwrap()
                         && let Some(DeviceMetrics(metrics)) = telemetry.variant
                     {
-                        println!("My Battery Level: {}", metrics.battery_level.unwrap())
+                        self.battery_level = metrics.battery_level;
                     }
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
@@ -494,7 +497,21 @@ impl DeviceView {
                     button = button.on_press(DeviceViewEvent(ShowChannel(None)));
                 }
 
-                header.push(button)
+                header = header.push(button);
+
+                match self.battery_level {
+                    Some(battery_level) if battery_level <= 100 => {
+                        let battery = Battery::new().state(BatteryState::Charged(battery_level));
+                        header = header.push(battery);
+                    }
+                    Some(_) => {
+                        let battery = Battery::new().state(BatteryState::Charging);
+                        header = header.push(battery);
+                    }
+                    None => {}
+                }
+
+                header
             }
             Disconnecting(device) => {
                 let button =

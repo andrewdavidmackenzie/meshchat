@@ -22,6 +22,7 @@ use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;
 
+mod battery;
 mod channel_view;
 mod channel_view_entry;
 mod config;
