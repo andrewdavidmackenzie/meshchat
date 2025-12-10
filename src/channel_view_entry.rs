@@ -1,5 +1,5 @@
 use crate::Message;
-use crate::Message::{DeviceViewEvent, ShowLocation};
+use crate::Message::{CopyToClipBoard, DeviceViewEvent, ShowLocation};
 use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
     EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -192,16 +192,15 @@ impl ChannelViewEntry {
 
         let mut message_content_column = Column::new();
 
-        if !mine {
-            message_content_column = self.top_row(message_content_column, name);
-        }
-
-        let content: Element<'static, Message> = match self.payload() {
-            NewTextMessage(text_msg) => text(text_msg.clone())
-                .style(message_text_style)
-                .size(18)
-                .shaping(Advanced)
-                .into(),
+        let (content, message_text): (Element<'static, Message>, String) = match self.payload() {
+            NewTextMessage(text_msg) => (
+                text(text_msg.clone())
+                    .style(message_text_style)
+                    .size(18)
+                    .shaping(Advanced)
+                    .into(),
+                text_msg.clone(),
+            ),
             TextMessageReply(reply_to_id, text_msg) => {
                 if let Some(original_text) = Self::text_from_id(entries, *reply_to_id) {
                     let quote_row = Row::new()
@@ -210,34 +209,51 @@ impl ChannelViewEntry {
                     message_content_column = message_content_column.push(quote_row);
                 };
 
-                text(text_msg.clone())
-                    .style(message_text_style)
-                    .size(18)
-                    .shaping(Advanced)
-                    .into()
+                (
+                    text(text_msg.clone())
+                        .style(message_text_style)
+                        .size(18)
+                        .shaping(Advanced)
+                        .into(),
+                    text_msg.clone(),
+                )
             }
             PositionMessage(lat, long) => {
                 let latitude = 0.0000001 * *lat as f64;
                 let longitude = 0.0000001 * *long as f64;
-                button(text(format!("📌 {:.2}, {:.2}", latitude, longitude)).shaping(Advanced))
-                    .padding([1, 5])
-                    .style(button_chip_style)
-                    .on_press(ShowLocation(latitude, longitude))
-                    .into()
+                let location_text = format!("📌 {:.2}, {:.2}", latitude, longitude);
+                (
+                    button(text(location_text.clone()).shaping(Advanced))
+                        .padding([1, 5])
+                        .style(button_chip_style)
+                        .on_press(ShowLocation(latitude, longitude))
+                        .into(),
+                    location_text,
+                )
             }
-            UserMessage(user) => text(format!(
-                "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
-                user.long_name,
-                user.short_name,
-                user.id,
-                user.hw_model().as_str_name()
-            ))
-            .style(message_text_style)
-            .size(18)
-            .shaping(Advanced)
-            .into(),
-            EmojiReply(_, _) => text("").into(), // Should never happen
+            UserMessage(user) => {
+                let user_text = format!(
+                    "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
+                    user.long_name,
+                    user.short_name,
+                    user.id,
+                    user.hw_model().as_str_name()
+                );
+                (
+                    text(user_text.clone())
+                        .style(message_text_style)
+                        .size(18)
+                        .shaping(Advanced)
+                        .into(),
+                    user_text,
+                )
+            }
+            EmojiReply(_, _) => (text("").into(), String::default()), // Should never happen
         };
+
+        if !mine {
+            message_content_column = self.top_row(message_content_column, name, message_text);
+        }
 
         // Create the row with message text and time and maybe an ACK tick mark
         let mut text_and_time_row = Row::new()
@@ -304,12 +320,13 @@ impl ChannelViewEntry {
         &'a self,
         message_content_column: Column<'a, Message>,
         name: &'a str,
+        message: String,
     ) -> Column<'a, Message> {
         let text_color = Self::color_from_id(self.from);
         let mut top_row = Row::new().padding(0).align_y(Top);
 
         top_row = top_row
-            .push(self.menu_bar(name))
+            .push(self.menu_bar(name, message))
             .push(Space::with_width(2.0));
 
         top_row = top_row.push(
@@ -367,14 +384,18 @@ impl ChannelViewEntry {
 
     // TODO differentiate if we are in a node or channel view
     // if a node view, don't show the DM menu item
-    fn menu_bar<'a>(&self, name: &'a str) -> MenuBar<'a, Message, Theme, Renderer> {
+    fn menu_bar<'a>(
+        &self,
+        name: &'a str,
+        message: String,
+    ) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);
 
         let dm = format!("DM with {}", name);
         #[rustfmt::skip]
         let menu_items = menu_items!(
             //(menu_button("forward".into(), Message::None))
-            //(menu_button("copy".into(), Message::None))
+            (menu_button("copy".into(), CopyToClipBoard(message.to_string())))
             (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id)))))
             //(menu_button("react".into(), Message::None))
             (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))

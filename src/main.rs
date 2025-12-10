@@ -2,8 +2,9 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AppError, AppNotification, ConfigChange, DeviceListViewEvent, DeviceViewEvent, Exit,
-    Navigation, NewConfig, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
+    AppError, AppNotification, ConfigChange, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent,
+    Exit, Navigation, NewConfig, RemoveNotification, ShowLocation, ToggleNodeFavourite,
+    WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId;
@@ -16,7 +17,7 @@ use crate::linear::Linear;
 use crate::notification::{Notification, Notifications};
 use iced::widget::{Column, Space};
 use iced::{Element, Fill};
-use iced::{Event, Subscription, Task, window};
+use iced::{Event, Subscription, Task, clipboard, window};
 use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;
@@ -72,6 +73,7 @@ pub enum Message {
     AppError(String, String),
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
+    CopyToClipBoard(String),
     None,
 }
 
@@ -158,6 +160,7 @@ impl MeshChat {
                 // and save the config asynchronously, so that we don't block the GUI thread
                 save_config(&self.config)
             }
+            CopyToClipBoard(string) => clipboard::write(string),
         }
     }
 

@@ -248,10 +248,14 @@ impl ChannelView {
                 ),
             };
             column = column.push(
-                container(text(format!("Replying to: {}", original_text)).font(Font {
-                    style: Italic,
-                    ..Default::default()
-                }))
+                container(
+                    text(format!("Replying to: {}", original_text))
+                        .shaping(Advanced)
+                        .font(Font {
+                            style: Italic,
+                            ..Default::default()
+                        }),
+                )
                 .style(reply_to_style),
             );
         }
