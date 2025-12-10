@@ -213,12 +213,12 @@ where
                 let icon_x = bounds.x + (battery_body.width - icon_size) / 2.0;
                 let icon_y = bounds.y + (bounds.height - icon_size) / 2.0;
 
-                // Draw a simple lightning bolt shape using two triangles/quads
+                // Draw a simple lightning bolt shape using two quads
                 // Top part of lightning bolt
                 let top_part = Rectangle {
                     x: icon_x + icon_size * 0.3,
                     y: icon_y,
-                    width: icon_size * 0.4,
+                    width: icon_size * 0.2,
                     height: icon_size * 0.5,
                 };
 
@@ -226,7 +226,7 @@ where
                 let bottom_part = Rectangle {
                     x: icon_x + icon_size * 0.2,
                     y: icon_y + icon_size * 0.4,
-                    width: icon_size * 0.4,
+                    width: icon_size * 0.2,
                     height: icon_size * 0.6,
                 };
 
@@ -286,97 +286,7 @@ where
                     );
                 }
             }
-            BatteryState::Unknown => {
-                // Draw a question mark using geometric shapes
-                let icon_size = bounds.height * 0.7;
-                let icon_x = bounds.x + (battery_body.width - icon_size) / 2.0;
-                let icon_y = bounds.y + (bounds.height - icon_size) / 2.0;
-                let stroke_width = icon_size * 0.15;
-
-                // Top curved part of the question mark (hook shape)
-                // Left vertical part
-                let top_left = Rectangle {
-                    x: icon_x + icon_size * 0.3,
-                    y: icon_y,
-                    width: stroke_width,
-                    height: icon_size * 0.4,
-                };
-
-                // Top horizontal part
-                let top_horizontal = Rectangle {
-                    x: icon_x + icon_size * 0.3,
-                    y: icon_y,
-                    width: icon_size * 0.4,
-                    height: stroke_width,
-                };
-
-                // Right vertical part (curved section)
-                let top_right = Rectangle {
-                    x: icon_x + icon_size * 0.6,
-                    y: icon_y + icon_size * 0.15,
-                    width: stroke_width,
-                    height: icon_size * 0.25,
-                };
-
-                // Middle vertical line
-                let middle = Rectangle {
-                    x: icon_x + icon_size * 0.45,
-                    y: icon_y + icon_size * 0.4,
-                    width: stroke_width,
-                    height: icon_size * 0.25,
-                };
-
-                // Bottom dot
-                let dot = Rectangle {
-                    x: icon_x + icon_size * 0.4,
-                    y: icon_y + icon_size * 0.7,
-                    width: icon_size * 0.2,
-                    height: icon_size * 0.2,
-                };
-
-                // Draw all parts of the question mark
-                let question_color = custom_style.unknown_color;
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: top_left,
-                        ..renderer::Quad::default()
-                    },
-                    Background::Color(question_color),
-                );
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: top_horizontal,
-                        ..renderer::Quad::default()
-                    },
-                    Background::Color(question_color),
-                );
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: top_right,
-                        ..renderer::Quad::default()
-                    },
-                    Background::Color(question_color),
-                );
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: middle,
-                        ..renderer::Quad::default()
-                    },
-                    Background::Color(question_color),
-                );
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: dot,
-                        border: Border {
-                            radius: Radius::from(icon_size * 0.1),
-                            width: 0.0,
-                            color: Color::TRANSPARENT,
-                        },
-                        ..renderer::Quad::default()
-                    },
-                    Background::Color(question_color),
-                );
-            }
+            BatteryState::Unknown => {}
         }
     }
 

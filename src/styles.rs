@@ -442,13 +442,13 @@ pub fn menu_button_style(_theme: &Theme, _status: iced_aw::style::Status) -> men
 /// Returns the dark style appearance for the battery widget
 pub fn battery_style(_theme: &Theme) -> BatteryAppearance {
     BatteryAppearance {
-        background_color: COLOR_GRAY_10,     // Very dark background
-        border_color: COLOR_GRAY_80,         // Light gray border
-        charging_color: COLOR_GREEN,         // Cyan for charging
-        charge_high_color: COLOR_DARK_GREEN, // Dark green for high charge (>50%)
-        charge_medium_color: COLOR_ORANGE,   // Orange for medium charge (20-50%)
-        charge_low_color: COLOR_DARK_RED,    // Dark red for low charge (<20%)
-        unknown_color: COLOR_GRAY_40,        // Medium gray for unknown state
+        background_color: COLOR_GRAY_10,   // Very dark background
+        border_color: COLOR_GRAY_80,       // Light gray border
+        charging_color: COLOR_GREEN,       // Green for charging
+        charge_high_color: COLOR_GREEN,    // Dark green for high charge (>50%)
+        charge_medium_color: COLOR_ORANGE, // Orange for medium charge (20-50%)
+        charge_low_color: COLOR_RED,       // Dark red for low charge (<20%)
+        unknown_color: COLOR_GRAY_40,      // Medium gray for unknown state
     }
 }
 
@@ -458,9 +458,9 @@ pub fn battery_style_dark(_theme: &Theme) -> BatteryAppearance {
         background_color: COLOR_GRAY_10,
         border_color: COLOR_GRAY_80,
         charging_color: COLOR_GREEN,
-        charge_high_color: COLOR_DARK_GREEN,
+        charge_high_color: COLOR_GREEN,
         charge_medium_color: COLOR_ORANGE,
-        charge_low_color: COLOR_DARK_RED,
+        charge_low_color: COLOR_RED,
         unknown_color: COLOR_GRAY_40,
     }
 }
