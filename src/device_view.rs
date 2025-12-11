@@ -733,13 +733,10 @@ impl DeviceView {
         row = if let Some(node) = self.nodes.get(&node_id)
             && let Some(position) = &node.position
         {
-            let latitude = 0.0000001 * position.latitude_i() as f64;
-            let longitude = 0.0000001 * position.longitude_i() as f64;
-
             row.push(
                 button(text("📌").shaping(Advanced))
                     .style(fav_button_style)
-                    .on_press(ShowLocation(latitude, longitude)),
+                    .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
             )
         } else {
             row.push(Space::with_width(30))

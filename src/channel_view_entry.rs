@@ -74,15 +74,6 @@ impl ChannelViewEntry {
             emoji_reply: HashMap::new(),
         }
     }
-
-    pub fn as_new_message(&self) -> Option<&String> {
-        if let NewTextMessage(text_message) = self.payload() {
-            Some(text_message)
-        } else {
-            None
-        }
-    }
-
     /// Return the node id that sent the message
     pub fn from(&self) -> u32 {
         self.from
@@ -136,9 +127,19 @@ impl ChannelViewEntry {
         left.rx_daytime.cmp(&right.rx_daytime)
     }
 
-    /// Return the text of a NewTextMessage that matches the given id, or None if not found
-    fn text_from_id(entries: &RingMap<u32, ChannelViewEntry>, id: u32) -> Option<&String> {
-        entries.get(&id).and_then(|entry| entry.as_new_message())
+    /// Return the text to use when replying to this message
+    fn reply_quote(entries: &RingMap<u32, ChannelViewEntry>, id: u32) -> Option<String> {
+        entries.get(&id).and_then(|entry| {
+            match entry.payload() {
+                NewTextMessage(text_message) => Some(format!("Re: {}", text_message)),
+                TextMessageReply(_, reply_text) => Some(format!("Re: {}", reply_text)),
+                EmojiReply(_, _) => None, // Not possible
+                PositionMessage(lat, long) => {
+                    Some(format!("Re: {}", Self::location_text(lat, long)))
+                }
+                UserMessage(user) => Some(format!("Re: {}", Self::user_text(user))),
+            }
+        })
     }
 
     /// Hash the node name into a color index - to be able to assign a consistent color to the text
@@ -202,10 +203,9 @@ impl ChannelViewEntry {
                 text_msg.clone(),
             ),
             TextMessageReply(reply_to_id, text_msg) => {
-                if let Some(original_text) = Self::text_from_id(entries, *reply_to_id) {
-                    let quote_row = Row::new()
-                        .push(text("Re: ").color(COLOR_GREEN).shaping(Advanced))
-                        .push(text(original_text).color(COLOR_GREEN).shaping(Advanced));
+                if let Some(reply_quote) = Self::reply_quote(entries, *reply_to_id) {
+                    let quote_row =
+                        Row::new().push(text(reply_quote).color(COLOR_GREEN).shaping(Advanced));
                     message_content_column = message_content_column.push(quote_row);
                 };
 
@@ -219,26 +219,18 @@ impl ChannelViewEntry {
                 )
             }
             PositionMessage(lat, long) => {
-                let latitude = 0.0000001 * *lat as f64;
-                let longitude = 0.0000001 * *long as f64;
-                let location_text = format!("📌 {:.2}, {:.2}", latitude, longitude);
+                let location_text = Self::location_text(lat, long);
                 (
                     button(text(location_text.clone()).shaping(Advanced))
                         .padding([1, 5])
                         .style(button_chip_style)
-                        .on_press(ShowLocation(latitude, longitude))
+                        .on_press(ShowLocation(*lat, *long))
                         .into(),
                     location_text,
                 )
             }
             UserMessage(user) => {
-                let user_text = format!(
-                    "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
-                    user.long_name,
-                    user.short_name,
-                    user.id,
-                    user.hw_model().as_str_name()
-                );
+                let user_text = Self::user_text(user);
                 (
                     text(user_text.clone())
                         .style(message_text_style)
@@ -313,6 +305,22 @@ impl ChannelViewEntry {
         message_column = self.emoji_row(nodes, message_column);
 
         Some(message_column.into())
+    }
+
+    fn user_text(user: &User) -> String {
+        format!(
+            "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
+            user.long_name,
+            user.short_name,
+            user.id,
+            user.hw_model().as_str_name()
+        )
+    }
+
+    fn location_text(lat: &i32, long: &i32) -> String {
+        let latitude = 0.0000001 * *lat as f64;
+        let longitude = 0.0000001 * *long as f64;
+        format!("📌 {:.2}, {:.2}", latitude, longitude)
     }
 
     /// Add a row to the content column with the name of the source node

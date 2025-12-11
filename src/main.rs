@@ -69,7 +69,7 @@ pub enum Message {
     Exit,
     NewConfig(Config),
     ConfigChange(ConfigChangeMessage),
-    ShowLocation(f64, f64), // lat and long
+    ShowLocation(i32, i32), // lat and long / 1_000_000
     AppNotification(String, String),
     AppError(String, String),
     RemoveNotification(usize),
@@ -149,8 +149,7 @@ impl MeshChat {
                 Task::none()
             }
             ShowLocation(lat, long) => {
-                let maps_url = format!("https://maps.google.com/?q={},{}", lat, long);
-                let _ = webbrowser::open(&maps_url);
+                let _ = webbrowser::open(&Self::location_url(lat, long));
                 Task::none()
             }
             ToggleNodeFavourite(node_id) => {
@@ -195,6 +194,13 @@ impl MeshChat {
 
         // add the notification area and the inner view
         stack.push(self.notifications.view()).push(inner).into()
+    }
+
+    /// Convert a location tuple to a URL that can be opened in a browser.
+    fn location_url(lat: i32, long: i32) -> String {
+        let latitude = 0.0000001 * lat as f64;
+        let longitude = 0.0000001 * long as f64;
+        format!("https://maps.google.com/?q={},{}", latitude, longitude)
     }
 
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
