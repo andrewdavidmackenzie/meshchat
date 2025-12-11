@@ -5,7 +5,8 @@ use iced::border::Radius;
 use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
-use iced::widget::{button, text, text_input};
+use iced::widget::scrollable::{Rail, Scroller};
+use iced::widget::{button, scrollable, text, text_input};
 use iced::{Background, Border, Color, Padding, Shadow, Theme};
 use iced_aw::menu;
 
@@ -462,5 +463,39 @@ pub fn battery_style_dark(_theme: &Theme) -> BatteryAppearance {
         charge_medium_color: COLOR_ORANGE,
         charge_low_color: COLOR_RED,
         unknown_color: COLOR_GRAY_40,
+    }
+}
+
+pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable::Style {
+    let scrollbar_color = match status {
+        scrollable::Status::Active => COLOR_GRAY_80,
+        scrollable::Status::Hovered { .. } => CYAN,
+        scrollable::Status::Dragged { .. } => CYAN,
+    };
+
+    scrollable::Style {
+        container: Style {
+            text_color: None,
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: NO_BORDER,
+            shadow: NO_SHADOW,
+        },
+        vertical_rail: Rail {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: NO_BORDER,
+            scroller: Scroller {
+                color: scrollbar_color,
+                border: NO_BORDER,
+            },
+        },
+        horizontal_rail: Rail {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: NO_BORDER,
+            scroller: Scroller {
+                color: scrollbar_color,
+                border: NO_BORDER,
+            },
+        },
+        gap: None,
     }
 }

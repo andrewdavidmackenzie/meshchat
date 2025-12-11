@@ -23,7 +23,8 @@ use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
 use crate::View::DeviceList;
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, fav_button_style, text_input_style,
+    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, fav_button_style, scrollbar_style,
+    text_input_style,
 };
 use crate::{Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
@@ -658,6 +659,7 @@ impl DeviceView {
                 let scrollbar = Scrollbar::new().width(10.0);
                 scrollable::Direction::Vertical(scrollbar)
             })
+            .style(scrollbar_style)
             .width(Fill)
             .height(Fill);
 

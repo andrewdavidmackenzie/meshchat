@@ -8,7 +8,9 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendInfoMessage, SendPositionMessage};
-use crate::styles::{DAY_SEPARATOR_STYLE, button_chip_style, reply_to_style, text_input_style};
+use crate::styles::{
+    DAY_SEPARATOR_STYLE, button_chip_style, reply_to_style, scrollbar_style, text_input_style,
+};
 use crate::{Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local};
@@ -207,6 +209,7 @@ impl ChannelView {
                 let scrollbar = Scrollbar::new().width(10.0);
                 scrollable::Direction::Vertical(scrollbar)
             })
+            .style(scrollbar_style)
             .width(Fill)
             .height(Fill);
 
