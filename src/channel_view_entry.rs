@@ -128,18 +128,28 @@ impl ChannelViewEntry {
     }
 
     /// Return the text to use when replying to this message
-    fn reply_quote(entries: &RingMap<u32, ChannelViewEntry>, id: u32) -> Option<String> {
-        entries.get(&id).and_then(|entry| {
-            match entry.payload() {
-                NewTextMessage(text_message) => Some(format!("Re: {}", text_message)),
-                TextMessageReply(_, reply_text) => Some(format!("Re: {}", reply_text)),
-                EmojiReply(_, _) => None, // Not possible
-                PositionMessage(lat, long) => {
-                    Some(format!("Re: {}", Self::location_text(lat, long)))
+    pub fn reply_quote(entries: &RingMap<u32, ChannelViewEntry>, id: &u32) -> Option<String> {
+        entries
+            .get(id)
+            .and_then(|entry| {
+                match entry.payload() {
+                    NewTextMessage(text_message) => Some(format!("Re: {}", text_message)),
+                    TextMessageReply(_, reply_text) => Some(format!("Re: {}", reply_text)),
+                    EmojiReply(_, _) => None, // Not possible
+                    PositionMessage(lat, long) => {
+                        Some(format!("Re: {}", Self::location_text(lat, long)))
+                    }
+                    UserMessage(user) => Some(format!("Re: {}", Self::user_text(user))),
                 }
-                UserMessage(user) => Some(format!("Re: {}", Self::user_text(user))),
-            }
-        })
+            })
+            .map(|mut text| {
+                if text.len() > 20 {
+                    text.truncate(20);
+                    format!("{} ...", text)
+                } else {
+                    text
+                }
+            })
     }
 
     /// Hash the node name into a color index - to be able to assign a consistent color to the text
@@ -203,7 +213,7 @@ impl ChannelViewEntry {
                 text_msg.clone(),
             ),
             TextMessageReply(reply_to_id, text_msg) => {
-                if let Some(reply_quote) = Self::reply_quote(entries, *reply_to_id) {
+                if let Some(reply_quote) = Self::reply_quote(entries, reply_to_id) {
                     let quote_row =
                         Row::new().push(text(reply_quote).color(COLOR_GREEN).shaping(Advanced));
                     message_content_column = message_content_column.push(quote_row);

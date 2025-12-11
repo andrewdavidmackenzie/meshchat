@@ -254,42 +254,31 @@ impl ChannelView {
         column: Column<'a, Message>,
         entry_id: &u32,
     ) -> Column<'a, Message> {
-        let original_text = match self.entries.get(entry_id).unwrap().payload() {
-            NewTextMessage(original_text) => original_text.clone(),
-            TextMessageReply(_, original_text) => original_text.clone(),
-            EmojiReply(_, original_text) => original_text.clone(),
-            PositionMessage(lat, lon) => format!("📌 ({:.2}, {:.2})", lat, lon),
-            UserMessage(user) => format!(
-                "Reply to ⓘ message from {} ({})",
-                user.long_name.clone(),
-                user.short_name.clone()
-            ),
-        };
-        let cancel_reply_button: Button<Message> = button(text("⨂").shaping(Advanced).size(16))
-            .on_press(DeviceViewEvent(ChannelMsg(CancelPrepareReply)))
-            .style(button_chip_style)
-            .padding(0);
+        if let Some(original_text) = ChannelViewEntry::reply_quote(&self.entries, entry_id) {
+            let cancel_reply_button: Button<Message> = button(text("⨂").shaping(Advanced).size(16))
+                .on_press(DeviceViewEvent(ChannelMsg(CancelPrepareReply)))
+                .style(button_chip_style)
+                .padding(0);
 
-        column.push(
-            container(
-                Row::new()
-                    .align_y(Center)
-                    .padding(2)
-                    .push(Space::with_width(24))
-                    .push(
-                        text(format!("Replying to: '{}'", original_text))
-                            .shaping(Advanced)
-                            .font(Font {
-                                style: Italic,
-                                ..Default::default()
-                            }),
-                    )
-                    .push(Space::with_width(8))
-                    .push(cancel_reply_button),
+            column.push(
+                container(
+                    Row::new()
+                        .align_y(Center)
+                        .padding(2)
+                        .push(Space::with_width(24))
+                        .push(text(original_text).shaping(Advanced).font(Font {
+                            style: Italic,
+                            ..Default::default()
+                        }))
+                        .push(Space::with_width(8))
+                        .push(cancel_reply_button),
+                )
+                .width(Fill)
+                .style(reply_to_style),
             )
-            .width(Fill)
-            .style(reply_to_style),
-        )
+        } else {
+            column
+        }
     }
 
     /// Return an Element that displays a day separator
