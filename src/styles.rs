@@ -9,6 +9,7 @@ use iced::widget::scrollable::{Rail, Scroller};
 use iced::widget::{button, scrollable, text, text_input};
 use iced::{Background, Border, Color, Padding, Shadow, Theme};
 use iced_aw::menu;
+use iced_aw::style::colors::RED;
 
 // Basic Colors
 pub const COLOR_RED: Color = Color::from_rgb(0.9, 0.2, 0.2);
@@ -322,6 +323,10 @@ pub fn message_text_style(_theme: &Theme) -> text::Style {
     text::Style {
         color: Some(Color::WHITE),
     }
+}
+
+pub fn alert_message_style(_theme: &Theme) -> text::Style {
+    text::Style { color: Some(RED) }
 }
 
 pub const TIME_TEXT_COLOR: Color = Color::from_rgba(0.6, 0.6, 0.6, 1.0);

@@ -2,13 +2,13 @@ use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, ShowLocation};
 use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
-    EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
+    AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
-    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, menu_button_style,
-    message_text_style,
+    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
+    menu_button_style, message_text_style,
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
@@ -27,6 +27,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
 pub enum Payload {
+    AlertMessage(String),
     NewTextMessage(String),
     /// TextMessageReply(reply_to_id, reply text)
     TextMessageReply(u32, String),
@@ -133,6 +134,7 @@ impl ChannelViewEntry {
             .get(id)
             .and_then(|entry| {
                 match entry.payload() {
+                    AlertMessage(text_message) => Some(format!("Re: {}", text_message)),
                     NewTextMessage(text_message) => Some(format!("Re: {}", text_message)),
                     TextMessageReply(_, reply_text) => Some(format!("Re: {}", reply_text)),
                     EmojiReply(_, _) => None, // Not possible
@@ -204,6 +206,14 @@ impl ChannelViewEntry {
         let mut message_content_column = Column::new();
 
         let (content, message_text): (Element<'static, Message>, String) = match self.payload() {
+            AlertMessage(text_msg) => (
+                text(text_msg.clone())
+                    .style(alert_message_style)
+                    .size(18)
+                    .shaping(Advanced)
+                    .into(),
+                text_msg.clone(),
+            ),
             NewTextMessage(text_msg) => (
                 text(text_msg.clone())
                     .style(message_text_style)
