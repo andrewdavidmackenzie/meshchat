@@ -16,7 +16,7 @@ use iced::advanced::text::Shaping::Advanced;
 use iced::font::Weight;
 use iced::widget::{Column, Container, Row, Space, Text, button, text, tooltip};
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
-use iced_aw::menu::{Item, Menu};
+use iced_aw::menu::Menu;
 use iced_aw::{MenuBar, menu_bar, menu_items};
 use meshtastic::protobufs::{NodeInfo, User};
 use ringmap::RingMap;
@@ -270,7 +270,7 @@ impl ChannelViewEntry {
         // Create the row with message text and time and maybe an ACK tick mark
         let mut text_and_time_row = Row::new()
             .push(content)
-            .push(Space::with_width(10.0))
+            .push(Space::new().width(10.0))
             .push(Self::time_to_text(self.time()))
             .align_y(Bottom);
 
@@ -310,14 +310,14 @@ impl ChannelViewEntry {
         if mine {
             // Avoid very wide messages from me extending all the way to the left edge of the screen
             message_row = message_row
-                .push(Space::with_width(100.0))
+                .push(Space::new().width(100.0))
                 .push(message_bubble);
             message_column = message_column.align_x(Right).push(message_row);
         } else {
             // Avoid very wide messages from others extending all the way to the right edge
             message_row = message_row
                 .push(message_bubble)
-                .push(Space::with_width(100.0));
+                .push(Space::new().width(100.0));
             message_column = message_column.align_x(Left).push(message_row);
         };
 
@@ -355,7 +355,7 @@ impl ChannelViewEntry {
 
         top_row = top_row
             .push(self.menu_bar(name, message))
-            .push(Space::with_width(2.0));
+            .push(Space::new().width(2.0));
 
         top_row = top_row.push(
             text(name)
@@ -420,12 +420,12 @@ impl ChannelViewEntry {
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);
 
         let dm = format!("DM with {}", name);
+        //(menu_button("forward".into(), Message::None))
+        //(menu_button("react".into(), Message::None))
         #[rustfmt::skip]
         let menu_items = menu_items!(
-            //(menu_button("forward".into(), Message::None))
-            (menu_button("copy".into(), CopyToClipBoard(message.to_string())))
-            (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id)))))
-            //(menu_button("react".into(), Message::None))
+            (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
+            (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id))))),
             (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
         );
 

@@ -129,7 +129,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         _tree: &mut Tree,
         _renderer: &Renderer,
         limits: &layout::Limits,
@@ -298,18 +298,17 @@ where
         tree::State::new(())
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         _tree: &mut Tree,
-        _event: iced::Event,
+        _event: &iced::Event,
         _layout: Layout<'_>,
         _cursor: mouse::Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn Clipboard,
         _shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> iced::event::Status {
-        iced::event::Status::Ignored
+    ) {
     }
 }
 

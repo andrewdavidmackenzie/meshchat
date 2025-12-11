@@ -5,9 +5,9 @@ use iced::border::Radius;
 use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
-use iced::widget::scrollable::{Rail, Scroller};
+use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
 use iced::widget::{button, scrollable, text, text_input};
-use iced::{Background, Border, Color, Padding, Shadow, Theme};
+use iced::{Background, Border, Color, Shadow, Theme};
 use iced_aw::menu;
 use iced_aw::style::colors::RED;
 
@@ -177,7 +177,7 @@ pub fn text_input_style(_theme: &Theme, status: text_input::Status) -> text_inpu
             value: Color::WHITE,
             selection: Default::default(),
         },
-        text_input::Status::Focused => text_input::Style {
+        text_input::Status::Focused { .. } => text_input::Style {
             background: TEXT_INPUT_BACKGROUND,
             border: TEXT_INPUT_BORDER_ACTIVE,
             icon: Color::WHITE,
@@ -214,6 +214,7 @@ pub fn source_tooltip_style(_theme: &Theme) -> Style {
         background: Some(Color::BLACK.into()),
         border: TOOLTIP_BORDER,
         shadow: NO_SHADOW,
+        snap: false,
     }
 }
 
@@ -224,24 +225,28 @@ pub fn transparent_button_style(_theme: &Theme, status: Status, color: Color) ->
             text_color: Color::WHITE,
             border: NO_BORDER,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Hovered => button::Style {
             background: None,
             text_color: Color::WHITE,
             border: NO_BORDER,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Status::Pressed => button::Style {
             background: None,
             text_color: Color::WHITE,
             border: NO_BORDER,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Status::Disabled => button::Style {
             background: None,
             text_color: Color::WHITE,
             border: NO_BORDER,
             shadow: NO_SHADOW,
+            snap: false,
         },
     };
 
@@ -256,24 +261,28 @@ pub fn fav_button_style(_theme: &Theme, status: Status) -> button::Style {
             text_color: Color::WHITE,
             border: NO_BORDER,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Status::Pressed => button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Status::Disabled => button::Style {
             background: Some(Background::Color(Color::TRANSPARENT)),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_DISABLED,
             shadow: NO_SHADOW,
+            snap: false,
         },
     }
 }
@@ -285,24 +294,28 @@ pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Status::Pressed => button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
+            snap: false,
         },
         Status::Disabled => button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_DISABLED,
             shadow: NO_SHADOW,
+            snap: false,
         },
     }
 }
@@ -338,6 +351,7 @@ pub const MY_MESSAGE_BUBBLE_STYLE: Style = Style {
     background: Some(Background::Color(Color::from_rgba(0.08, 0.3, 0.22, 1.0))),
     border: MESSAGE_BORDER,
     shadow: NO_SHADOW,
+    snap: false,
 };
 
 pub const DAY_SEPARATOR_STYLE: Style = Style {
@@ -345,6 +359,7 @@ pub const DAY_SEPARATOR_STYLE: Style = Style {
     background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 1.0))),
     border: DAY_SEPARATOR_BORDER,
     shadow: NO_SHADOW,
+    snap: false,
 };
 
 pub const OTHERS_MESSAGE_BUBBLE_STYLE: Style = Style {
@@ -352,6 +367,7 @@ pub const OTHERS_MESSAGE_BUBBLE_STYLE: Style = Style {
     background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 1.0))),
     border: MESSAGE_BORDER,
     shadow: NO_SHADOW,
+    snap: false,
 };
 
 const NAME_BOX_BORDER: Border = Border {
@@ -370,6 +386,7 @@ pub const NAME_BOX_STYLE: Style = Style {
     background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.0, 1.0))),
     border: NO_BORDER,
     shadow: NO_SHADOW,
+    snap: false,
 };
 
 pub fn name_box_style(_theme: &Theme) -> Style {
@@ -381,6 +398,7 @@ const REPLY_TO_STYLE: Style = Style {
     background: Some(Background::Color(Color::from_rgba(0.08, 0.3, 0.22, 1.0))),
     border: NO_BORDER,
     shadow: NO_SHADOW,
+    snap: false,
 };
 
 pub fn reply_to_style(_theme: &Theme) -> Style {
@@ -392,6 +410,7 @@ pub const VIEW_BUTTON_HOVER_STYLE: button::Style = button::Style {
     text_color: Color::BLACK,
     border: VIEW_BUTTON_BORDER,
     shadow: NO_SHADOW,
+    snap: false,
 };
 
 pub const VIEW_BUTTON_STYLE: button::Style = button::Style {
@@ -399,6 +418,7 @@ pub const VIEW_BUTTON_STYLE: button::Style = button::Style {
     text_color: Color::WHITE,
     border: NO_BORDER,
     shadow: NO_SHADOW,
+    snap: false,
 };
 
 pub fn channel_row_style(_: &Theme, status: Status) -> button::Style {
@@ -440,11 +460,9 @@ pub fn menu_button_style(_theme: &Theme, _status: iced_aw::style::Status) -> men
         bar_background: Background::Color(Color::TRANSPARENT),
         bar_border: NO_BORDER,
         bar_shadow: NO_SHADOW,
-        bar_background_expand: Padding::new(0.0),
         menu_background: Background::Color(Color::BLACK),
         menu_border: BUTTON_BORDER_DISABLED,
         menu_shadow: NO_SHADOW,
-        menu_background_expand: Padding::new(0.0),
         path: Background::Color(Color::TRANSPARENT),
         path_border: NO_BORDER,
     }
@@ -479,13 +497,13 @@ pub fn battery_style_dark(_theme: &Theme) -> BatteryAppearance {
 
 pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let scrollbar_color = match status {
-        scrollable::Status::Active => Color::TRANSPARENT,
-        scrollable::Status::Hovered { .. } => COLOR_GRAY_80,
-        scrollable::Status::Dragged { .. } => CYAN,
+        scrollable::Status::Active { .. } => Background::Color(Color::TRANSPARENT),
+        scrollable::Status::Hovered { .. } => Background::Color(COLOR_GRAY_80),
+        scrollable::Status::Dragged { .. } => Background::Color(CYAN),
     };
 
     let border = match status {
-        scrollable::Status::Active => NO_BORDER,
+        scrollable::Status::Active { .. } => NO_BORDER,
         scrollable::Status::Hovered { .. } => CYAN_BORDER,
         scrollable::Status::Dragged { .. } => NO_BORDER,
     };
@@ -496,12 +514,13 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
             background: Some(Background::Color(Color::TRANSPARENT)),
             border: NO_BORDER,
             shadow: NO_SHADOW,
+            snap: false,
         },
         vertical_rail: Rail {
             background: Some(Background::Color(Color::TRANSPARENT)),
             border: NO_BORDER,
             scroller: Scroller {
-                color: scrollbar_color,
+                background: scrollbar_color,
                 border,
             },
         },
@@ -509,10 +528,16 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
             background: Some(Background::Color(Color::TRANSPARENT)),
             border: NO_BORDER,
             scroller: Scroller {
-                color: scrollbar_color,
+                background: scrollbar_color,
                 border,
             },
         },
         gap: None,
+        auto_scroll: AutoScroll {
+            background: Background::Color(Color::TRANSPARENT),
+            border,
+            shadow: NO_SHADOW,
+            icon: Default::default(),
+        },
     }
 }

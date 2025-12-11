@@ -3,10 +3,9 @@ use iced::advanced::layout;
 use iced::advanced::renderer::{self, Quad};
 use iced::advanced::widget::tree::{self, Tree};
 use iced::advanced::{self, Clipboard, Layout, Shell, Widget};
-use iced::event;
 use iced::mouse;
 use iced::time::Instant;
-use iced::window::{self, RedrawRequest};
+use iced::window::{self};
 use iced::{Background, Color, Element, Event, Length, Rectangle, Size};
 
 use super::easing::{self, Easing};
@@ -146,14 +145,6 @@ where
     Theme: StyleSheet + 'a,
     Renderer: advanced::Renderer + 'a,
 {
-    fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<State>()
-    }
-
-    fn state(&self) -> tree::State {
-        tree::State::new(State::default())
-    }
-
     fn size(&self) -> Size<Length> {
         Size {
             width: self.width,
@@ -162,34 +153,12 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         _tree: &mut Tree,
         _renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         layout::atomic(limits, self.width, self.height)
-    }
-
-    fn on_event(
-        &mut self,
-        tree: &mut Tree,
-        event: Event,
-        _layout: Layout<'_>,
-        _cursor: mouse::Cursor,
-        _renderer: &Renderer,
-        _clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
-        _viewport: &Rectangle,
-    ) -> event::Status {
-        let state = tree.state.downcast_mut::<State>();
-
-        if let Event::Window(window::Event::RedrawRequested(now)) = event {
-            *state = state.timed_transition(self.cycle_duration, now);
-
-            shell.request_redraw(RedrawRequest::NextFrame);
-        }
-
-        event::Status::Ignored
     }
 
     fn draw(
@@ -207,28 +176,28 @@ where
         let state = tree.state.downcast_ref::<State>();
 
         renderer.fill_quad(
-            renderer::Quad {
+            Quad {
                 bounds: Rectangle {
                     x: bounds.x,
                     y: bounds.y,
                     width: bounds.width,
                     height: bounds.height,
                 },
-                ..renderer::Quad::default()
+                ..Quad::default()
             },
             Background::Color(custom_style.track_color),
         );
 
         match state {
             State::Expanding { progress, .. } => renderer.fill_quad(
-                renderer::Quad {
+                Quad {
                     bounds: Rectangle {
                         x: bounds.x,
                         y: bounds.y,
                         width: self.easing.y_at_x(*progress) * bounds.width,
                         height: bounds.height,
                     },
-                    ..renderer::Quad::default()
+                    ..Quad::default()
                 },
                 Background::Color(custom_style.bar_color),
             ),
@@ -241,10 +210,38 @@ where
                         width: (1.0 - self.easing.y_at_x(*progress)) * bounds.width,
                         height: bounds.height,
                     },
-                    ..renderer::Quad::default()
+                    ..Quad::default()
                 },
                 Background::Color(custom_style.bar_color),
             ),
+        }
+    }
+
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<State>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(State::default())
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        _layout: Layout<'_>,
+        _cursor: mouse::Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        _viewport: &Rectangle,
+    ) {
+        let state = tree.state.downcast_mut::<State>();
+
+        if let Event::Window(window::Event::RedrawRequested(now)) = event {
+            *state = state.timed_transition(self.cycle_duration, *now);
+
+            shell.request_redraw();
         }
     }
 }
@@ -253,7 +250,7 @@ impl<'a, Message, Theme, Renderer> From<Linear<'a, Theme>> for Element<'a, Messa
 where
     Message: Clone + 'a,
     Theme: StyleSheet + 'a,
-    Renderer: iced::advanced::Renderer + 'a,
+    Renderer: advanced::Renderer + 'a,
 {
     fn from(linear: Linear<'a, Theme>) -> Self {
         Self::new(linear)
@@ -282,7 +279,7 @@ pub trait StyleSheet {
     /// The supported style of the [`StyleSheet`].
     type Style: Default;
 
-    /// Produces the active [`Appearance`] of a indicator.
+    /// Produces the active [`Appearance`] of an indicator.
     fn appearance(&self, style: &Self::Style) -> Appearance;
 }
 

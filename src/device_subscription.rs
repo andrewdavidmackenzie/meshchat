@@ -131,124 +131,131 @@ impl PacketRouter<(), Error> for MyRouter {
 /// A stream of [DeviceViewMessage] announcing the discovery or loss of devices via BLE
 ///
 pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
-    stream::channel(100, move |mut gui_sender| async move {
-        let mut device_state = Disconnected;
-        let mut stream_api: Option<ConnectedStreamApi> = None;
-        let mut my_router = MyRouter::new(gui_sender.clone());
-        let (subscriber_sender, mut subscriber_receiver) = channel::<SubscriberMessage>(100);
+    stream::channel(
+        100,
+        move |mut gui_sender: futures_channel::mpsc::Sender<SubscriptionEvent>| async move {
+            let mut device_state = Disconnected;
+            let mut stream_api: Option<ConnectedStreamApi> = None;
+            let mut my_router = MyRouter::new(gui_sender.clone());
+            let (subscriber_sender, mut subscriber_receiver) = channel::<SubscriberMessage>(100);
 
-        // Send the event sender back to the GUI, so it can send messages
-        let _ = gui_sender
-            .send(SubscriptionEvent::Ready(subscriber_sender.clone()))
-            .await;
+            // Send the event sender back to the GUI, so it can send messages
+            let _ = gui_sender
+                .send(SubscriptionEvent::Ready(subscriber_sender.clone()))
+                .await;
 
-        // Convert the channels to a `Stream`.
-        let mut subscriber_receiver = Box::pin(async_stream::stream! {
-              while let Some(item) = subscriber_receiver.recv().await {
-                  yield item;
-              }
-        })
-            as Pin<Box<dyn Stream<Item = SubscriberMessage> + Send>>;
+            // Convert the channels to a `Stream`.
+            let mut subscriber_receiver = Box::pin(async_stream::stream! {
+                  while let Some(item) = subscriber_receiver.recv().await {
+                      yield item;
+                  }
+            })
+                as Pin<Box<dyn Stream<Item = SubscriberMessage> + Send>>;
 
-        loop {
-            match device_state {
-                Disconnected => {
-                    // Wait for a message from the UI to request that we connect to a device
-                    // No need to wait for any messages from a radio, as we are not connected to one
-                    if let Some(Connect(device)) = subscriber_receiver.next().await {
-                        match do_connect(&device).await {
-                            Ok((packet_receiver, stream)) => {
-                                device_state = Connected(device.clone(), packet_receiver);
-                                stream_api = Some(stream);
+            loop {
+                match device_state {
+                    Disconnected => {
+                        // Wait for a message from the UI to request that we connect to a device
+                        // No need to wait for any messages from a radio, as we are not connected to one
+                        if let Some(Connect(device)) = subscriber_receiver.next().await {
+                            match do_connect(&device).await {
+                                Ok((packet_receiver, stream)) => {
+                                    device_state = Connected(device.clone(), packet_receiver);
+                                    stream_api = Some(stream);
 
-                                gui_sender
-                                    .send(ConnectedEvent(device.clone()))
-                                    .await
-                                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                    gui_sender
+                                        .send(ConnectedEvent(device.clone()))
+                                        .await
+                                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                }
+                                Err(e) => {
+                                    gui_sender
+                                        .send(ConnectionError(
+                                            device.clone(),
+                                            format!(
+                                                "Failed to connect to {}",
+                                                device.name.as_ref().unwrap()
+                                            ),
+                                            e.to_string(),
+                                        ))
+                                        .await
+                                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                }
                             }
-                            Err(e) => {
+                        }
+                    }
+                    Connected(device, packet_receiver) => {
+                        let radio_stream = UnboundedReceiverStream::from(packet_receiver)
+                            .map(|fr| RadioPacket(Box::new(fr)));
+
+                        let mut merged_stream = radio_stream.merge(&mut subscriber_receiver);
+
+                        while let Some(message) = StreamExt::next(&mut merged_stream).await {
+                            let result = match message {
+                                Connect(_) => {
+                                    eprintln!("Cannot connect while already connected");
+                                    Ok(())
+                                }
+                                Disconnect => break,
+                                SendText(text, channel_id, reply_to_id) => {
+                                    let mut api = stream_api.take().unwrap();
+                                    let r = send_text_message(
+                                        &mut api,
+                                        &mut my_router,
+                                        channel_id,
+                                        reply_to_id,
+                                        text,
+                                    )
+                                    .await;
+                                    let _none = stream_api.replace(api);
+                                    r
+                                }
+                                SendPosition(channel_id, position) => {
+                                    let mut api = stream_api.take().unwrap();
+                                    let r = send_position(
+                                        &mut api,
+                                        &mut my_router,
+                                        channel_id,
+                                        position,
+                                    )
+                                    .await;
+                                    let _none = stream_api.replace(api);
+                                    r
+                                }
+                                SendInfo(channel_id) => {
+                                    let mut api = stream_api.take().unwrap();
+                                    let r = send_info(&mut api, &mut my_router, channel_id).await;
+                                    let _none = stream_api.replace(api);
+                                    r
+                                }
+                                RadioPacket(packet) => my_router.handle_from_radio(packet),
+                            };
+
+                            if let Err(e) = result {
                                 gui_sender
                                     .send(ConnectionError(
                                         device.clone(),
-                                        format!(
-                                            "Failed to connect to {}",
-                                            device.name.as_ref().unwrap()
-                                        ),
+                                        "Send error".to_string(),
                                         e.to_string(),
                                     ))
                                     .await
                                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                             }
                         }
+
+                        // Disconnect
+                        let api = stream_api.take().unwrap();
+                        device_state = Disconnected;
+                        let _ = do_disconnect(api).await;
+                        gui_sender
+                            .send(DisconnectedEvent(device.clone()))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                     }
-                }
-                Connected(device, packet_receiver) => {
-                    let radio_stream = UnboundedReceiverStream::from(packet_receiver)
-                        .map(|fr| RadioPacket(Box::new(fr)));
-
-                    let mut merged_stream = radio_stream.merge(&mut subscriber_receiver);
-
-                    while let Some(message) = StreamExt::next(&mut merged_stream).await {
-                        let result = match message {
-                            Connect(_) => {
-                                eprintln!("Cannot connect while already connected");
-                                Ok(())
-                            }
-                            Disconnect => break,
-                            SendText(text, channel_id, reply_to_id) => {
-                                let mut api = stream_api.take().unwrap();
-                                let r = send_text_message(
-                                    &mut api,
-                                    &mut my_router,
-                                    channel_id,
-                                    reply_to_id,
-                                    text,
-                                )
-                                .await;
-                                let _none = stream_api.replace(api);
-                                r
-                            }
-                            SendPosition(channel_id, position) => {
-                                let mut api = stream_api.take().unwrap();
-                                let r =
-                                    send_position(&mut api, &mut my_router, channel_id, position)
-                                        .await;
-                                let _none = stream_api.replace(api);
-                                r
-                            }
-                            SendInfo(channel_id) => {
-                                let mut api = stream_api.take().unwrap();
-                                let r = send_info(&mut api, &mut my_router, channel_id).await;
-                                let _none = stream_api.replace(api);
-                                r
-                            }
-                            RadioPacket(packet) => my_router.handle_from_radio(packet),
-                        };
-
-                        if let Err(e) = result {
-                            gui_sender
-                                .send(ConnectionError(
-                                    device.clone(),
-                                    "Send error".to_string(),
-                                    e.to_string(),
-                                ))
-                                .await
-                                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                        }
-                    }
-
-                    // Disconnect
-                    let api = stream_api.take().unwrap();
-                    device_state = Disconnected;
-                    let _ = do_disconnect(api).await;
-                    gui_sender
-                        .send(DisconnectedEvent(device.clone()))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
             }
-        }
-    })
+        },
+    )
 }
 
 /// Send a Text Message to the other node or the channel, which is possibly a reply

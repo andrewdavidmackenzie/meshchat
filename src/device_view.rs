@@ -480,7 +480,7 @@ impl DeviceView {
 
         header = match state {
             Disconnected(_, _) => header
-                .push(Space::with_width(Fill))
+                .push(Space::new().width(Fill))
                 .push(button("Disconnected").style(button_chip_style)),
             Connecting(device) => {
                 let name_button =
@@ -488,7 +488,7 @@ impl DeviceView {
                         .style(button_chip_style);
                 header = header.push(name_button);
                 header
-                    .push(Space::with_width(Fill))
+                    .push(Space::new().width(Fill))
                     .push(button("Connecting").style(button_chip_style))
             }
             Connected(device) => {
@@ -502,7 +502,7 @@ impl DeviceView {
 
                 header
                     .push(button)
-                    .push(Space::with_width(4))
+                    .push(Space::new().width(4))
                     .push(self.battery_level())
             }
             Disconnecting(device) => {
@@ -511,7 +511,7 @@ impl DeviceView {
                         .style(button_chip_style);
                 header = header.push(button);
                 header
-                    .push(Space::with_width(Fill))
+                    .push(Space::new().width(Fill))
                     .push(iced::widget::button("Disconnecting").style(button_chip_style))
             }
         };
@@ -537,7 +537,7 @@ impl DeviceView {
 
         // Add a disconnect button on the right if we are connected
         if let Connected(device) = state {
-            header = header.push(Space::new(Fill, 1)).push(
+            header = header.push(Space::new().width(Fill)).push(
                 button("Disconnect")
                     .on_press(DeviceViewEvent(DisconnectRequest(device.clone(), false)))
                     .style(button_chip_style),
@@ -724,7 +724,7 @@ impl DeviceView {
                     .width(Fill)
                     .style(channel_row_style),
             )
-            .push(Space::with_width(10))
+            .push(Space::new().width(10))
             .into()
     }
 
@@ -751,7 +751,7 @@ impl DeviceView {
                     .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
             )
         } else {
-            row.push(Space::with_width(30))
+            row.push(Space::new().width(30))
         };
 
         let icon = if favourite {
@@ -765,7 +765,7 @@ impl DeviceView {
                 .on_press(ToggleNodeFavourite(node_id))
                 .style(fav_button_style),
         )
-        .push(Space::with_width(10))
+        .push(Space::new().width(10))
         .into()
     }
 

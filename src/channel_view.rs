@@ -237,7 +237,7 @@ impl ChannelView {
         let channel_buttons = Row::new()
             .padding([2, 0])
             .push(send_position_button)
-            .push(Space::with_width(6))
+            .push(Space::new().width(6))
             .push(send_info_button);
 
         // Place the scrollable in a column, with a row of buttons at the bottom
@@ -272,12 +272,12 @@ impl ChannelView {
                     Row::new()
                         .align_y(Center)
                         .padding(2)
-                        .push(Space::with_width(24))
+                        .push(Space::new().width(24))
                         .push(text(original_text).shaping(Advanced).font(Font {
                             style: Italic,
                             ..Default::default()
                         }))
-                        .push(Space::with_width(8))
+                        .push(Space::new().width(8))
                         .push(cancel_reply_button),
                 )
                 .width(Fill)
@@ -361,9 +361,9 @@ impl ChannelView {
                         side: Side::Left,
                     }),
             )
-            .push(Space::with_width(4.0))
+            .push(Space::new().width(4.0))
             .push(clear_button)
-            .push(Space::with_width(4.0))
+            .push(Space::new().width(4.0))
             .push(send_button)
             .into()
     }

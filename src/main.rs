@@ -79,12 +79,13 @@ pub enum Message {
 }
 
 fn main() -> iced::Result {
-    iced::application(MeshChat::title, MeshChat::update, MeshChat::view)
+    iced::application(MeshChat::new, MeshChat::update, MeshChat::view)
         .subscription(MeshChat::subscription)
         .exit_on_close_request(false)
         .resizable(true)
         .font(icons::FONT)
-        .run_with(MeshChat::new)
+        .title(MeshChat::title)
+        .run()
 }
 
 impl MeshChat {
@@ -112,7 +113,7 @@ impl MeshChat {
             WindowEvent(event) => self.window_handler(event),
             DeviceListViewEvent(discovery_event) => self.device_list_view.update(discovery_event),
             DeviceViewEvent(device_event) => self.device_view.update(device_event),
-            Exit => window::get_latest().and_then(window::close),
+            Exit => window::latest().and_then(window::close),
             AppNotification(summary, detail) => {
                 self.notifications.add(Notification::Info(summary, detail));
                 Task::none()
@@ -184,7 +185,7 @@ impl MeshChat {
 
         // If busy of connecting or disconnecting, add a busy bar to the header
         if scanning || matches!(state, Connecting(_) | Disconnecting(_)) {
-            stack = stack.push(Space::new(Fill, 2)).push(
+            stack = stack.push(Space::new().width(Fill)).push(
                 Linear::new()
                     .easing(easing::emphasized_accelerate())
                     .cycle_duration(Duration::from_secs_f32(2.0))
@@ -228,7 +229,7 @@ impl MeshChat {
                 self.device_view
                     .update(DisconnectRequest(device.clone(), true))
             } else {
-                window::get_latest().and_then(window::close)
+                window::latest().and_then(window::close)
             }
         } else {
             Task::none()

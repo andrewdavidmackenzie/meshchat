@@ -5,6 +5,7 @@ use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, D
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::button_chip_style;
 use crate::{Message, View};
+use futures_channel::mpsc::Sender;
 use iced::futures::{SinkExt, Stream};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{Column, Container, Row, Space, button, container, scrollable, text};
@@ -58,9 +59,9 @@ impl DeviceListView {
 
         header = header.push(match state {
             Disconnected(_, _) => Row::new()
-                .push(Space::with_width(Fill))
+                .push(Space::new().width(Fill))
                 .push(iced::widget::button("Disconnected").style(button_chip_style)),
-            Connecting(device) => Row::new().push(Space::with_width(Fill)).push(
+            Connecting(device) => Row::new().push(Space::new().width(Fill)).push(
                 iced::widget::button(text(format!(
                     "Connecting to {}",
                     device.name.as_ref().unwrap()
@@ -84,7 +85,7 @@ impl DeviceListView {
 
         // Add a disconnect button on the right if we are connected
         if let Connected(device) = state {
-            header = header.push(Space::new(Fill, 1)).push(
+            header = header.push(Space::new().width(Fill)).push(
                 button("Disconnect")
                     .on_press(DeviceViewEvent(DisconnectRequest(device.clone(), false)))
                     .style(button_chip_style),
@@ -104,7 +105,7 @@ impl DeviceListView {
         for device in &self.discovered_devices {
             let mut device_row = Row::new().align_y(Center).padding(2);
             device_row = device_row.push(text(device.name.as_ref().unwrap()).width(150));
-            device_row = device_row.push(Space::new(6, 0));
+            device_row = device_row.push(Space::new().width(6));
             match &connection_state {
                 Connected(connected_device) => {
                     device_row = device_row.push(
@@ -168,45 +169,48 @@ fn empty_view() -> Element<'static, Message> {
 
 /// A stream of [DiscoveryEvent] announcing the discovery or loss of devices via BLE
 pub fn ble_discovery() -> impl Stream<Item = DiscoveryEvent> {
-    stream::channel(100, move |mut gui_sender| async move {
-        let mut mesh_radio_ids: Vec<BleDevice> = vec![];
+    stream::channel(
+        100,
+        move |mut gui_sender: Sender<DiscoveryEvent>| async move {
+            let mut mesh_radio_ids: Vec<BleDevice> = vec![];
 
-        // loop scanning for devices
-        loop {
-            match available_ble_devices(Duration::from_secs(4)).await {
-                Ok(radios_now_ids) => {
-                    // detect lost radios
-                    for id in &mesh_radio_ids {
-                        if !radios_now_ids.iter().any(|other_id| id == other_id) {
-                            // inform GUI of a device lost
-                            gui_sender
-                                .send(BLERadioLost(id.clone()))
-                                .await
-                                .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
+            // loop scanning for devices
+            loop {
+                match available_ble_devices(Duration::from_secs(4)).await {
+                    Ok(radios_now_ids) => {
+                        // detect lost radios
+                        for id in &mesh_radio_ids {
+                            if !radios_now_ids.iter().any(|other_id| id == other_id) {
+                                // inform GUI of a device lost
+                                gui_sender
+                                    .send(BLERadioLost(id.clone()))
+                                    .await
+                                    .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
+                            }
+                        }
+
+                        // detect new radios found
+                        for id in &radios_now_ids {
+                            if !mesh_radio_ids.iter().any(|other_id| id == other_id) {
+                                // track it for the future
+                                mesh_radio_ids.push(id.clone());
+
+                                // inform GUI of a new device found
+                                gui_sender
+                                    .send(BLERadioFound(id.clone()))
+                                    .await
+                                    .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
+                            }
                         }
                     }
-
-                    // detect new radios found
-                    for id in &radios_now_ids {
-                        if !mesh_radio_ids.iter().any(|other_id| id == other_id) {
-                            // track it for the future
-                            mesh_radio_ids.push(id.clone());
-
-                            // inform GUI of a new device found
-                            gui_sender
-                                .send(BLERadioFound(id.clone()))
-                                .await
-                                .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
-                        }
+                    Err(e) => {
+                        gui_sender
+                            .send(Error(e.to_string()))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
                     }
-                }
-                Err(e) => {
-                    gui_sender
-                        .send(Error(e.to_string()))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
                 }
             }
-        }
-    })
+        },
+    )
 }
