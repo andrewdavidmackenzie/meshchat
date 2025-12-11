@@ -4,7 +4,7 @@ use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, MessageInput, PrepareReply, SendMessage,
 };
 use crate::channel_view_entry::Payload::{
-    EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
+    AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{ChannelMsg, SendInfoMessage, SendPositionMessage};
@@ -116,7 +116,11 @@ impl ChannelView {
     /// Add a new [ChannelViewEntry] message to the [ChannelView]
     pub fn new_message(&mut self, new_message: ChannelViewEntry) {
         match &new_message.payload() {
-            NewTextMessage(_) | PositionMessage(_, _) | UserMessage(_) | TextMessageReply(_, _) => {
+            AlertMessage(_)
+            | NewTextMessage(_)
+            | PositionMessage(_, _)
+            | UserMessage(_)
+            | TextMessageReply(_, _) => {
                 self.entries.insert_sorted_by(
                     new_message.message_id(),
                     new_message,
