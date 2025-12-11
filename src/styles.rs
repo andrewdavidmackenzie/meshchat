@@ -497,7 +497,7 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
             border: NO_BORDER,
             scroller: Scroller {
                 color: scrollbar_color,
-                border: border,
+                border,
             },
         },
         horizontal_rail: Rail {
@@ -505,7 +505,7 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
             border: NO_BORDER,
             scroller: Scroller {
                 color: scrollbar_color,
-                border: border,
+                border,
             },
         },
         gap: None,

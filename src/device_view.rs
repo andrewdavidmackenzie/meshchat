@@ -29,7 +29,9 @@ use crate::styles::{
 use crate::{Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
-use iced::widget::{Column, Container, Row, Space, button, row, scrollable, text, text_input};
+use iced::widget::{
+    Column, Container, Row, Space, button, row, scrollable, text, text_input, tooltip,
+};
 use iced::{Center, Element, Fill, Padding, Task};
 use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
@@ -547,13 +549,21 @@ impl DeviceView {
 
     /// Return an element that displays the battery level of the connected device
     fn battery_level(&self) -> Element<'_, Message> {
-        let battery_state = match self.battery_level {
-            Some(battery_level) if battery_level <= 100 => BatteryState::Charged(battery_level),
-            Some(_) => BatteryState::Charging,
-            None => BatteryState::Unknown,
+        let (battery_state, tooltip_text) = match self.battery_level {
+            Some(battery_level) if battery_level <= 100 => (
+                BatteryState::Charged(battery_level),
+                format!("Charged: {}%", battery_level),
+            ),
+            Some(_) => (BatteryState::Charging, "Charging".into()),
+            None => (BatteryState::Unknown, "Battery Level Unknown".into()),
         };
 
-        Battery::new().state(battery_state).into()
+        tooltip(
+            Battery::new().state(battery_state),
+            text(tooltip_text),
+            tooltip::Position::Bottom,
+        )
+        .into()
     }
 
     pub fn view(&self, config: &Config) -> Element<'_, Message> {
