@@ -497,7 +497,10 @@ impl DeviceView {
                     button = button.on_press(DeviceViewEvent(ShowChannel(None)));
                 }
 
-                header.push(button).push(self.battery_level())
+                header
+                    .push(button)
+                    .push(Space::with_width(4))
+                    .push(self.battery_level())
             }
             Disconnecting(device) => {
                 let button =

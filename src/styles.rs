@@ -367,7 +367,7 @@ pub fn name_box_style(_theme: &Theme) -> Style {
 const REPLY_TO_STYLE: Style = Style {
     text_color: Some(Color::WHITE),
     background: Some(Background::Color(Color::from_rgba(0.08, 0.3, 0.22, 1.0))),
-    border: MESSAGE_BORDER,
+    border: NO_BORDER,
     shadow: NO_SHADOW,
 };
 

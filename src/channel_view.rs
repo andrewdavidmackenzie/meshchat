@@ -1,7 +1,7 @@
 use crate::Message::DeviceViewEvent;
 use crate::channel_view::ChannelId::{Channel, Node};
 use crate::channel_view::ChannelViewMessage::{
-    ClearMessage, MessageInput, PrepareReply, SendMessage,
+    CancelPrepareReply, ClearMessage, MessageInput, PrepareReply, SendMessage,
 };
 use crate::channel_view_entry::Payload::{
     EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -18,7 +18,7 @@ use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
-    Column, Container, Row, Space, button, container, scrollable, text, text_input,
+    Button, Column, Container, Row, Space, button, container, scrollable, text, text_input,
 };
 use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
 use meshtastic::packet::PacketDestination;
@@ -36,6 +36,7 @@ pub enum ChannelViewMessage {
     ClearMessage,
     SendMessage(Option<u32>), // optional message id if we are replying to that message
     PrepareReply(u32),        // entry_id
+    CancelPrepareReply,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
@@ -165,6 +166,10 @@ impl ChannelView {
                 self.preparing_reply = Some(entry_id);
                 Task::none()
             }
+            CancelPrepareReply => {
+                self.preparing_reply = None;
+                Task::none()
+            }
         }
     }
 
@@ -236,32 +241,54 @@ impl ChannelView {
 
         // If we are replying to a message, add a row at the bottom of the channel view with the original text
         if let Some(entry_id) = &self.preparing_reply {
-            let original_text = match self.entries.get(entry_id).unwrap().payload() {
-                NewTextMessage(original_text) => original_text.clone(),
-                TextMessageReply(_, original_text) => original_text.clone(),
-                EmojiReply(_, original_text) => original_text.clone(),
-                PositionMessage(lat, lon) => format!("📌 ({:.2}, {:.2})", lat, lon),
-                UserMessage(user) => format!(
-                    "Reply to ⓘ message from {} ({})",
-                    user.long_name.clone(),
-                    user.short_name.clone()
-                ),
-            };
-            column = column.push(
-                container(
-                    text(format!("Replying to: {}", original_text))
-                        .shaping(Advanced)
-                        .font(Font {
-                            style: Italic,
-                            ..Default::default()
-                        }),
-                )
-                .style(reply_to_style),
-            );
+            column = self.replying_to(column, entry_id);
         }
 
         // Add the input box at the bottom of the channel view
         column.push(self.input_box()).into()
+    }
+
+    /// Add a row that explains we are replying to a prior message
+    fn replying_to<'a>(
+        &'a self,
+        column: Column<'a, Message>,
+        entry_id: &u32,
+    ) -> Column<'a, Message> {
+        let original_text = match self.entries.get(entry_id).unwrap().payload() {
+            NewTextMessage(original_text) => original_text.clone(),
+            TextMessageReply(_, original_text) => original_text.clone(),
+            EmojiReply(_, original_text) => original_text.clone(),
+            PositionMessage(lat, lon) => format!("📌 ({:.2}, {:.2})", lat, lon),
+            UserMessage(user) => format!(
+                "Reply to ⓘ message from {} ({})",
+                user.long_name.clone(),
+                user.short_name.clone()
+            ),
+        };
+        let cancel_reply_button: Button<Message> = button(text("⨂").shaping(Advanced))
+            .on_press(DeviceViewEvent(ChannelMsg(CancelPrepareReply)))
+            .style(button_chip_style)
+            .padding(Padding::from([6, 6]));
+
+        column.push(
+            container(
+                Row::new()
+                    .align_y(Center)
+                    .push(Space::with_width(4))
+                    .push(
+                        text(format!("Replying to: '{}'", original_text))
+                            .shaping(Advanced)
+                            .font(Font {
+                                style: Italic,
+                                ..Default::default()
+                            }),
+                    )
+                    .push(Space::with_width(4))
+                    .push(cancel_reply_button),
+            )
+            .width(Fill)
+            .style(reply_to_style),
+        )
     }
 
     /// Return an Element that displays a day separator
