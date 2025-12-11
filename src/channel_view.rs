@@ -265,7 +265,7 @@ impl ChannelView {
                 user.short_name.clone()
             ),
         };
-        let cancel_reply_button: Button<Message> = button(text("⨂").shaping(Advanced))
+        let cancel_reply_button: Button<Message> = button(text("⨂").shaping(Advanced).size(16))
             .on_press(DeviceViewEvent(ChannelMsg(CancelPrepareReply)))
             .style(button_chip_style)
             .padding(0);
