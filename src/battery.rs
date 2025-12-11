@@ -214,7 +214,7 @@ where
                 let icon_y = bounds.y + (bounds.height - icon_size) / 2.0;
 
                 // Draw a simple lightning bolt shape using two quads
-                // Top part of lightning bolt
+                // Top part of the lightning bolt
                 let top_part = Rectangle {
                     x: icon_x + icon_size * 0.3,
                     y: icon_y,
@@ -347,7 +347,7 @@ impl Default for Appearance {
         Self {
             background_color: Color::from_rgba(0.1, 0.1, 0.1, 1.0),
             border_color: Color::WHITE,
-            charging_color: Color::from_rgb(0.2, 0.8, 0.9), // Cyan
+            charging_color: Color::from_rgb(0.2, 0.8, 0.2), // Green
             charge_high_color: Color::from_rgb(0.2, 0.8, 0.2), // Green
             charge_medium_color: Color::from_rgb(0.95, 0.9, 0.2), // Yellow
             charge_low_color: Color::from_rgb(0.9, 0.2, 0.2), // Red
@@ -373,7 +373,7 @@ impl StyleSheet for iced::Theme {
         Appearance {
             background_color: Color::from_rgb(0.05, 0.05, 0.05), // Very dark background
             border_color: Color::from_rgb(0.4, 0.4, 0.4),        // Light gray border
-            charging_color: Color::from_rgb(0.0, 0.6, 0.8),      // Cyan for charging
+            charging_color: Color::from_rgb(0.0, 0.7, 0.0),      // Green for charging
             charge_high_color: Color::from_rgb(0.0, 0.7, 0.0), // Dark green for high charge (>50%)
             charge_medium_color: Color::from_rgb(0.8, 0.7, 0.0), // Orange/yellow for medium charge (20-50%)
             charge_low_color: Color::from_rgb(0.8, 0.0, 0.0),    // Dark red for low charge (<20%)
