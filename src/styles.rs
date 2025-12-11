@@ -429,7 +429,7 @@ pub fn menu_button_style(_theme: &Theme, _status: iced_aw::style::Status) -> men
         bar_border: NO_BORDER,
         bar_shadow: NO_SHADOW,
         bar_background_expand: Padding::new(0.0),
-        menu_background: Background::Color(Color::TRANSPARENT),
+        menu_background: Background::Color(Color::BLACK),
         menu_border: NO_BORDER,
         menu_shadow: NO_SHADOW,
         menu_background_expand: Padding::new(0.0),

@@ -268,13 +268,14 @@ impl ChannelView {
         let cancel_reply_button: Button<Message> = button(text("⨂").shaping(Advanced))
             .on_press(DeviceViewEvent(ChannelMsg(CancelPrepareReply)))
             .style(button_chip_style)
-            .padding(Padding::from([6, 6]));
+            .padding(0);
 
         column.push(
             container(
                 Row::new()
                     .align_y(Center)
-                    .push(Space::with_width(4))
+                    .padding(2)
+                    .push(Space::with_width(24))
                     .push(
                         text(format!("Replying to: '{}'", original_text))
                             .shaping(Advanced)
@@ -283,7 +284,7 @@ impl ChannelView {
                                 ..Default::default()
                             }),
                     )
-                    .push(Space::with_width(4))
+                    .push(Space::with_width(8))
                     .push(cancel_reply_button),
             )
             .width(Fill)
