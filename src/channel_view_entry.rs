@@ -207,13 +207,11 @@ impl ChannelViewEntry {
     ) -> Element<'a, Message> {
         let mut col = Column::new();
         for source in sources {
-            if let Some(name) = Self::short_name(nodes, *source) {
-                col = col.push(
-                    text(name)
-                        .color(Self::color_from_id(*source))
-                        .shaping(Advanced),
-                );
-            }
+            col = col.push(
+                text(Self::short_name(nodes, *source))
+                    .color(Self::color_from_id(*source))
+                    .shaping(Advanced),
+            );
         }
         col.into()
     }
@@ -224,8 +222,8 @@ impl ChannelViewEntry {
         entries: &'a RingMap<u32, ChannelViewEntry>,
         nodes: &'a HashMap<u32, NodeInfo>,
         mine: bool,
-    ) -> Option<Element<'a, Message>> {
-        let name = Self::short_name(nodes, self.from)?;
+    ) -> Element<'a, Message> {
+        let name = Self::short_name(nodes, self.from);
 
         let mut message_content_column = Column::new();
 
@@ -348,7 +346,7 @@ impl ChannelViewEntry {
         // Add the emoji row outside the bubble, below it
         message_column = self.emoji_row(nodes, message_column);
 
-        Some(message_column.into())
+        message_column.into()
     }
 
     fn user_text(user: &User) -> String {
@@ -396,11 +394,12 @@ impl ChannelViewEntry {
 
     /// Return an Optional name to display in the message box as the source of a message.
     /// If the message is from myself, then return None.
-    fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> Option<&str> {
+    fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
         nodes
             .get(&from)
             .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
             .map(|user: &User| user.short_name.as_ref())
+            .unwrap_or("????")
     }
 
     /// Append an element to the column that contains the emoji replies for this message, if any.

@@ -42,7 +42,7 @@ mod notification;
 pub enum View {
     #[default]
     DeviceList,
-    Device,
+    Device(Option<ChannelId>),
 }
 
 #[derive(Default)]
@@ -172,12 +172,12 @@ impl MeshChat {
         // Build the inner view and show busy if in DeviceList which is in discovery mode
         let (inner, scanning) = match self.current_view {
             DeviceList => (self.device_list_view.view(state), true),
-            View::Device => (self.device_view.view(&self.config), false),
+            View::Device(_) => (self.device_view.view(&self.config), false),
         };
 
         let header = match self.current_view {
             DeviceList => self.device_list_view.header(state),
-            View::Device => self.device_view.header(state),
+            View::Device(_) => self.device_view.header(state),
         };
 
         // Create the stack of elements, starting with the header
@@ -218,8 +218,13 @@ impl MeshChat {
 
     /// Navigate to show a different view, as defined by the [View] enum
     fn navigate(&mut self, view: View) -> Task<Message> {
-        self.current_view = view;
-        Task::none()
+        self.current_view = view.clone();
+        if let View::Device(Some(channel_id)) = view {
+            self.device_view
+                .update(DeviceViewMessage::ShowChannel(Some(channel_id)))
+        } else {
+            Task::none()
+        }
     }
 
     /// Handle window events, like close button or minimize button

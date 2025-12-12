@@ -71,7 +71,7 @@ impl DeviceListView {
             Connected(device) => Row::new().push(
                 button(text(device.name.as_ref().unwrap()))
                     .style(button_chip_style)
-                    .on_press(Navigation(View::Device)),
+                    .on_press(Navigation(View::Device(None))),
             ),
             Disconnecting(device) => Row::new().push(
                 text(format!(

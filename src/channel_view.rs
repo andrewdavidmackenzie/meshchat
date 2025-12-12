@@ -137,7 +137,7 @@ impl ChannelView {
     pub fn num_unseen_messages(&self) -> usize {
         self.entries
             .values()
-            .fold(0, |acc, e| if e.seen { acc + 1 } else { acc })
+            .fold(0, |acc, e| if !e.seen { acc + 1 } else { acc })
     }
 
     /// Update the [ChannelView] state based on a [ChannelViewMessage]
@@ -202,11 +202,11 @@ impl ChannelView {
                 previous_day = message_day;
             }
 
-            if let Some(element) =
-                entry.view(&self.entries, nodes, entry.source_node(self.my_source))
-            {
-                channel_view = channel_view.push(element);
-            }
+            channel_view = channel_view.push(entry.view(
+                &self.entries,
+                nodes,
+                entry.source_node(self.my_source),
+            ));
         }
 
         // Wrap the list of messages in a scrollable container, with a scrollbar

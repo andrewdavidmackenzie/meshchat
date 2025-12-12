@@ -131,11 +131,10 @@ impl DeviceView {
         match device_view_message {
             ConnectRequest(device, channel_id) => {
                 // save the desired channel to show for when the connection is completed later
-                self.viewing_channel = channel_id;
                 self.connection_state = Connecting(device.clone());
                 let sender = self.subscription_sender.clone();
                 return Task::perform(request_connection(sender.unwrap(), device.clone()), |_| {
-                    Navigation(View::Device)
+                    Navigation(View::Device(channel_id))
                 });
             }
             DisconnectRequest(name, exit) => {
@@ -148,10 +147,11 @@ impl DeviceView {
                 });
             }
             ShowChannel(channel_id) => {
+                // Save this even if we are not connected yet
+                self.viewing_channel = channel_id;
                 if let Connected(device) = &self.connection_state {
-                    let channel_id_clone = channel_id.clone();
+                    let channel_id_clone = self.viewing_channel.clone();
                     let device_clone = device.clone();
-                    self.viewing_channel = channel_id;
                     return Task::perform(empty(), move |_| {
                         Message::ConfigChange(DeviceAndChannel(
                             Some(device_clone.clone()),
