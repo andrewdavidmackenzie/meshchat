@@ -22,6 +22,7 @@ use meshtastic::protobufs::{NodeInfo, User};
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::default::Default;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -37,16 +38,28 @@ pub enum Payload {
     UserMessage(User),
 }
 
+impl Default for Payload {
+    fn default() -> Self {
+        NewTextMessage(String::default())
+    }
+}
+
 /// An entry in the Channel View that represents some type of message sent to either this user on
 /// this device or to a channel this device can read. Can be any of [Payload] types.
 #[allow(dead_code)] // Remove when the 'seen' field is used
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ChannelViewEntry {
+    /// NodeId of the node that sent this message
     from: u32,
+    // Unique message ID for this message
     message_id: u32,
+    /// The daytime the message was sent/received
     rx_daytime: DateTime<Local>,
+    /// The message contents of differing types
     payload: Payload,
-    seen: bool,
+    /// Has the user of the app seen this message?
+    pub seen: bool,
+    /// Has the entry been acknowledged as received by a receiver?
     acked: bool,
     /// Map of emojis and for each emoji there is the string for it and a number of node ids
     /// who sent that emoji
@@ -56,7 +69,7 @@ pub struct ChannelViewEntry {
 impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(payload: Payload, from: u32, message_id: u32, seen: bool) -> Self {
+    pub fn new(payload: Payload, from: u32, message_id: u32) -> Self {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())
@@ -70,9 +83,7 @@ impl ChannelViewEntry {
             from,
             message_id,
             rx_daytime,
-            seen,
-            acked: false,
-            emoji_reply: HashMap::new(),
+            ..Default::default()
         }
     }
     /// Return the node id that sent the message
@@ -83,6 +94,11 @@ impl ChannelViewEntry {
     /// Get a reference to the payload of this message
     pub fn payload(&self) -> &Payload {
         &self.payload
+    }
+
+    /// Mark this entry as having been seen by the user
+    pub fn set_seen(&mut self) {
+        self.seen = true;
     }
 
     /// Return true if this message was sent from the specified node id

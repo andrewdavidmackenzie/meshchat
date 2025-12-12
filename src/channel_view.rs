@@ -135,7 +135,9 @@ impl ChannelView {
 
     /// Return the number of messages in the channel
     pub fn num_unseen_messages(&self) -> usize {
-        self.entries.len()
+        self.entries
+            .values()
+            .fold(0, |acc, e| if e.seen { acc + 1 } else { acc })
     }
 
     /// Update the [ChannelView] state based on a [ChannelViewMessage]
@@ -386,16 +388,13 @@ mod test {
 
         // create a set of messages with more than a second between them
         // message ids are not in order
-        let oldest_message =
-            ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1, false);
+        let oldest_message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let middle_message =
-            ChannelViewEntry::new(NewTextMessage("Hello 2".to_string()), 2, 1000, false);
+        let middle_message = ChannelViewEntry::new(NewTextMessage("Hello 2".to_string()), 2, 1000);
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let newest_message =
-            ChannelViewEntry::new(NewTextMessage("Hello 3".to_string()), 1, 500, false);
+        let newest_message = ChannelViewEntry::new(NewTextMessage("Hello 3".to_string()), 1, 500);
 
         // Add them in order
         channel_view.new_message(oldest_message.clone());

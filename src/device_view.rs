@@ -79,7 +79,7 @@ pub struct DeviceView {
     my_node_num: Option<u32>,
     my_position: Option<Position>,
     my_info: bool,
-    pub(crate) viewing_channel: Option<ChannelId>,
+    viewing_channel: Option<ChannelId>,
     /// Map of ChannelViews, indexed by ChannelId
     channel_views: HashMap<ChannelId, ChannelView>,
     pub(crate) channels: Vec<Channel>,
@@ -361,12 +361,10 @@ impl DeviceView {
                 Ok(PortNum::AlertApp) => {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let seen = self.viewing_channel == Some(channel_id);
                         let new_message = ChannelViewEntry::new(
                             AlertMessage(String::from_utf8(data.payload.clone()).unwrap()),
                             mesh_packet.from,
                             mesh_packet.id,
-                            seen,
                         );
 
                         channel_view.new_message(new_message);
@@ -395,9 +393,8 @@ impl DeviceView {
                             }
                         };
 
-                        let seen = self.viewing_channel == Some(channel_id);
                         let new_message =
-                            ChannelViewEntry::new(message, mesh_packet.from, mesh_packet.id, seen);
+                            ChannelViewEntry::new(message, mesh_packet.from, mesh_packet.id);
 
                         channel_view.new_message(new_message);
                     } else {
@@ -407,7 +404,6 @@ impl DeviceView {
                 Ok(PortNum::PositionApp) => {
                     let position = Position::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let seen = self.viewing_channel.as_ref() == Some(&channel_id);
                     self.update_node_position(mesh_packet.from, &position);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         if let Some(lat) = position.latitude_i
@@ -417,7 +413,6 @@ impl DeviceView {
                                 PositionMessage(lat, lon),
                                 mesh_packet.from,
                                 mesh_packet.id,
-                                seen,
                             );
                             channel_view.new_message(new_message);
                         } else {
@@ -440,13 +435,11 @@ impl DeviceView {
                 Ok(PortNum::NodeinfoApp) => {
                     let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let seen = self.viewing_channel.as_ref() == Some(&channel_id);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
                             UserMessage(user),
                             mesh_packet.from,
                             mesh_packet.id,
-                            seen,
                         );
                         channel_view.new_message(new_message);
                     } else {
@@ -463,6 +456,9 @@ impl DeviceView {
 
     /// If the Node is known already, then update its Position with a PositionApp update
     /// it has sent
+    /// NOTE: This position maybe more recent, but it could have less accuracy, as position
+    /// accuracy is set per channel. Consider deciding whether to update or not if it has lower
+    /// accuracy depending on the age of the previous position?
     fn update_node_position(&mut self, from: u32, position: &Position) {
         if let Some(node) = self.nodes.get_mut(&from) {
             node.position = Some(*position);
@@ -554,7 +550,7 @@ impl DeviceView {
         let (battery_state, tooltip_text) = match self.battery_level {
             Some(battery_level) if battery_level <= 100 => (
                 BatteryState::Charged(battery_level),
-                format!("Charge {}%", battery_level),
+                format!("Battery {}%", battery_level),
             ),
             Some(_) => (BatteryState::Charging, "Charging".into()),
             None => (BatteryState::Unknown, "Battery Level Unknown".into()),
@@ -784,7 +780,7 @@ impl DeviceView {
         channel_id: ChannelId,
     ) -> Element<'static, Message> {
         let name_row = Row::new()
-            .push(text(format!("{}", name)).shaping(Advanced))
+            .push(text(name).shaping(Advanced))
             .push(Space::new().width(4))
             .push(Self::unread_counter(num_messages));
 
@@ -809,7 +805,7 @@ impl DeviceView {
         favourite: bool,
     ) -> Element<'static, Message> {
         let name_row = Row::new()
-            .push(text(format!("{}", name)).shaping(Advanced))
+            .push(text(name).shaping(Advanced))
             .push(Space::new().width(4))
             .push(Self::unread_counter(num_messages));
 
