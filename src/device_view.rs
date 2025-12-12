@@ -23,14 +23,14 @@ use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{DeviceViewEvent, Navigation, ShowLocation, ToggleNodeFavourite};
 use crate::View::DeviceList;
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, fav_button_style, scrollbar_style,
-    text_input_style,
+    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
+    scrollbar_style, text_input_style, tooltip_style,
 };
 use crate::{Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::{
-    Column, Container, Row, Space, button, row, scrollable, text, text_input, tooltip,
+    Column, Container, Row, Space, button, container, row, scrollable, text, text_input, tooltip,
 };
 use iced::{Center, Element, Fill, Padding, Task};
 use meshtastic::Message as _;
@@ -492,9 +492,11 @@ impl DeviceView {
                     .push(button("Connecting").style(button_chip_style))
             }
             Connected(device) => {
-                let mut button =
-                    button(text(format!("📱 {}", device.name.as_ref().unwrap())).shaping(Advanced))
-                        .style(button_chip_style);
+                let name_row = Row::new()
+                    .push(text(format!("📱 {}", device.name.as_ref().unwrap())).shaping(Advanced))
+                    .push(Space::new().width(4))
+                    .push(Self::unread_counter(self.unread_count()));
+                let mut button = button(name_row).style(button_chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
                 if self.viewing_channel.is_some() {
                     button = button.on_press(DeviceViewEvent(ShowChannel(None)));
@@ -563,9 +565,22 @@ impl DeviceView {
             text(tooltip_text),
             tooltip::Position::Bottom,
         )
+        .style(tooltip_style)
         .into()
     }
 
+    /// Count all the unread messages available to this device across channels and nodes
+    fn unread_count(&self) -> usize {
+        let mut unread_count = 0;
+
+        for channel in self.channel_views.values() {
+            unread_count += channel.num_unseen_messages();
+        }
+
+        unread_count
+    }
+
+    /// Create the Element that shows the channels, nodes, etc.
     pub fn view(&self, config: &Config) -> Element<'_, Message> {
         if let Some(channel_number) = &self.viewing_channel
             && let Some(channel_view) = self.channel_views.get(channel_number)
@@ -574,6 +589,33 @@ impl DeviceView {
         }
 
         // If not viewing a channel/user, show the list of channels and users
+        let mut channels_list = self.channel_list();
+
+        // Add the favourite nodes to the list if there are any
+        channels_list = self.favourite_nodes(channels_list, config);
+
+        // Add the list of non-favourite nodes
+        channels_list = self.nodes_list(channels_list, config);
+
+        // Wrap the whole thing in a scrollable area
+        let channel_and_user_scroll = scrollable(channels_list)
+            .direction({
+                let scrollbar = Scrollbar::new().width(10);
+                scrollable::Direction::Vertical(scrollbar)
+            })
+            .style(scrollbar_style)
+            .width(Fill)
+            .height(Fill);
+
+        // Add a search box at the top, outside the scrollable area
+        Column::new()
+            .push(self.search_box())
+            .push(channel_and_user_scroll)
+            .into()
+    }
+
+    /// Create a column with a set of rows, one for each channel
+    fn channel_list(&self) -> Column<'_, Message> {
         let mut channels_list = Column::new();
 
         if !self.channels.is_empty() {
@@ -590,7 +632,7 @@ impl DeviceView {
             }
 
             let channel_id = ChannelId::Channel(index as i32);
-            let channel_row = Self::channel_button(
+            let channel_row = Self::channel_row(
                 channel_name,
                 self.channel_views
                     .get(&channel_id)
@@ -601,7 +643,16 @@ impl DeviceView {
             channels_list = channels_list.push(channel_row);
         }
 
-        // Construct list of favourite nodes
+        channels_list
+    }
+
+    /// Construct the list of favourite nodes, adding them to the channels_list Column
+    /// If there is a filter, only show nodes that contain the filter in their name
+    fn favourite_nodes<'a>(
+        &'a self,
+        mut channels_list: Column<'a, Message>,
+        config: &Config,
+    ) -> Column<'a, Message> {
         let mut fav_nodes: Vec<(u32, String)> = vec![];
 
         for fav_node_id in &config.fav_nodes {
@@ -630,6 +681,16 @@ impl DeviceView {
             }
         }
 
+        channels_list
+    }
+
+    /// Create the list of nodes that are not already in the favourite nodes list
+    /// If there is a filter, only show nodes that contain the filter in their name
+    fn nodes_list<'a>(
+        &'a self,
+        mut channels_list: Column<'a, Message>,
+        config: &Config,
+    ) -> Column<'a, Message> {
         let node_list = self
             .nodes
             .keys()
@@ -664,19 +725,7 @@ impl DeviceView {
             }
         }
 
-        let channel_and_user_scroll = scrollable(channels_list)
-            .direction({
-                let scrollbar = Scrollbar::new().width(10.0);
-                scrollable::Direction::Vertical(scrollbar)
-            })
-            .style(scrollbar_style)
-            .width(Fill)
-            .height(Fill);
-
-        Column::new()
-            .push(self.search_box())
-            .push(channel_and_user_scroll)
-            .into()
+        channels_list
     }
 
     /// Add a section header between areas of the list
@@ -711,15 +760,37 @@ impl DeviceView {
         Some(format!("📱  {}", &user.long_name))
     }
 
+    /// An element that will show a count of unread messages if greater than zero, or nothing
+    fn unread_counter(num_messages: usize) -> Element<'static, Message> {
+        if num_messages > 0 {
+            tooltip(
+                container(text(format!("{}", num_messages)))
+                    .padding([0, 6])
+                    .style(count_style),
+                text(format!("{} Unread Messages", num_messages)),
+                tooltip::Position::Right,
+            )
+            .style(tooltip_style)
+            .into()
+        } else {
+            Space::new().width(0).into()
+        }
+    }
+
     /// Create a Button that represents either a Channel or a Node
-    fn channel_button(
+    fn channel_row(
         name: String,
         num_messages: usize,
         channel_id: ChannelId,
     ) -> Element<'static, Message> {
+        let name_row = Row::new()
+            .push(text(format!("{}", name)).shaping(Advanced))
+            .push(Space::new().width(4))
+            .push(Self::unread_counter(num_messages));
+
         Row::new()
             .push(
-                button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
+                button(name_row)
                     .on_press(DeviceViewEvent(ShowChannel(Some(channel_id))))
                     .width(Fill)
                     .style(channel_row_style),
@@ -728,6 +799,8 @@ impl DeviceView {
             .into()
     }
 
+    /// Create a row for a Node in the device view with the name, unread count, location icon/button,
+    /// and favourite button.
     fn node_row(
         &self,
         name: String,
@@ -735,38 +808,46 @@ impl DeviceView {
         node_id: u32,
         favourite: bool,
     ) -> Element<'static, Message> {
-        let mut row = Row::new().push(
-            button(text(format!("{} ({})", name, num_messages)).shaping(Advanced))
+        let name_row = Row::new()
+            .push(text(format!("{}", name)).shaping(Advanced))
+            .push(Space::new().width(4))
+            .push(Self::unread_counter(num_messages));
+
+        let mut node_row = Row::new().push(
+            button(name_row)
                 .on_press(DeviceViewEvent(ShowChannel(Some(Node(node_id)))))
                 .width(Fill)
                 .style(channel_row_style),
         );
 
-        row = if let Some(node) = self.nodes.get(&node_id)
+        // Add a button to show the location of the node if it has one
+        node_row = if let Some(node) = self.nodes.get(&node_id)
             && let Some(position) = &node.position
         {
-            row.push(
+            node_row.push(
                 button(text("📌").shaping(Advanced))
                     .style(fav_button_style)
                     .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
             )
         } else {
-            row.push(Space::new().width(30))
+            node_row.push(Space::new().width(30))
         };
 
+        // Add a button to toggle the favourite status of the node
         let icon = if favourite {
             icons::star()
         } else {
             icons::star_empty()
         };
 
-        row.push(
-            button(icon)
-                .on_press(ToggleNodeFavourite(node_id))
-                .style(fav_button_style),
-        )
-        .push(Space::new().width(10))
-        .into()
+        node_row
+            .push(
+                button(icon)
+                    .on_press(ToggleNodeFavourite(node_id))
+                    .style(fav_button_style),
+            )
+            .push(Space::new().width(10))
+            .into()
     }
 
     fn search_box(&self) -> Element<'static, Message> {

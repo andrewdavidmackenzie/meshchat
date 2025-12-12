@@ -208,10 +208,20 @@ const BUTTON_BORDER_DISABLED: Border = Border {
     color: Color::TRANSPARENT,
 };
 
-pub fn source_tooltip_style(_theme: &Theme) -> Style {
+pub fn tooltip_style(_theme: &Theme) -> Style {
     Style {
         text_color: Some(Color::WHITE),
         background: Some(Color::BLACK.into()),
+        border: TOOLTIP_BORDER,
+        shadow: NO_SHADOW,
+        snap: false,
+    }
+}
+
+pub fn count_style(_theme: &Theme) -> Style {
+    Style {
+        text_color: Some(Color::WHITE),
+        background: Some(Background::Color(RED)),
         border: TOOLTIP_BORDER,
         shadow: NO_SHADOW,
         snap: false,
