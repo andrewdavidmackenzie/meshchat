@@ -197,35 +197,40 @@ impl ChannelView {
     ) -> Element<'a, Message> {
         let mut channel_view = Column::new().padding(right(10));
 
-        let mut previous_day = u32::MIN;
+        let message_area: Element<'a, Message> = if self.entries.is_empty() {
+            Self::empty_view()
+        } else {
+            let mut previous_day = u32::MIN;
 
-        // Add a view to the column for each of the entries in this Channel
-        for entry in self.entries.values() {
-            let message_day = entry.time().day();
+            // Add a view to the column for each of the entries in this Channel
+            for entry in self.entries.values() {
+                let message_day = entry.time().day();
 
-            // Add a day separator when the day of an entry changes
-            if message_day != previous_day {
-                channel_view = channel_view.push(Self::day_separator(&entry.time()));
-                previous_day = message_day;
+                // Add a day separator when the day of an entry changes
+                if message_day != previous_day {
+                    channel_view = channel_view.push(Self::day_separator(&entry.time()));
+                    previous_day = message_day;
+                }
+
+                channel_view = channel_view.push(entry.view(
+                    &self.entries,
+                    nodes,
+                    &self.channel_id,
+                    entry.source_node(self.my_source),
+                ));
             }
 
-            channel_view = channel_view.push(entry.view(
-                &self.entries,
-                nodes,
-                &self.channel_id,
-                entry.source_node(self.my_source),
-            ));
-        }
-
-        // Wrap the list of messages in a scrollable container, with a scrollbar
-        let channel_scroll = scrollable(channel_view)
-            .direction({
-                let scrollbar = Scrollbar::new().width(10.0);
-                scrollable::Direction::Vertical(scrollbar)
-            })
-            .style(scrollbar_style)
-            .width(Fill)
-            .height(Fill);
+            // Wrap the list of messages in a scrollable container, with a scrollbar
+            scrollable(channel_view)
+                .direction({
+                    let scrollbar = Scrollbar::new().width(10.0);
+                    scrollable::Direction::Vertical(scrollbar)
+                })
+                .style(scrollbar_style)
+                .width(Fill)
+                .height(Fill)
+                .into()
+        };
 
         // A row of action buttons at the bottom of the channel view - this could be made
         // a menu or something different in the future
@@ -253,7 +258,7 @@ impl ChannelView {
         // Place the scrollable in a column, with a row of buttons at the bottom
         let mut column = Column::new()
             .padding(4)
-            .push(channel_scroll)
+            .push(message_area)
             .push(channel_buttons);
 
         // If we are replying to a message, add a row at the bottom of the channel view with the original text
@@ -263,6 +268,17 @@ impl ChannelView {
 
         // Add the input box at the bottom of the channel view
         column.push(self.input_box()).into()
+    }
+
+    fn empty_view<'a>() -> Element<'a, Message> {
+        Container::new(Column::new().push(text("No messages sent or received yet.").align_x(Center).size(20))
+                           .push(text("You can use the text box at the bottom of the screen to send a text message, or the buttons to send your position or node info").align_x(Center).size(20)).align_x(Center))
+            .padding(10)
+            .width(Fill)
+            .align_y(Center)
+            .height(Fill)
+            .align_x(Center)
+            .into()
     }
 
     /// Add a row that explains we are replying to a prior message
