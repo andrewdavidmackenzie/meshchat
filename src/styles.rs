@@ -508,7 +508,7 @@ pub fn battery_style_dark(_theme: &Theme) -> BatteryAppearance {
 pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let scrollbar_color = match status {
         scrollable::Status::Active { .. } => Background::Color(Color::TRANSPARENT),
-        scrollable::Status::Hovered { .. } => Background::Color(COLOR_GRAY_80),
+        scrollable::Status::Hovered { .. } => Background::Color(CYAN),
         scrollable::Status::Dragged { .. } => Background::Color(CYAN),
     };
 
