@@ -96,8 +96,12 @@ impl MeshChat {
     /// Return the title of the app, which is used in the window title bar
     /// This could vary with state, such as number of devices or unread messages or similar
     fn title(&self) -> String {
-        // Can enhance with the number of unread messages or something
-        "MeshChat".to_string()
+        let unread_count = self.device_view.unread_count();
+        if unread_count > 0 {
+            format!("MeshChat ({} unread) ", unread_count)
+        } else {
+            "MeshChat".to_string()
+        }
     }
 
     /// Update the app state based on a message received from the GUI.
