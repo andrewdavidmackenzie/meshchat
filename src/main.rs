@@ -2,9 +2,9 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AppError, AppNotification, ConfigChange, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent,
-    Exit, Navigation, NewConfig, RemoveNotification, ShowLocation, ToggleNodeFavourite,
-    WindowEvent,
+    AddNodeAlias, AppError, AppNotification, ConfigChange, CopyToClipBoard, DeviceListViewEvent,
+    DeviceViewEvent, Exit, Navigation, NewConfig, RemoveNodeAlias, RemoveNotification,
+    ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId;
@@ -75,6 +75,8 @@ pub enum Message {
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
     CopyToClipBoard(String),
+    AddNodeAlias(u32, String),
+    RemoveNodeAlias(u32),
     None,
 }
 
@@ -116,7 +118,7 @@ impl MeshChat {
             Navigation(view) => self.navigate(view),
             WindowEvent(event) => self.window_handler(event),
             DeviceListViewEvent(discovery_event) => self.device_list_view.update(discovery_event),
-            DeviceViewEvent(device_event) => self.device_view.update(&self.config, device_event),
+            DeviceViewEvent(device_event) => self.device_view.update(device_event),
             Exit => window::latest().and_then(window::close),
             AppNotification(summary, detail) => {
                 self.notifications.add(Notification::Info(summary, detail));
@@ -130,13 +132,10 @@ impl MeshChat {
             NewConfig(config) => {
                 self.config = config;
                 if let Some(device) = &self.config.device {
-                    self.device_view.update(
-                        &self.config,
-                        DeviceViewMessage::ConnectRequest(
-                            device.clone(),
-                            self.config.channel_id.clone(),
-                        ),
-                    )
+                    self.device_view.update(DeviceViewMessage::ConnectRequest(
+                        device.clone(),
+                        self.config.channel_id.clone(),
+                    ))
                 } else {
                     Task::none()
                 }
@@ -169,6 +168,14 @@ impl MeshChat {
                 save_config(&self.config)
             }
             CopyToClipBoard(string) => clipboard::write(string),
+            AddNodeAlias(node_id, alias) => {
+                self.config.aliases.insert(node_id, alias);
+                save_config(&self.config)
+            }
+            RemoveNodeAlias(node_id) => {
+                self.config.aliases.remove(&node_id);
+                save_config(&self.config)
+            }
         }
     }
 
@@ -184,7 +191,7 @@ impl MeshChat {
 
         let header = match self.current_view {
             DeviceList => self.device_list_view.header(state),
-            View::Device(_) => self.device_view.header(state),
+            View::Device(_) => self.device_view.header(&self.config, state),
         };
 
         // Create the stack of elements, starting with the header
@@ -227,10 +234,8 @@ impl MeshChat {
     fn navigate(&mut self, view: View) -> Task<Message> {
         self.current_view = view.clone();
         if let View::Device(Some(channel_id)) = view {
-            self.device_view.update(
-                &self.config,
-                DeviceViewMessage::ShowChannel(Some(channel_id)),
-            )
+            self.device_view
+                .update(DeviceViewMessage::ShowChannel(Some(channel_id)))
         } else {
             Task::none()
         }
@@ -241,7 +246,7 @@ impl MeshChat {
         if let Event::Window(window::Event::CloseRequested) = event {
             if let Connected(device) = self.device_view.connection_state() {
                 self.device_view
-                    .update(&self.config, DisconnectRequest(device.clone(), true))
+                    .update(DisconnectRequest(device.clone(), true))
             } else {
                 window::latest().and_then(window::close)
             }
