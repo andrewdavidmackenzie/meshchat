@@ -2,9 +2,9 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AppError, AppNotification, ConfigChange, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent,
-    Exit, Navigation, NewConfig, RemoveNotification, ShowLocation, ToggleNodeFavourite,
-    WindowEvent,
+    AddNodeAlias, AppError, AppNotification, ConfigChange, CopyToClipBoard, DeviceListViewEvent,
+    DeviceViewEvent, Exit, Navigation, NewConfig, RemoveNodeAlias, RemoveNotification,
+    ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId;
@@ -75,6 +75,8 @@ pub enum Message {
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
     CopyToClipBoard(String),
+    AddNodeAlias(u32, String),
+    RemoveNodeAlias(u32),
     None,
 }
 
@@ -166,6 +168,19 @@ impl MeshChat {
                 save_config(&self.config)
             }
             CopyToClipBoard(string) => clipboard::write(string),
+            AddNodeAlias(node_id, alias) => {
+                self.device_view.stop_editing_alias();
+                if !alias.is_empty() {
+                    self.config.aliases.insert(node_id, alias);
+                    save_config(&self.config)
+                } else {
+                    Task::none()
+                }
+            }
+            RemoveNodeAlias(node_id) => {
+                self.config.aliases.remove(&node_id);
+                save_config(&self.config)
+            }
         }
     }
 
@@ -181,7 +196,7 @@ impl MeshChat {
 
         let header = match self.current_view {
             DeviceList => self.device_list_view.header(state),
-            View::Device(_) => self.device_view.header(state),
+            View::Device(_) => self.device_view.header(&self.config, state),
         };
 
         // Create the stack of elements, starting with the header

@@ -393,7 +393,7 @@ impl ChannelViewEntry {
         message_content_column.push(top_row)
     }
 
-    /// Return an Optional name to display in the message box as the source of a message.
+    /// Return an name to display in the message box as the source of a message.
     /// If the message is from myself, then return None.
     fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
         nodes
