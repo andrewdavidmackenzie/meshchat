@@ -773,10 +773,11 @@ impl DeviceView {
     /// Return the long name for the node with id node_id - prefixed with a node/device emoji -
     /// if the node is known and has a name
     fn aliased_long_name<'a>(&'a self, config: &'a Config, node_id: u32) -> Option<&'a str> {
+        // Avoid returning an (aliased) name until we have the node info
+        let node = self.nodes.get(&node_id)?;
         if let Some(alias) = config.aliases.get(&node_id) {
             return Some(alias);
         }
-        let node = self.nodes.get(&node_id)?;
         let user = node.user.as_ref()?;
         Some(&user.long_name)
     }
