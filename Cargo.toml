@@ -11,6 +11,7 @@ include = ["src", "assets", "build.rs", "README.md", "LICENSE"]
 [features]
 default = []
 debug = ["iced/debug"] # use "... --features "debug" to enable this for Iced
+hot = ["iced/hot"]
 
 [dependencies]
 # For communications with BLE connected radios running meshtastic firmware
@@ -30,7 +31,7 @@ tokio-stream = { version = "0.1.17", default-features = false }
 # For receiving messages from UI in device_subscription.rs
 async-stream = { version = "0.3.6", default-features = false }
 # For mpsc sender/receiver and async file IO
-tokio = { version = "1.47.1", default-features = false }
+tokio = { version = "1.48.0", default-features = false }
 # For ordering messages in ChannelView
 ringmap = "0.2"
 # For horizontal busy bar in easing.rs
