@@ -24,6 +24,8 @@ use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt;
+use std::fmt::Formatter;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -37,6 +39,19 @@ pub enum Payload {
     EmojiReply(u32, String),
     PositionMessage(i32, i32),
     UserMessage(User),
+}
+
+impl fmt::Display for Payload {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            AlertMessage(text_message) => f.write_str(text_message),
+            NewTextMessage(text_message) => f.write_str(text_message),
+            TextMessageReply(_, reply_text) => f.write_str(reply_text),
+            EmojiReply(_, _) => f.write_str(""), // Not possible
+            PositionMessage(lat, long) => f.write_str(&ChannelViewEntry::location_text(lat, long)),
+            UserMessage(user) => f.write_str(&ChannelViewEntry::user_text(user)),
+        }
+    }
 }
 
 impl Default for Payload {
@@ -58,6 +73,8 @@ pub struct ChannelViewEntry {
     rx_daytime: DateTime<Local>,
     /// The message contents of differing types
     payload: Payload,
+    /// has the message been forwarded?
+    forwarded: bool,
     /// Has the user of the app seen this message?
     pub seen: bool,
     /// Has the entry been acknowledged as received by a receiver?
@@ -71,22 +88,26 @@ impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
     pub fn new(payload: Payload, from: u32, message_id: u32) -> Self {
+        ChannelViewEntry {
+            payload,
+            from,
+            message_id,
+            rx_daytime: Self::now(),
+            ..Default::default()
+        }
+    }
+
+    /// Get the time now as a [DateTime<Local>]
+    fn now() -> DateTime<Local> {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())
             .unwrap_or(0);
 
         let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
-        let rx_daytime = datetime_utc.with_timezone(&Local);
-
-        ChannelViewEntry {
-            payload,
-            from,
-            message_id,
-            rx_daytime,
-            ..Default::default()
-        }
+        datetime_utc.with_timezone(&Local)
     }
+
     /// Return the node id that sent the message
     pub fn from(&self) -> u32 {
         self.from
@@ -144,18 +165,7 @@ impl ChannelViewEntry {
     pub fn reply_quote(entries: &RingMap<u32, ChannelViewEntry>, id: &u32) -> Option<String> {
         entries
             .get(id)
-            .and_then(|entry| {
-                match entry.payload() {
-                    AlertMessage(text_message) => Some(format!("Re: {}", text_message)),
-                    NewTextMessage(text_message) => Some(format!("Re: {}", text_message)),
-                    TextMessageReply(_, reply_text) => Some(format!("Re: {}", reply_text)),
-                    EmojiReply(_, _) => None, // Not possible
-                    PositionMessage(lat, long) => {
-                        Some(format!("Re: {}", Self::location_text(lat, long)))
-                    }
-                    UserMessage(user) => Some(format!("Re: {}", Self::user_text(user))),
-                }
-            })
+            .map(|entry| format!("Re: {}", entry.payload))
             .map(|mut text| {
                 if text.len() > 20 {
                     text = Self::truncate(&text, 20).to_string();
@@ -164,6 +174,16 @@ impl ChannelViewEntry {
                     text
                 }
             })
+    }
+
+    /// Update the time of arrival of a message - used in forwarding
+    pub fn update_time(&mut self) {
+        self.rx_daytime = Self::now();
+    }
+
+    /// Mark this entry as having been forwarded
+    pub fn forwarded(&mut self) {
+        self.forwarded = true;
     }
 
     /// Truncate a String at a character boundary
@@ -222,69 +242,56 @@ impl ChannelViewEntry {
     ) -> Element<'a, Message> {
         let name = Self::short_name(nodes, self.from);
 
+        let mut message_text = match self.payload() {
+            AlertMessage(text_msg) => text_msg.clone(),
+            NewTextMessage(text_msg) => text_msg.clone(),
+            TextMessageReply(_, text_msg) => text_msg.clone(),
+            PositionMessage(lat, long) => Self::location_text(lat, long),
+            UserMessage(user) => Self::user_text(user),
+            EmojiReply(_, _) => String::default(), // Should never happen
+        };
+
+        if self.forwarded {
+            message_text = format!("FWD: {}", message_text);
+        }
+
         let mut message_content_column = Column::new();
 
-        let (content, message_text): (Element<'static, Message>, String) = match self.payload() {
-            AlertMessage(text_msg) => (
-                text(text_msg.clone())
-                    .style(alert_message_style)
-                    .size(18)
-                    .shaping(Advanced)
-                    .into(),
-                text_msg.clone(),
-            ),
-            NewTextMessage(text_msg) => (
-                text(text_msg.clone())
-                    .style(message_text_style)
-                    .size(18)
-                    .shaping(Advanced)
-                    .into(),
-                text_msg.clone(),
-            ),
-            TextMessageReply(reply_to_id, text_msg) => {
+        if !mine {
+            message_content_column =
+                self.top_row(message_content_column, name, message_text.clone());
+        }
+
+        let content: Element<'static, Message> = match self.payload() {
+            AlertMessage(_) => text(message_text)
+                .style(alert_message_style)
+                .size(18)
+                .shaping(Advanced)
+                .into(),
+            NewTextMessage(_) | UserMessage(_) => text(message_text)
+                .style(message_text_style)
+                .size(18)
+                .shaping(Advanced)
+                .into(),
+            TextMessageReply(reply_to_id, _) => {
                 if let Some(reply_quote) = Self::reply_quote(entries, reply_to_id) {
                     let quote_row =
                         Row::new().push(text(reply_quote).color(COLOR_GREEN).shaping(Advanced));
                     message_content_column = message_content_column.push(quote_row);
                 };
-
-                (
-                    text(text_msg.clone())
-                        .style(message_text_style)
-                        .size(18)
-                        .shaping(Advanced)
-                        .into(),
-                    text_msg.clone(),
-                )
+                text(message_text)
+                    .style(message_text_style)
+                    .size(18)
+                    .shaping(Advanced)
+                    .into()
             }
-            PositionMessage(lat, long) => {
-                let location_text = Self::location_text(lat, long);
-                (
-                    button(text(location_text.clone()).shaping(Advanced))
-                        .padding([1, 5])
-                        .style(button_chip_style)
-                        .on_press(ShowLocation(*lat, *long))
-                        .into(),
-                    location_text,
-                )
-            }
-            UserMessage(user) => {
-                let user_text = Self::user_text(user);
-                (
-                    text(user_text.clone())
-                        .style(message_text_style)
-                        .size(18)
-                        .shaping(Advanced)
-                        .into(),
-                    user_text,
-                )
-            }
-            EmojiReply(_, _) => (text("").into(), String::default()), // Should never happen
+            PositionMessage(lat, long) => button(text(message_text).shaping(Advanced))
+                .padding([1, 5])
+                .style(button_chip_style)
+                .on_press(ShowLocation(*lat, *long))
+                .into(),
+            EmojiReply(_, _) => text(message_text).into(),
         };
-
-        if !mine {
-            message_content_column = self.top_row(message_content_column, name, message_text);
-        }
 
         // Create the row with message text and time and maybe an ACK tick mark
         let mut text_and_time_row = Row::new()

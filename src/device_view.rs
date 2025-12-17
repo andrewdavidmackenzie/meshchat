@@ -213,7 +213,9 @@ impl DeviceView {
                 && let Connected(device) = &self.connection_state
                 && let Some(channel_view) = self.channel_views.get_mut(channel)
             {
-                channel_view.forwarding = self.forwarding_message.take();
+                if let Some(forwarded_message) = &self.forwarding_message.take() {
+                    channel_view.forward(forwarded_message.to_owned());
+                }
 
                 let device = device.clone();
                 let channel_id = channel_id.clone();

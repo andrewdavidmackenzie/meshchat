@@ -92,7 +92,6 @@ pub struct ChannelView {
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
     my_source: u32,
     preparing_reply: Option<u32>,
-    pub forwarding: Option<ChannelViewEntry>, // We are in the process of forwarding to this channel
 }
 
 async fn empty() {}
@@ -113,6 +112,15 @@ impl ChannelView {
         if let Some(entry) = self.entries.get_mut(&request_id) {
             entry.ack();
         }
+    }
+
+    /// Forward a message to this channel - update the time and prefix with "fwd:"
+    pub fn forward(&mut self, mut entry: ChannelViewEntry) {
+        // update the entry's time of arrival to be the forwarding time
+        entry.update_time();
+        entry.forwarded();
+        self.entries
+            .insert_sorted_by(entry.message_id(), entry, ChannelViewEntry::sort_by_rx_time);
     }
 
     /// Add an emoji reply to a message.
