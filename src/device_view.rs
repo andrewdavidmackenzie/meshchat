@@ -898,7 +898,7 @@ impl DeviceView {
         let name_element: Element<'a, Message> = if let Some(alias) = config.aliases.get(&node_id) {
             tooltip(
                 text(alias).shaping(Advanced),
-                text(name.to_string()).shaping(Advanced),
+                text(format!("Original node name: {}", name)).shaping(Advanced),
                 tooltip::Position::Right,
             )
             .style(tooltip_style)
