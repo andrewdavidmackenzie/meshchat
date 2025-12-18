@@ -2,23 +2,23 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AddNodeAlias, AppError, AppNotification, ConfigChange, CopyToClipBoard, DeviceListViewEvent,
-    DeviceViewEvent, Exit, Navigation, NewConfig, RemoveNodeAlias, RemoveNotification,
-    ShowLocation, ToggleNodeFavourite, WindowEvent,
+    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, CopyToClipBoard,
+    DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, NewConfig, RemoveDeviceAlias,
+    RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_view::ChannelId;
 use crate::config::{Config, load_config, save_config};
-use crate::device_list_view::{DeviceListView, DiscoveryEvent, ble_discovery};
+use crate::device_list_view::{DeviceListEvent, DeviceListView, ble_discovery};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::linear::Linear;
 use crate::notification::{Notification, Notifications};
+use btleplug::api::BDAddr;
 use iced::widget::{Column, Space};
 use iced::{Element, Fill};
 use iced::{Event, Subscription, Task, clipboard, window};
-use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;
 
@@ -56,7 +56,7 @@ struct MeshChat {
 
 #[derive(Debug, Clone)]
 pub enum ConfigChangeMessage {
-    DeviceAndChannel(Option<BleDevice>, Option<ChannelId>),
+    DeviceAndChannel(Option<BDAddr>, Option<ChannelId>),
 }
 
 /// These are the messages that MeshChat responds to
@@ -64,7 +64,7 @@ pub enum ConfigChangeMessage {
 pub enum Message {
     Navigation(View),
     WindowEvent(Event),
-    DeviceListViewEvent(DiscoveryEvent),
+    DeviceListViewEvent(DeviceListEvent),
     DeviceViewEvent(DeviceViewMessage),
     Exit,
     NewConfig(Config),
@@ -77,6 +77,8 @@ pub enum Message {
     CopyToClipBoard(String),
     AddNodeAlias(u32, String),
     RemoveNodeAlias(u32),
+    AddDeviceAlias(BDAddr, String),
+    RemoveDeviceAlias(BDAddr),
     None,
 }
 
@@ -117,7 +119,9 @@ impl MeshChat {
         match message {
             Navigation(view) => self.navigate(view),
             WindowEvent(event) => self.window_handler(event),
-            DeviceListViewEvent(discovery_event) => self.device_list_view.update(discovery_event),
+            DeviceListViewEvent(device_list_event) => {
+                self.device_list_view.update(device_list_event)
+            }
             DeviceViewEvent(device_event) => self.device_view.update(device_event),
             Exit => window::latest().and_then(window::close),
             AppNotification(summary, detail) => {
@@ -131,9 +135,9 @@ impl MeshChat {
             Message::None => Task::none(),
             NewConfig(config) => {
                 self.config = config;
-                if let Some(device) = &self.config.device {
+                if let Some(mac_address) = &self.config.device_mac_address {
                     self.device_view.update(DeviceViewMessage::ConnectRequest(
-                        device.clone(),
+                        *mac_address,
                         self.config.channel_id.clone(),
                     ))
                 } else {
@@ -143,8 +147,8 @@ impl MeshChat {
             ConfigChange(config_change) => {
                 // Merge in what has changed
                 match config_change {
-                    ConfigChangeMessage::DeviceAndChannel(device, channel) => {
-                        self.config.device = device;
+                    ConfigChangeMessage::DeviceAndChannel(mac_address, channel) => {
+                        self.config.device_mac_address = mac_address;
                         self.config.channel_id = channel;
                     }
                 }
@@ -181,6 +185,19 @@ impl MeshChat {
                 self.config.aliases.remove(&node_id);
                 save_config(&self.config)
             }
+            AddDeviceAlias(mac_address, alias) => {
+                self.device_list_view.stop_editing_alias();
+                if !alias.is_empty() {
+                    self.config.device_aliases.insert(mac_address, alias);
+                    save_config(&self.config)
+                } else {
+                    Task::none()
+                }
+            }
+            RemoveDeviceAlias(mac_address) => {
+                self.config.device_aliases.remove(&mac_address);
+                save_config(&self.config)
+            }
         }
     }
 
@@ -190,13 +207,15 @@ impl MeshChat {
 
         // Build the inner view and show busy if in DeviceList which is in discovery mode
         let (inner, scanning) = match self.current_view {
-            DeviceList => (self.device_list_view.view(state), true),
+            DeviceList => (self.device_list_view.view(&self.config, state), true),
             View::Device(_) => (self.device_view.view(&self.config), false),
         };
 
         let header = match self.current_view {
-            DeviceList => self.device_list_view.header(state),
-            View::Device(_) => self.device_view.header(&self.config, state),
+            DeviceList => self.device_list_view.header(&self.config, state),
+            View::Device(_) => self
+                .device_view
+                .header(&self.config, state, &self.device_list_view),
         };
 
         // Create the stack of elements, starting with the header
@@ -249,9 +268,9 @@ impl MeshChat {
     /// Handle window events, like close button or minimize button
     fn window_handler(&mut self, event: Event) -> Task<Message> {
         if let Event::Window(window::Event::CloseRequested) = event {
-            if let Connected(device) = self.device_view.connection_state() {
+            if let Connected(mac_address) = self.device_view.connection_state() {
                 self.device_view
-                    .update(DisconnectRequest(device.clone(), true))
+                    .update(DisconnectRequest(*mac_address, true))
             } else {
                 window::latest().and_then(window::close)
             }

@@ -1,8 +1,8 @@
 use crate::Message;
 use crate::channel_view::ChannelId;
+use btleplug::api::BDAddr;
 use directories::ProjectDirs;
 use iced::Task;
-use meshtastic::utils::stream::BleDevice;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -13,11 +13,13 @@ use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
-    pub device: Option<BleDevice>,
+    pub device_mac_address: Option<BDAddr>,
     pub channel_id: Option<ChannelId>,
     pub fav_nodes: HashSet<u32>,
     #[serde(default = "HashMap::new")]
     pub aliases: HashMap<u32, String>, // node name aliases
+    #[serde(default = "HashMap::new")]
+    pub device_aliases: HashMap<BDAddr, String>, // node name aliases
 }
 
 // Private methods for async reading and writing of config files
@@ -47,10 +49,16 @@ pub fn save_config(config: &Config) -> Task<Message> {
     if let Some(proj_dirs) = ProjectDirs::from("net", "Mackenzie Serres", "meshchat") {
         let config_path = proj_dirs.config_dir().join("config.toml");
 
-        Task::perform(save(config_path, config.clone()), {
-            |result| match result {
+        Task::perform(save(config_path.clone(), config.clone()), {
+            move |result| match result {
                 Ok(_) => Message::None,
-                Err(e) => Message::AppError("Error saving config file".to_string(), e.to_string()),
+                Err(e) => Message::AppError(
+                    format!(
+                        "Error saving config file: '{}'",
+                        config_path.to_string_lossy()
+                    ),
+                    e.to_string(),
+                ),
             }
         })
     } else {
@@ -63,22 +71,30 @@ pub fn load_config() -> Task<Message> {
     if let Some(proj_dirs) = ProjectDirs::from("net", "Mackenzie Serres", "meshchat") {
         let config_path = proj_dirs.config_dir().join("config.toml");
         if config_path.exists() {
-            Task::perform(load(config_path), {
-                |result| match result {
+            Task::perform(load(config_path.clone()), {
+                move |result| match result {
                     Ok(config) => Message::NewConfig(config),
-                    Err(e) => {
-                        Message::AppError("Error loading config file".to_string(), e.to_string())
-                    }
+                    Err(e) => Message::AppError(
+                        format!(
+                            "Error loading config file: '{}'",
+                            config_path.to_string_lossy()
+                        ),
+                        e.to_string(),
+                    ),
                 }
             })
         } else {
             // Create the config file so that it can be relied upon to always exist later on
-            Task::perform(create(config_path), {
-                |result| match result {
+            Task::perform(create(config_path.clone()), {
+                move |result| match result {
                     Ok(_) => Message::None,
-                    Err(e) => {
-                        Message::AppError("Error creating config file: ".to_string(), e.to_string())
-                    }
+                    Err(e) => Message::AppError(
+                        format!(
+                            "Error creating config file: '{}'",
+                            config_path.to_string_lossy()
+                        ),
+                        e.to_string(),
+                    ),
                 }
             })
         }

@@ -25,11 +25,13 @@ use crate::Message::{
     AddNodeAlias, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation, ToggleNodeFavourite,
 };
 use crate::View::DeviceList;
+use crate::device_list_view::DeviceListView;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
     scrollbar_style, text_input_style, tooltip_style,
 };
 use crate::{Message, View, icons};
+use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::{
@@ -44,16 +46,15 @@ use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position};
-use meshtastic::utils::stream::BleDevice;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq)]
 pub enum ConnectionState {
-    Disconnected(Option<BleDevice>, Option<String>),
-    Connecting(BleDevice),
-    Connected(BleDevice),
-    Disconnecting(BleDevice),
+    Disconnected(Option<BDAddr>, Option<String>),
+    Connecting(BDAddr),
+    Connected(BDAddr),
+    Disconnecting(BDAddr),
 }
 
 impl Default for ConnectionState {
@@ -64,8 +65,8 @@ impl Default for ConnectionState {
 
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
-    ConnectRequest(BleDevice, Option<ChannelId>),
-    DisconnectRequest(BleDevice, bool), // bool is to exit or not
+    ConnectRequest(BDAddr, Option<ChannelId>),
+    DisconnectRequest(BDAddr, bool), // bool is to exit or not
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
@@ -99,8 +100,8 @@ pub struct DeviceView {
     pub forwarding_message: Option<ChannelViewEntry>,
 }
 
-async fn request_connection(sender: Sender<SubscriberMessage>, device: BleDevice) {
-    let _ = sender.send(Connect(device)).await;
+async fn request_connection(sender: Sender<SubscriberMessage>, mac_address: BDAddr) {
+    let _ = sender.send(Connect(mac_address)).await;
 }
 
 async fn request_send(
@@ -139,17 +140,17 @@ impl DeviceView {
     /// Return a true value to show we can show the device view, false for main to decide
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
-            ConnectRequest(device, channel_id) => {
+            ConnectRequest(mac_address, channel_id) => {
                 // save the desired channel to show for when the connection is completed later
-                self.connection_state = Connecting(device.clone());
+                self.connection_state = Connecting(mac_address);
                 let sender = self.subscription_sender.clone();
-                return Task::perform(request_connection(sender.unwrap(), device.clone()), |_| {
+                return Task::perform(request_connection(sender.unwrap(), mac_address), |_| {
                     Navigation(View::Device(channel_id))
                 });
             }
-            DisconnectRequest(name, exit) => {
+            DisconnectRequest(mac_address, exit) => {
                 self.exit_pending = exit;
-                self.connection_state = Disconnecting(name);
+                self.connection_state = Disconnecting(mac_address);
                 // Send a message to the subscription to disconnect
                 let sender = self.subscription_sender.clone();
                 return Task::perform(request_disconnection(sender.unwrap()), |_| {
@@ -210,17 +211,17 @@ impl DeviceView {
             self.viewing_channel = channel_id.clone();
 
             if let Some(channel) = &channel_id
-                && let Connected(device) = &self.connection_state
+                && let Connected(mac_address) = &self.connection_state
                 && let Some(channel_view) = self.channel_views.get_mut(channel)
             {
                 if let Some(forwarded_message) = &self.forwarding_message.take() {
                     channel_view.forward(forwarded_message.to_owned());
                 }
 
-                let device = device.clone();
                 let channel_id = channel_id.clone();
+                let mac_address = *mac_address;
                 return Task::perform(empty(), move |_| {
-                    Message::ConfigChange(DeviceAndChannel(Some(device), channel_id))
+                    Message::ConfigChange(DeviceAndChannel(Some(mac_address), channel_id))
                 });
             }
         }
@@ -245,14 +246,14 @@ impl DeviceView {
         subscription_event: SubscriptionEvent,
     ) -> Task<Message> {
         match subscription_event {
-            ConnectedEvent(device) => {
-                self.connection_state = Connected(device.clone());
+            ConnectedEvent(mac_address) => {
+                self.connection_state = Connected(mac_address);
                 match &self.viewing_channel {
                     None => {
                         let channel_id = self.viewing_channel.clone();
                         Task::perform(empty(), move |_| {
                             Message::ConfigChange(DeviceAndChannel(
-                                Some(device.clone()),
+                                Some(mac_address),
                                 channel_id.clone(),
                             ))
                         })
@@ -508,6 +509,7 @@ impl DeviceView {
         &'a self,
         config: &'a Config,
         state: &'a ConnectionState,
+        device_list_view: &DeviceListView,
     ) -> Element<'a, Message> {
         let mut header = Row::new().padding(4).align_y(Center).push(
             button("Devices")
@@ -519,10 +521,15 @@ impl DeviceView {
             Disconnected(_, _) => header
                 .push(Space::new().width(Fill))
                 .push(button("Disconnected").style(button_chip_style)),
-            Connecting(device) => {
-                let name_button =
-                    button(text(format!("📱 {}", device.name.as_ref().unwrap())).shaping(Advanced))
-                        .style(button_chip_style);
+            Connecting(mac_address) => {
+                let name_button = button(
+                    text(format!(
+                        "📱 {}",
+                        device_list_view.device_name_or_alias(mac_address, config)
+                    ))
+                    .shaping(Advanced),
+                )
+                .style(button_chip_style);
                 header = header.push(name_button);
                 header
                     .push(Space::new().width(Fill))
@@ -530,7 +537,13 @@ impl DeviceView {
             }
             Connected(device) => {
                 let name_row = Row::new()
-                    .push(text(format!("📱 {}", device.name.as_ref().unwrap())).shaping(Advanced))
+                    .push(
+                        text(format!(
+                            "📱 {}",
+                            device_list_view.device_name_or_alias(device, config)
+                        ))
+                        .shaping(Advanced),
+                    )
                     .push(Space::new().width(4))
                     .push(Self::unread_counter(self.unread_count()));
                 let mut button = button(name_row).style(button_chip_style);
@@ -545,9 +558,14 @@ impl DeviceView {
                     .push(self.battery_level())
             }
             Disconnecting(device) => {
-                let button =
-                    button(text(format!("📱 {}", device.name.as_ref().unwrap())).shaping(Advanced))
-                        .style(button_chip_style);
+                let button = button(
+                    text(format!(
+                        "📱 {}",
+                        device_list_view.device_name_or_alias(device, config)
+                    ))
+                    .shaping(Advanced),
+                )
+                .style(button_chip_style);
                 header = header.push(button);
                 header
                     .push(Space::new().width(Fill))
@@ -575,10 +593,10 @@ impl DeviceView {
         }
 
         // Add a disconnect button on the right if we are connected
-        if let Connected(device) = state {
+        if let Connected(mac_address) = state {
             header = header.push(Space::new().width(Fill)).push(
                 button("Disconnect")
-                    .on_press(DeviceViewEvent(DisconnectRequest(device.clone(), false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(*mac_address, false)))
                     .style(button_chip_style),
             )
         }
@@ -889,7 +907,7 @@ impl DeviceView {
         add_buttons: bool,
         select: fn(ChannelId) -> Message,
     ) -> Element<'a, Message> {
-        let name: &str = self
+        let user_name: &str = self
             .nodes
             .get(&node_id)
             .and_then(|node_info| node_info.user.as_ref().map(|user| user.long_name.as_ref()))
@@ -898,7 +916,7 @@ impl DeviceView {
         let name_element: Element<'a, Message> = if let Some(alias) = config.aliases.get(&node_id) {
             tooltip(
                 text(alias).shaping(Advanced),
-                text(format!("Original node name: {}", name)).shaping(Advanced),
+                text(format!("Original user name: {}", user_name)).shaping(Advanced),
                 tooltip::Position::Right,
             )
             .style(tooltip_style)
@@ -906,13 +924,13 @@ impl DeviceView {
         } else if let Some(editing_node_id) = self.editing_alias
             && editing_node_id == node_id
         {
-            text_input("Enter node alias", &self.alias)
+            text_input("Enter alias for this user name", &self.alias)
                 .on_input(|s| DeviceViewEvent(AliasInput(s)))
                 .on_submit(AddNodeAlias(editing_node_id, self.alias.clone()))
                 .style(text_input_style)
                 .into()
         } else {
-            text(name.to_string()).shaping(Advanced).into()
+            text(user_name.to_string()).shaping(Advanced).into()
         };
 
         let name_row = Row::new()
@@ -937,70 +955,80 @@ impl DeviceView {
         };
 
         if add_buttons {
-            // Add a button to add or remove an alias for this node '👤'
-            let (tooltip_text, message) = if config.aliases.contains_key(&node_id) {
-                ("Remove alias for this node", RemoveNodeAlias(node_id))
-            } else {
-                (
-                    "Add an alias for this node",
-                    DeviceViewEvent(StartEditingAlias(node_id)),
-                )
-            };
+            node_row = self.add_buttons(node_row, node_id, favourite, config)
+        }
 
-            node_row = node_row.push(
+        node_row.into()
+    }
+
+    fn add_buttons<'a>(
+        &self,
+        mut node_row: Row<'a, Message>,
+        node_id: u32,
+        favourite: bool,
+        config: &'a Config,
+    ) -> Row<'a, Message> {
+        // Add a button to add or remove an alias for this node '👤'
+        let (tooltip_text, message) = if config.aliases.contains_key(&node_id) {
+            ("Remove alias for this node", RemoveNodeAlias(node_id))
+        } else {
+            (
+                "Add an alias for this node",
+                DeviceViewEvent(StartEditingAlias(node_id)),
+            )
+        };
+
+        node_row = node_row.push(
+            tooltip(
+                button(text("👤").shaping(Advanced))
+                    .on_press(message)
+                    .style(fav_button_style),
+                tooltip_text,
+                tooltip::Position::Left,
+            )
+            .gap(6)
+            .style(tooltip_style),
+        );
+
+        // Add a button to show the location of the node if it has one
+        node_row = if let Some(node) = self.nodes.get(&node_id)
+            && let Some(position) = &node.position
+        {
+            node_row.push(
                 tooltip(
-                    button(text("👤").shaping(Advanced))
-                        .on_press(message)
+                    button(text("📌").shaping(Advanced))
+                        .style(fav_button_style)
+                        .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
+                    "Show node position in maps",
+                    tooltip::Position::Left,
+                )
+                .gap(6)
+                .style(tooltip_style),
+            )
+        } else {
+            node_row.push(Space::new().width(36))
+        };
+
+        // Add a button to toggle the favourite status of the node
+        let (tooltip_text, icon) = if favourite {
+            ("Unfavourite this node", icons::star())
+        } else {
+            ("Favourite this node", icons::star_empty())
+        };
+
+        node_row
+            .push(
+                tooltip(
+                    button(icon)
+                        .on_press(ToggleNodeFavourite(node_id))
                         .style(fav_button_style),
                     tooltip_text,
                     tooltip::Position::Left,
                 )
                 .gap(6)
                 .style(tooltip_style),
-            );
-
-            // Add a button to show the location of the node if it has one
-            node_row = if let Some(node) = self.nodes.get(&node_id)
-                && let Some(position) = &node.position
-            {
-                node_row.push(
-                    tooltip(
-                        button(text("📌").shaping(Advanced))
-                            .style(fav_button_style)
-                            .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
-                        "Show node position in maps",
-                        tooltip::Position::Left,
-                    )
-                    .gap(6)
-                    .style(tooltip_style),
-                )
-            } else {
-                node_row.push(Space::new().width(36))
-            };
-
-            // Add a button to toggle the favourite status of the node
-            let (tooltip_text, icon) = if favourite {
-                ("Unfavourite this node", icons::star())
-            } else {
-                ("Favourite this node", icons::star_empty())
-            };
-
-            node_row = node_row
-                .push(
-                    tooltip(
-                        button(icon)
-                            .on_press(ToggleNodeFavourite(node_id))
-                            .style(fav_button_style),
-                        tooltip_text,
-                        tooltip::Position::Left,
-                    )
-                    .gap(6)
-                    .style(tooltip_style),
-                )
-                .push(Space::new().width(10))
-        }
-
-        node_row.into()
+            )
+            .push(Space::new().width(10))
     }
 
     fn search_box(&self) -> Element<'static, Message> {

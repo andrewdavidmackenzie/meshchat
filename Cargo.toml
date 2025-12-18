@@ -40,6 +40,7 @@ futures-channel = { version = "0.3.31", default-features = false }
 chrono = { version = "0.4.42", default-features = false, features = ["clock"] }
 webbrowser = { version = "1.0", default-features = false }
 iced_aw = { version = "0.13", default-features = false, features = ["menu"] }
+btleplug = "0.11.8"
 
 [build-dependencies]
 iced_fontello = "0.13"

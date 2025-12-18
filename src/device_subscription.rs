@@ -6,6 +6,7 @@ use crate::device_subscription::SubscriberMessage::{
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent,
 };
+use btleplug::api::BDAddr;
 use futures::SinkExt;
 use iced::stream;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
@@ -17,7 +18,7 @@ use meshtastic::protobufs::from_radio::PayloadVariant::{
 };
 use meshtastic::protobufs::{FromRadio, MeshPacket, PortNum, Position, User};
 use meshtastic::types::NodeId;
-use meshtastic::utils::stream::BleDevice;
+use meshtastic::utils::stream::BleId;
 use meshtastic::{Message, utils};
 use std::pin::Pin;
 use std::time::Duration;
@@ -29,16 +30,16 @@ use tokio_stream::{Stream, StreamExt};
 pub enum SubscriptionEvent {
     /// A message from the subscription to indicate it is ready to receive messages
     Ready(Sender<SubscriberMessage>),
-    ConnectedEvent(BleDevice),
-    DisconnectedEvent(BleDevice),
+    ConnectedEvent(BDAddr),
+    DisconnectedEvent(BDAddr),
     DevicePacket(Box<FromRadio>),
     DeviceMeshPacket(Box<MeshPacket>),
-    ConnectionError(BleDevice, String, String),
+    ConnectionError(BDAddr, String, String),
 }
 
 /// A message type sent from the UI to the subscriber
 pub enum SubscriberMessage {
-    Connect(BleDevice),
+    Connect(BDAddr),
     Disconnect,
     SendText(String, ChannelId, Option<u32>), // Optional reply to message id
     SendPosition(ChannelId, Position),
@@ -48,7 +49,7 @@ pub enum SubscriberMessage {
 
 enum DeviceState {
     Disconnected,
-    Connected(BleDevice, PacketReceiver),
+    Connected(BDAddr, PacketReceiver),
 }
 
 struct MyRouter {
@@ -157,25 +158,22 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     Disconnected => {
                         // Wait for a message from the UI to request that we connect to a device
                         // No need to wait for any messages from a radio, as we are not connected to one
-                        if let Some(Connect(device)) = subscriber_receiver.next().await {
-                            match do_connect(&device).await {
+                        if let Some(Connect(mac_address)) = subscriber_receiver.next().await {
+                            match do_connect(&mac_address).await {
                                 Ok((packet_receiver, stream)) => {
-                                    device_state = Connected(device.clone(), packet_receiver);
+                                    device_state = Connected(mac_address, packet_receiver);
                                     stream_api = Some(stream);
 
                                     gui_sender
-                                        .send(ConnectedEvent(device.clone()))
+                                        .send(ConnectedEvent(mac_address))
                                         .await
                                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                                 }
                                 Err(e) => {
                                     gui_sender
                                         .send(ConnectionError(
-                                            device.clone(),
-                                            format!(
-                                                "Failed to connect to {}",
-                                                device.name.as_ref().unwrap()
-                                            ),
+                                            mac_address,
+                                            format!("Failed to connect to {}", mac_address),
                                             e.to_string(),
                                         ))
                                         .await
@@ -184,7 +182,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             }
                         }
                     }
-                    Connected(device, packet_receiver) => {
+                    Connected(mac_address, packet_receiver) => {
                         let radio_stream = UnboundedReceiverStream::from(packet_receiver)
                             .map(|fr| RadioPacket(Box::new(fr)));
 
@@ -234,7 +232,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             if let Err(e) = result {
                                 gui_sender
                                     .send(ConnectionError(
-                                        device.clone(),
+                                        mac_address,
                                         "Send error".to_string(),
                                         e.to_string(),
                                     ))
@@ -248,7 +246,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         device_state = Disconnected;
                         let _ = do_disconnect(api).await;
                         gui_sender
-                            .send(DisconnectedEvent(device.clone()))
+                            .send(DisconnectedEvent(mac_address))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                     }
@@ -335,10 +333,12 @@ async fn send_info(
 
 /// Connect to a specific [BleDevice] and return a [PacketReceiver] that receives messages from the
 /// radio and a [ConnectedStreamApi] that can be used to send messages to the radio.
-async fn do_connect(device: &BleDevice) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
-    let ble_stream =
-        utils::stream::build_ble_stream::<BleDevice>(device.clone(), Duration::from_secs(4))
-            .await?;
+async fn do_connect(mac_address: &BDAddr) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
+    let ble_stream = utils::stream::build_ble_stream::<BleId>(
+        BleId::from_mac_address(&mac_address.to_string()).unwrap(),
+        Duration::from_secs(4),
+    )
+    .await?;
     let stream_api = StreamApi::new();
     let (packet_receiver, stream_api) = stream_api.connect(ble_stream).await;
     let config_id = utils::generate_rand_id();
