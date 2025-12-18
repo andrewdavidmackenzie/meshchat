@@ -118,10 +118,23 @@ pub const RADIUS_12: Radius = Radius {
     bottom_left: 12.0,
 };
 
+pub const RADIUS_12_TOP: Radius = Radius {
+    top_left: 12.0,
+    top_right: 12.0,
+    bottom_right: 0.0,
+    bottom_left: 0.0,
+};
+
 pub const TOOLTIP_BORDER: Border = Border {
     color: Color::WHITE,
     width: 1.0,
     radius: RADIUS_12,
+};
+
+pub const PICKER_HEADER_BORDER: Border = Border {
+    color: Color::WHITE,
+    width: 1.0,
+    radius: RADIUS_12_TOP,
 };
 
 pub const VIEW_BUTTON_BORDER: Border = Border {
@@ -218,6 +231,15 @@ pub fn tooltip_style(_theme: &Theme) -> Style {
     }
 }
 
+pub fn picker_header_style(_theme: &Theme) -> Style {
+    Style {
+        text_color: Some(Color::WHITE),
+        background: Some(COLOR_GRAY_40.into()),
+        border: PICKER_HEADER_BORDER,
+        shadow: NO_SHADOW,
+        snap: false,
+    }
+}
 pub fn count_style(_theme: &Theme) -> Style {
     Style {
         text_color: Some(Color::WHITE),

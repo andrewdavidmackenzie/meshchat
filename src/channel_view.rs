@@ -1,28 +1,35 @@
 use crate::Message::DeviceViewEvent;
 use crate::channel_view::ChannelId::{Channel, Node};
 use crate::channel_view::ChannelViewMessage::{
-    CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PrepareReply, SendMessage,
+    CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PickChannel, PrepareReply,
+    SendMessage,
 };
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
-use crate::device_view::DeviceViewMessage;
-use crate::device_view::DeviceViewMessage::{ChannelMsg, SendInfoMessage, SendPositionMessage};
+use crate::config::Config;
+use crate::device_view::DeviceViewMessage::{
+    ChannelMsg, SendInfoMessage, SendPositionMessage, ShowChannel, StopPicking,
+};
+use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, button_chip_style, reply_to_style, scrollbar_style, text_input_style,
+    DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
+    text_input_style, tooltip_style,
 };
 use crate::{Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local};
 use iced::font::Style::Italic;
+use iced::font::Weight;
 use iced::padding::right;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
-    Button, Column, Container, Row, Space, button, container, scrollable, text, text_input,
+    Button, Column, Container, Row, Space, button, center, container, mouse_area, opaque,
+    scrollable, stack, text, text_input,
 };
-use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
+use iced::{Center, Color, Element, Fill, Font, Padding, Pixels, Task};
 use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::NodeInfo;
 use meshtastic::types::{MeshChannel, NodeId};
@@ -40,6 +47,7 @@ pub enum ChannelViewMessage {
     PrepareReply(u32),        // entry_id
     CancelPrepareReply,
     MessageSeen(ChannelId, u32),
+    PickChannel(Option<ChannelId>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
@@ -77,6 +85,7 @@ impl ChannelId {
 
 /// [ChannelView] implements view and update methods for Iced for a set of
 /// messages to and from a "Channel" which can be a Channel or a Node
+#[derive(Debug, Default)]
 pub struct ChannelView {
     channel_id: ChannelId,
     message: String,                         // text message typed in so far
@@ -93,10 +102,8 @@ impl ChannelView {
     pub fn new(channel_id: ChannelId, source: u32) -> Self {
         Self {
             channel_id,
-            message: String::new(),
-            entries: RingMap::new(),
             my_source: source,
-            preparing_reply: None,
+            ..Default::default()
         }
     }
 
@@ -105,6 +112,15 @@ impl ChannelView {
         if let Some(entry) = self.entries.get_mut(&request_id) {
             entry.ack();
         }
+    }
+
+    /// Forward a message to this channel - update the time and prefix with "fwd:"
+    pub fn forward(&mut self, mut entry: ChannelViewEntry) {
+        // update the entry's time of arrival to be the forwarding time
+        entry.update_time();
+        entry.forwarded();
+        self.entries
+            .insert_sorted_by(entry.message_id(), entry, ChannelViewEntry::sort_by_rx_time);
     }
 
     /// Add an emoji reply to a message.
@@ -185,6 +201,9 @@ impl ChannelView {
                 }
                 Task::none()
             }
+            PickChannel(channel_id) => {
+                Task::perform(empty(), move |_| DeviceViewEvent(ShowChannel(channel_id)))
+            }
         }
     }
 
@@ -194,8 +213,25 @@ impl ChannelView {
         nodes: &'a HashMap<u32, NodeInfo>,
         enable_position: bool,
         enable_my_info: bool,
+        device_view: &'a DeviceView,
+        config: &'a Config,
     ) -> Element<'a, Message> {
-        let mut channel_view = Column::new().padding(right(10));
+        let channel_view_content = self.channel_view(nodes, enable_position, enable_my_info);
+
+        if device_view.forwarding_message.is_some() {
+            self.channel_picker(channel_view_content, device_view, config)
+        } else {
+            channel_view_content
+        }
+    }
+
+    fn channel_view<'a>(
+        &'a self,
+        nodes: &'a HashMap<u32, NodeInfo>,
+        enable_position: bool,
+        enable_my_info: bool,
+    ) -> Element<'a, Message> {
+        let mut channel_view_content = Column::new().padding(right(10));
 
         let message_area: Element<'a, Message> = if self.entries.is_empty() {
             Self::empty_view()
@@ -208,11 +244,12 @@ impl ChannelView {
 
                 // Add a day separator when the day of an entry changes
                 if message_day != previous_day {
-                    channel_view = channel_view.push(Self::day_separator(&entry.time()));
+                    channel_view_content =
+                        channel_view_content.push(Self::day_separator(&entry.time()));
                     previous_day = message_day;
                 }
 
-                channel_view = channel_view.push(entry.view(
+                channel_view_content = channel_view_content.push(entry.view(
                     &self.entries,
                     nodes,
                     &self.channel_id,
@@ -221,7 +258,7 @@ impl ChannelView {
             }
 
             // Wrap the list of messages in a scrollable container, with a scrollbar
-            scrollable(channel_view)
+            scrollable(channel_view_content)
                 .direction({
                     let scrollbar = Scrollbar::new().width(10.0);
                     scrollable::Direction::Vertical(scrollbar)
@@ -279,6 +316,68 @@ impl ChannelView {
             .height(Fill)
             .align_x(Center)
             .into()
+    }
+
+    /// Create a modal dialog with a channel list view inside it that the user can use to
+    /// select a channel/node from
+    fn channel_picker<'a>(
+        &'a self,
+        content: Element<'a, Message>,
+        device_view: &'a DeviceView,
+        config: &'a Config,
+    ) -> Element<'a, Message> {
+        let select = |channel_number: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_number)));
+        let inner_picker = Column::new()
+            .push(
+                container(
+                    text("Chose channel or node to forward message to")
+                        .size(18)
+                        .width(Fill)
+                        .font(Font {
+                            weight: Weight::Bold,
+                            ..Default::default()
+                        })
+                        .align_x(Center),
+                )
+                .style(picker_header_style)
+                .padding(4),
+            )
+            .push(device_view.channel_and_node_list(config, false, select));
+        let picker = container(inner_picker)
+            .style(tooltip_style)
+            .width(400)
+            .height(600);
+        Self::modal(content, picker, DeviceViewEvent(StopPicking))
+    }
+
+    /// Function to create a modal dialog in the middle of the screen
+    fn modal<'a, Message>(
+        base: impl Into<Element<'a, Message>>,
+        content: impl Into<Element<'a, Message>>,
+        on_blur: Message,
+    ) -> Element<'a, Message>
+    where
+        Message: Clone + 'a,
+    {
+        stack![
+            base.into(),
+            opaque(
+                mouse_area(center(opaque(content)).style(|_theme| {
+                    container::Style {
+                        background: Some(
+                            Color {
+                                a: 0.8,
+                                ..Color::BLACK
+                            }
+                            .into(),
+                        ),
+                        ..container::Style::default()
+                    }
+                }))
+                .on_press(on_blur)
+            )
+        ]
+        .into()
     }
 
     /// Add a row that explains we are replying to a prior message

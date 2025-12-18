@@ -15,8 +15,9 @@ use crate::device_subscription::SubscriptionEvent::{
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
-    AliasInput, ChannelMsg, ConnectRequest, DisconnectRequest, SearchInput, SendInfoMessage,
-    SendPositionMessage, SendTextMessage, ShowChannel, StartEditingAlias, SubscriptionMessage,
+    AliasInput, ChannelMsg, ConnectRequest, DisconnectRequest, Forward, SearchInput,
+    SendInfoMessage, SendPositionMessage, SendTextMessage, ShowChannel, StartEditingAlias,
+    StopPicking, SubscriptionMessage,
 };
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
@@ -74,6 +75,8 @@ pub enum DeviceViewMessage {
     SearchInput(String),
     StartEditingAlias(u32),
     AliasInput(String),
+    Forward(ChannelViewEntry),
+    StopPicking,
 }
 
 #[derive(Default)]
@@ -93,6 +96,7 @@ pub struct DeviceView {
     battery_level: Option<u32>,
     editing_alias: Option<u32>,
     alias: String,
+    pub forwarding_message: Option<ChannelViewEntry>,
 }
 
 async fn request_connection(sender: Sender<SubscriberMessage>, device: BleDevice) {
@@ -153,18 +157,7 @@ impl DeviceView {
                 });
             }
             ShowChannel(channel_id) => {
-                // Save this even if we are not connected yet
-                self.viewing_channel = channel_id;
-                if let Connected(device) = &self.connection_state {
-                    let channel_id_clone = self.viewing_channel.clone();
-                    let device_clone = device.clone();
-                    return Task::perform(empty(), move |_| {
-                        Message::ConfigChange(DeviceAndChannel(
-                            Some(device_clone.clone()),
-                            channel_id_clone.clone(),
-                        ))
-                    });
-                }
+                return self.channel_change(channel_id.clone());
             }
             SubscriptionMessage(subscription_event) => {
                 return self.process_subscription_event(subscription_event);
@@ -203,8 +196,34 @@ impl DeviceView {
             SearchInput(filter) => self.filter = filter,
             AliasInput(alias) => self.alias = alias,
             StartEditingAlias(node_id) => self.start_editing_alias(node_id),
+            Forward(chanel_view_entry) => self.forwarding_message = Some(chanel_view_entry),
+            StopPicking => self.forwarding_message = None,
         }
 
+        Task::none()
+    }
+
+    /// ave the new channel (which could be None) and if we are connected to a device
+    /// asynchronously, save the modified config
+    fn channel_change(&mut self, channel_id: Option<ChannelId>) -> Task<Message> {
+        if self.viewing_channel != channel_id {
+            self.viewing_channel = channel_id.clone();
+
+            if let Some(channel) = &channel_id
+                && let Connected(device) = &self.connection_state
+                && let Some(channel_view) = self.channel_views.get_mut(channel)
+            {
+                if let Some(forwarded_message) = &self.forwarding_message.take() {
+                    channel_view.forward(forwarded_message.to_owned());
+                }
+
+                let device = device.clone();
+                let channel_id = channel_id.clone();
+                return Task::perform(empty(), move |_| {
+                    Message::ConfigChange(DeviceAndChannel(Some(device), channel_id))
+                });
+            }
+        }
         Task::none()
     }
 
@@ -603,37 +622,61 @@ impl DeviceView {
         if let Some(channel_number) = &self.viewing_channel
             && let Some(channel_view) = self.channel_views.get(channel_number)
         {
-            return channel_view.view(&self.nodes, self.my_position.is_some(), self.my_info);
+            return channel_view.view(
+                &self.nodes,
+                self.my_position.is_some(),
+                self.my_info,
+                self,
+                config,
+            );
         }
 
+        let select = |channel_number: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_number)));
+
         // If not viewing a channel/user, show the list of channels and users
-        let mut channels_list = self.channel_list();
+        let channel_and_node_scroll = self.channel_and_node_list(config, true, select);
+
+        // Add a search box at the top, outside the scrollable area
+        Column::new()
+            .push(self.search_box())
+            .push(channel_and_node_scroll)
+            .into()
+    }
+
+    /// Create a list of channels and nodes in this device with a button to select one of them
+    pub fn channel_and_node_list<'a>(
+        &'a self,
+        config: &'a Config,
+        add_buttons: bool,
+        select: fn(ChannelId) -> Message,
+    ) -> Element<'a, Message> {
+        // If not viewing a channel/user, show the list of channels and users
+        let mut channels_list = self.channel_list(add_buttons, select);
 
         // Add the favourite nodes to the list if there are any
-        channels_list = self.favourite_nodes(channels_list, config);
+        channels_list = self.favourite_nodes(channels_list, config, add_buttons, select);
 
         // Add the list of non-favourite nodes
-        channels_list = self.nodes_list(channels_list, config);
+        channels_list = self.nodes_list(channels_list, config, add_buttons, select);
 
         // Wrap the whole thing in a scrollable area
-        let channel_and_user_scroll = scrollable(channels_list)
+        scrollable(channels_list)
             .direction({
                 let scrollbar = Scrollbar::new().width(10);
                 scrollable::Direction::Vertical(scrollbar)
             })
             .style(scrollbar_style)
             .width(Fill)
-            .height(Fill);
-
-        // Add a search box at the top, outside the scrollable area
-        Column::new()
-            .push(self.search_box())
-            .push(channel_and_user_scroll)
+            .height(Fill)
             .into()
     }
 
     /// Create a column with a set of rows, one for each channel
-    fn channel_list(&self) -> Column<'_, Message> {
+    fn channel_list(
+        &self,
+        add_buttons: bool,
+        select: fn(ChannelId) -> Message,
+    ) -> Column<'_, Message> {
         let mut channels_list = Column::new();
 
         if !self.channels.is_empty() {
@@ -657,6 +700,8 @@ impl DeviceView {
                     .unwrap()
                     .num_unseen_messages(),
                 channel_id,
+                add_buttons,
+                select,
             );
             channels_list = channels_list.push(channel_row);
         }
@@ -670,6 +715,8 @@ impl DeviceView {
         &'a self,
         mut channels_list: Column<'a, Message>,
         config: &'a Config,
+        add_buttons: bool,
+        select: fn(ChannelId) -> Message,
     ) -> Column<'a, Message> {
         let mut fav_nodes: Vec<u32> = vec![];
 
@@ -694,6 +741,8 @@ impl DeviceView {
                         fav_node_id,
                         true, // Favourite
                         config,
+                        add_buttons,
+                        select,
                     ));
                 }
             }
@@ -708,6 +757,8 @@ impl DeviceView {
         &'a self,
         mut channels_list: Column<'a, Message>,
         config: &'a Config,
+        add_buttons: bool,
+        select: fn(ChannelId) -> Message,
     ) -> Column<'a, Message> {
         let node_list = self
             .nodes
@@ -737,6 +788,8 @@ impl DeviceView {
                             *node_id,
                             false, // Not a Favourite
                             config,
+                            add_buttons,
+                            select,
                         ),
                     );
                 }
@@ -800,10 +853,14 @@ impl DeviceView {
     }
 
     /// Create a Button that represents either a Channel or a Node
+    /// DeviceViewEvent(ShowChannel(Some(channel_id)))
+    /// DeviceViewEvent(ShowChannel(Some(channel_id)))
     fn channel_row(
         name: String,
         num_messages: usize,
         channel_id: ChannelId,
+        _add_buttons: bool,
+        select: fn(ChannelId) -> Message,
     ) -> Element<'static, Message> {
         let name_row = Row::new()
             .push(text(name).shaping(Advanced))
@@ -813,7 +870,7 @@ impl DeviceView {
         Row::new()
             .push(
                 button(name_row)
-                    .on_press(DeviceViewEvent(ShowChannel(Some(channel_id))))
+                    .on_press(select(channel_id))
                     .width(Fill)
                     .style(channel_row_style),
             )
@@ -829,6 +886,8 @@ impl DeviceView {
         node_id: u32,
         favourite: bool,
         config: &'a Config,
+        add_buttons: bool,
+        select: fn(ChannelId) -> Message,
     ) -> Element<'a, Message> {
         let name: &str = self
             .nodes
@@ -865,10 +924,11 @@ impl DeviceView {
 
         let mut node_row = Row::new().align_y(Bottom);
 
+        let channel_id = Node(node_id);
         node_row = if self.editing_alias.is_none() {
             node_row.push(
                 button(name_row)
-                    .on_press(DeviceViewEvent(ShowChannel(Some(Node(node_id)))))
+                    .on_press(select(channel_id))
                     .width(Fill)
                     .style(channel_row_style),
             )
@@ -876,68 +936,71 @@ impl DeviceView {
             node_row.push(name_row)
         };
 
-        // Add a button to add or remove an alias for this node '👤'
-        let (tooltip_text, message) = if config.aliases.contains_key(&node_id) {
-            ("Remove alias for this node", RemoveNodeAlias(node_id))
-        } else {
-            (
-                "Add an alias for this node",
-                DeviceViewEvent(StartEditingAlias(node_id)),
-            )
-        };
-
-        node_row = node_row.push(
-            tooltip(
-                button(text("👤").shaping(Advanced))
-                    .on_press(message)
-                    .style(fav_button_style),
-                tooltip_text,
-                tooltip::Position::Left,
-            )
-            .gap(6)
-            .style(tooltip_style),
-        );
-
-        // Add a button to show the location of the node if it has one
-        node_row = if let Some(node) = self.nodes.get(&node_id)
-            && let Some(position) = &node.position
-        {
-            node_row.push(
-                tooltip(
-                    button(text("📌").shaping(Advanced))
-                        .style(fav_button_style)
-                        .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
-                    "Show node position in maps",
-                    tooltip::Position::Left,
+        if add_buttons {
+            // Add a button to add or remove an alias for this node '👤'
+            let (tooltip_text, message) = if config.aliases.contains_key(&node_id) {
+                ("Remove alias for this node", RemoveNodeAlias(node_id))
+            } else {
+                (
+                    "Add an alias for this node",
+                    DeviceViewEvent(StartEditingAlias(node_id)),
                 )
-                .gap(6)
-                .style(tooltip_style),
-            )
-        } else {
-            node_row.push(Space::new().width(36))
-        };
+            };
 
-        // Add a button to toggle the favourite status of the node
-        let (tooltip_text, icon) = if favourite {
-            ("Unfavourite this node", icons::star())
-        } else {
-            ("Favourite this node", icons::star_empty())
-        };
-
-        node_row
-            .push(
+            node_row = node_row.push(
                 tooltip(
-                    button(icon)
-                        .on_press(ToggleNodeFavourite(node_id))
+                    button(text("👤").shaping(Advanced))
+                        .on_press(message)
                         .style(fav_button_style),
                     tooltip_text,
                     tooltip::Position::Left,
                 )
                 .gap(6)
                 .style(tooltip_style),
-            )
-            .push(Space::new().width(10))
-            .into()
+            );
+
+            // Add a button to show the location of the node if it has one
+            node_row = if let Some(node) = self.nodes.get(&node_id)
+                && let Some(position) = &node.position
+            {
+                node_row.push(
+                    tooltip(
+                        button(text("📌").shaping(Advanced))
+                            .style(fav_button_style)
+                            .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
+                        "Show node position in maps",
+                        tooltip::Position::Left,
+                    )
+                    .gap(6)
+                    .style(tooltip_style),
+                )
+            } else {
+                node_row.push(Space::new().width(36))
+            };
+
+            // Add a button to toggle the favourite status of the node
+            let (tooltip_text, icon) = if favourite {
+                ("Unfavourite this node", icons::star())
+            } else {
+                ("Favourite this node", icons::star_empty())
+            };
+
+            node_row = node_row
+                .push(
+                    tooltip(
+                        button(icon)
+                            .on_press(ToggleNodeFavourite(node_id))
+                            .style(fav_button_style),
+                        tooltip_text,
+                        tooltip::Position::Left,
+                    )
+                    .gap(6)
+                    .style(tooltip_style),
+                )
+                .push(Space::new().width(10))
+        }
+
+        node_row.into()
     }
 
     fn search_box(&self) -> Element<'static, Message> {
