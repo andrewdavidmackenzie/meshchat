@@ -889,7 +889,7 @@ impl DeviceView {
         add_buttons: bool,
         select: fn(ChannelId) -> Message,
     ) -> Element<'a, Message> {
-        let name: &str = self
+        let user_name: &str = self
             .nodes
             .get(&node_id)
             .and_then(|node_info| node_info.user.as_ref().map(|user| user.long_name.as_ref()))
@@ -898,7 +898,7 @@ impl DeviceView {
         let name_element: Element<'a, Message> = if let Some(alias) = config.aliases.get(&node_id) {
             tooltip(
                 text(alias).shaping(Advanced),
-                text(format!("Original node name: {}", name)).shaping(Advanced),
+                text(format!("Original user name: {}", user_name)).shaping(Advanced),
                 tooltip::Position::Right,
             )
             .style(tooltip_style)
@@ -906,13 +906,13 @@ impl DeviceView {
         } else if let Some(editing_node_id) = self.editing_alias
             && editing_node_id == node_id
         {
-            text_input("Enter node alias", &self.alias)
+            text_input("Enter alias for this user name", &self.alias)
                 .on_input(|s| DeviceViewEvent(AliasInput(s)))
                 .on_submit(AddNodeAlias(editing_node_id, self.alias.clone()))
                 .style(text_input_style)
                 .into()
         } else {
-            text(name.to_string()).shaping(Advanced).into()
+            text(user_name.to_string()).shaping(Advanced).into()
         };
 
         let name_row = Row::new()
@@ -937,70 +937,80 @@ impl DeviceView {
         };
 
         if add_buttons {
-            // Add a button to add or remove an alias for this node '👤'
-            let (tooltip_text, message) = if config.aliases.contains_key(&node_id) {
-                ("Remove alias for this node", RemoveNodeAlias(node_id))
-            } else {
-                (
-                    "Add an alias for this node",
-                    DeviceViewEvent(StartEditingAlias(node_id)),
-                )
-            };
+            node_row = self.add_buttons(node_row, node_id, favourite, config)
+        }
 
-            node_row = node_row.push(
+        node_row.into()
+    }
+
+    fn add_buttons<'a>(
+        &self,
+        mut node_row: Row<'a, Message>,
+        node_id: u32,
+        favourite: bool,
+        config: &'a Config,
+    ) -> Row<'a, Message> {
+        // Add a button to add or remove an alias for this node '👤'
+        let (tooltip_text, message) = if config.aliases.contains_key(&node_id) {
+            ("Remove alias for this node", RemoveNodeAlias(node_id))
+        } else {
+            (
+                "Add an alias for this node",
+                DeviceViewEvent(StartEditingAlias(node_id)),
+            )
+        };
+
+        node_row = node_row.push(
+            tooltip(
+                button(text("👤").shaping(Advanced))
+                    .on_press(message)
+                    .style(fav_button_style),
+                tooltip_text,
+                tooltip::Position::Left,
+            )
+            .gap(6)
+            .style(tooltip_style),
+        );
+
+        // Add a button to show the location of the node if it has one
+        node_row = if let Some(node) = self.nodes.get(&node_id)
+            && let Some(position) = &node.position
+        {
+            node_row.push(
                 tooltip(
-                    button(text("👤").shaping(Advanced))
-                        .on_press(message)
+                    button(text("📌").shaping(Advanced))
+                        .style(fav_button_style)
+                        .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
+                    "Show node position in maps",
+                    tooltip::Position::Left,
+                )
+                .gap(6)
+                .style(tooltip_style),
+            )
+        } else {
+            node_row.push(Space::new().width(36))
+        };
+
+        // Add a button to toggle the favourite status of the node
+        let (tooltip_text, icon) = if favourite {
+            ("Unfavourite this node", icons::star())
+        } else {
+            ("Favourite this node", icons::star_empty())
+        };
+
+        node_row
+            .push(
+                tooltip(
+                    button(icon)
+                        .on_press(ToggleNodeFavourite(node_id))
                         .style(fav_button_style),
                     tooltip_text,
                     tooltip::Position::Left,
                 )
                 .gap(6)
                 .style(tooltip_style),
-            );
-
-            // Add a button to show the location of the node if it has one
-            node_row = if let Some(node) = self.nodes.get(&node_id)
-                && let Some(position) = &node.position
-            {
-                node_row.push(
-                    tooltip(
-                        button(text("📌").shaping(Advanced))
-                            .style(fav_button_style)
-                            .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
-                        "Show node position in maps",
-                        tooltip::Position::Left,
-                    )
-                    .gap(6)
-                    .style(tooltip_style),
-                )
-            } else {
-                node_row.push(Space::new().width(36))
-            };
-
-            // Add a button to toggle the favourite status of the node
-            let (tooltip_text, icon) = if favourite {
-                ("Unfavourite this node", icons::star())
-            } else {
-                ("Favourite this node", icons::star_empty())
-            };
-
-            node_row = node_row
-                .push(
-                    tooltip(
-                        button(icon)
-                            .on_press(ToggleNodeFavourite(node_id))
-                            .style(fav_button_style),
-                        tooltip_text,
-                        tooltip::Position::Left,
-                    )
-                    .gap(6)
-                    .style(tooltip_style),
-                )
-                .push(Space::new().width(10))
-        }
-
-        node_row.into()
+            )
+            .push(Space::new().width(10))
     }
 
     fn search_box(&self) -> Element<'static, Message> {
