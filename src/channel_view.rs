@@ -9,7 +9,8 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::config::Config;
 use crate::device_view::DeviceViewMessage::{
-    ChannelMsg, SendInfoMessage, SendPositionMessage, ShowChannel, StopPicking,
+    ChannelMsg, ForwardMessage, SendInfoMessage, SendPositionMessage, ShowChannel,
+    StopForwardingMessage,
 };
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::styles::{
@@ -112,15 +113,6 @@ impl ChannelView {
         if let Some(entry) = self.entries.get_mut(&request_id) {
             entry.ack();
         }
-    }
-
-    /// Forward a message to this channel - update the time and prefix with "fwd:"
-    pub fn forward(&mut self, mut entry: ChannelViewEntry) {
-        // update the entry's time of arrival to be the forwarding time
-        entry.update_time();
-        entry.forwarded();
-        self.entries
-            .insert_sorted_by(entry.message_id(), entry, ChannelViewEntry::sort_by_rx_time);
     }
 
     /// Add an emoji reply to a message.
@@ -326,7 +318,7 @@ impl ChannelView {
         device_view: &'a DeviceView,
         config: &'a Config,
     ) -> Element<'a, Message> {
-        let select = |channel_number: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_number)));
+        let select = |channel_number: ChannelId| DeviceViewEvent(ForwardMessage(channel_number));
         let inner_picker = Column::new()
             .push(
                 container(
@@ -347,7 +339,7 @@ impl ChannelView {
             .style(tooltip_style)
             .width(400)
             .height(600);
-        Self::modal(content, picker, DeviceViewEvent(StopPicking))
+        Self::modal(content, picker, DeviceViewEvent(StopForwardingMessage))
     }
 
     /// Function to create a modal dialog in the middle of the screen

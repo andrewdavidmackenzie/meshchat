@@ -15,9 +15,9 @@ use crate::device_subscription::SubscriptionEvent::{
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
-    AliasInput, ChannelMsg, ConnectRequest, DisconnectRequest, Forward, SearchInput,
+    AliasInput, ChannelMsg, ConnectRequest, DisconnectRequest, ForwardMessage, SearchInput,
     SendInfoMessage, SendPositionMessage, SendTextMessage, ShowChannel, StartEditingAlias,
-    StopPicking, SubscriptionMessage,
+    StartForwardingMessage, StopForwardingMessage, SubscriptionMessage,
 };
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
@@ -45,7 +45,7 @@ use meshtastic::protobufs::config::device_config;
 use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
-use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position};
+use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position, User};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -76,8 +76,9 @@ pub enum DeviceViewMessage {
     SearchInput(String),
     StartEditingAlias(u32),
     AliasInput(String),
-    Forward(ChannelViewEntry),
-    StopPicking,
+    StartForwardingMessage(ChannelViewEntry),
+    ForwardMessage(ChannelId),
+    StopForwardingMessage,
 }
 
 #[derive(Default)]
@@ -197,8 +198,14 @@ impl DeviceView {
             SearchInput(filter) => self.filter = filter,
             AliasInput(alias) => self.alias = alias,
             StartEditingAlias(node_id) => self.start_editing_alias(node_id),
-            Forward(chanel_view_entry) => self.forwarding_message = Some(chanel_view_entry),
-            StopPicking => self.forwarding_message = None,
+            StartForwardingMessage(channel_view_entry) => {
+                self.forwarding_message = Some(channel_view_entry)
+            }
+            StopForwardingMessage => self.forwarding_message = None,
+            ForwardMessage(channel_id) => {
+                let entry = self.forwarding_message.take();
+                return self.forward_message(channel_id, entry);
+            }
         }
 
         Task::none()
@@ -212,12 +219,8 @@ impl DeviceView {
 
             if let Some(channel) = &channel_id
                 && let Connected(mac_address) = &self.connection_state
-                && let Some(channel_view) = self.channel_views.get_mut(channel)
+                && self.channel_views.contains_key(channel)
             {
-                if let Some(forwarded_message) = &self.forwarding_message.take() {
-                    channel_view.forward(forwarded_message.to_owned());
-                }
-
                 let channel_id = channel_id.clone();
                 let mac_address = *mac_address;
                 return Task::perform(empty(), move |_| {
@@ -226,6 +229,39 @@ impl DeviceView {
             }
         }
         Task::none()
+    }
+
+    /// Forward a message by sending to a channel - with the prefix "FWD:"
+    fn forward_message(
+        &mut self,
+        channel_id: ChannelId,
+        entry: Option<ChannelViewEntry>,
+    ) -> Task<Message> {
+        if let Some(channel_view_entry) = entry
+            && let Some(sender) = self.subscription_sender.clone()
+        {
+            let message_text = format!(
+                "FWD from '{}': {}\n",
+                Self::short_name(&self.nodes, channel_view_entry.from()),
+                channel_view_entry.payload()
+            );
+            Task::perform(
+                request_send(sender, message_text, channel_id.clone(), None),
+                |_| DeviceViewEvent(ShowChannel(Some(channel_id))),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Return a name to display in the message box as the source of a message.
+    /// If the message is from myself, then return None.
+    pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
+        nodes
+            .get(&from)
+            .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
+            .map(|user: &User| user.short_name.as_ref())
+            .unwrap_or("????")
     }
 
     /// Called when the user selects to alias a node name
@@ -471,7 +507,7 @@ impl DeviceView {
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
-                    let user = meshtastic::protobufs::User::decode(&data.payload as &[u8]).unwrap();
+                    let user = User::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(

@@ -36,7 +36,7 @@ pub enum DeviceListEvent {
 
 #[derive(Default)]
 pub struct DeviceListView {
-    device_list: HashMap<BDAddr, Option<String>>,
+    device_list: HashMap<BDAddr, String>,
     alias: String,
     editing_alias: Option<BDAddr>,
 }
@@ -50,7 +50,12 @@ impl DeviceListView {
                 if let std::collections::hash_map::Entry::Vacant(e) =
                     self.device_list.entry(device.mac_address)
                 {
-                    e.insert(device.name.clone());
+                    e.insert(
+                        device
+                            .name
+                            .unwrap_or(device.mac_address.to_string())
+                            .clone(),
+                    );
                 }
             }
             BLERadioLost(device) => {
@@ -85,11 +90,14 @@ impl DeviceListView {
         &'a self,
         mac_address: &'a BDAddr,
         config: &'a Config,
-    ) -> &'a str {
+    ) -> String {
         if let Some(alias) = config.device_aliases.get(mac_address) {
-            alias
+            alias.to_string()
         } else {
-            self.device_list.get(mac_address).unwrap().as_ref().unwrap()
+            self.device_list
+                .get(mac_address)
+                .unwrap_or(&mac_address.to_string())
+                .to_string()
         }
     }
 
@@ -160,11 +168,7 @@ impl DeviceListView {
                 if let Some(alias) = config.device_aliases.get(mac_address) {
                     tooltip(
                         text(alias).shaping(Advanced).width(250),
-                        text(format!(
-                            "Original device name: {}",
-                            device_name.as_ref().unwrap()
-                        ))
-                        .shaping(Advanced),
+                        text(format!("Original device name: {}", device_name)).shaping(Advanced),
                         tooltip::Position::Right,
                     )
                     .style(tooltip_style)
@@ -179,7 +183,7 @@ impl DeviceListView {
                         .style(text_input_style)
                         .into()
                 } else {
-                    text(device_name.as_ref().unwrap()).shaping(Advanced).into()
+                    text(device_name).shaping(Advanced).into()
                 };
 
             device_row = device_row.push(name_element);
@@ -264,7 +268,7 @@ impl DeviceListView {
 
         // Create the menu bar with the root button and list of options
         menu_bar!((menu_root_button("▼"), {
-            menu_tpl_1(menu_items).width(140)
+            menu_tpl_1(menu_items).width(180)
         }))
         .style(menu_button_style)
     }

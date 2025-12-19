@@ -5,7 +5,8 @@ use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
-use crate::device_view::DeviceViewMessage::{ChannelMsg, Forward, ShowChannel};
+use crate::device_view::DeviceView;
+use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
@@ -73,8 +74,6 @@ pub struct ChannelViewEntry {
     rx_daytime: DateTime<Local>,
     /// The message contents of differing types
     payload: Payload,
-    /// has the message been forwarded?
-    forwarded: bool,
     /// Has the user of the app seen this message?
     pub seen: bool,
     /// Has the entry been acknowledged as received by a receiver?
@@ -176,16 +175,6 @@ impl ChannelViewEntry {
             })
     }
 
-    /// Update the time of arrival of a message - used in forwarding
-    pub fn update_time(&mut self) {
-        self.rx_daytime = Self::now();
-    }
-
-    /// Mark this entry as having been forwarded
-    pub fn forwarded(&mut self) {
-        self.forwarded = true;
-    }
-
     /// Truncate a String at a character boundary
     fn truncate(s: &str, max_chars: usize) -> &str {
         match s.char_indices().nth(max_chars) {
@@ -224,7 +213,7 @@ impl ChannelViewEntry {
         let mut col = Column::new();
         for source in sources {
             col = col.push(
-                text(Self::short_name(nodes, *source))
+                text(DeviceView::short_name(nodes, *source))
                     .color(Self::color_from_id(*source))
                     .shaping(Advanced),
             );
@@ -240,9 +229,9 @@ impl ChannelViewEntry {
         channel_id: &'a ChannelId,
         mine: bool,
     ) -> Element<'a, Message> {
-        let name = Self::short_name(nodes, self.from);
+        let name = DeviceView::short_name(nodes, self.from);
 
-        let mut message_text = match self.payload() {
+        let message_text = match self.payload() {
             AlertMessage(text_msg) => text_msg.clone(),
             NewTextMessage(text_msg) => text_msg.clone(),
             TextMessageReply(_, text_msg) => text_msg.clone(),
@@ -250,10 +239,6 @@ impl ChannelViewEntry {
             UserMessage(user) => Self::user_text(user),
             EmojiReply(_, _) => String::default(), // Should never happen
         };
-
-        if self.forwarded {
-            message_text = format!("FWD: {}", message_text);
-        }
 
         let mut message_content_column = Column::new();
 
@@ -400,16 +385,6 @@ impl ChannelViewEntry {
         message_content_column.push(top_row)
     }
 
-    /// Return a name to display in the message box as the source of a message.
-    /// If the message is from myself, then return None.
-    fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
-        nodes
-            .get(&from)
-            .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
-            .map(|user: &User| user.short_name.as_ref())
-            .unwrap_or("????")
-    }
-
     /// Append an element to the column that contains the emoji replies for this message, if any.
     fn emoji_row<'a>(
         &'a self,
@@ -455,7 +430,7 @@ impl ChannelViewEntry {
         #[rustfmt::skip]
         let menu_items = menu_items!(
             (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
-            (menu_button("forward".into(), DeviceViewEvent(Forward(self.clone())))),
+            (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
             (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id))))),
             (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
         );
