@@ -92,7 +92,7 @@ pub struct DeviceView {
     viewing_channel: Option<ChannelId>,
     /// Map of ChannelViews, indexed by ChannelId
     channel_views: HashMap<ChannelId, ChannelView>,
-    pub(crate) channels: Vec<Channel>,
+    channels: Vec<Channel>,
     nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
     filter: String,
     exit_pending: bool,

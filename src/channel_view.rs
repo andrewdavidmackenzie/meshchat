@@ -91,7 +91,7 @@ pub struct ChannelView {
     channel_id: ChannelId,
     message: String,                         // text message typed in so far
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
-    my_source: u32,
+    source: u32,
     preparing_reply: Option<u32>,
 }
 
@@ -103,7 +103,7 @@ impl ChannelView {
     pub fn new(channel_id: ChannelId, source: u32) -> Self {
         Self {
             channel_id,
-            my_source: source,
+            source,
             ..Default::default()
         }
     }
@@ -250,7 +250,7 @@ impl ChannelView {
                     &self.entries,
                     nodes,
                     &self.channel_id,
-                    entry.source_node(self.my_source),
+                    entry.source_node(self.source),
                 ));
             }
 
