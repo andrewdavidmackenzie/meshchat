@@ -15,9 +15,9 @@ use crate::device_subscription::SubscriptionEvent::{
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
-    AliasInput, ChannelMsg, ConnectRequest, DisconnectRequest, ForwardMessage, SearchInput,
-    SendInfoMessage, SendPositionMessage, SendTextMessage, ShowChannel, StartEditingAlias,
-    StartForwardingMessage, StopForwardingMessage, SubscriptionMessage,
+    AliasInput, ChannelMsg, ClearFilter, ConnectRequest, DisconnectRequest, ForwardMessage,
+    SearchInput, SendInfoMessage, SendPositionMessage, SendTextMessage, ShowChannel,
+    StartEditingAlias, StartForwardingMessage, StopForwardingMessage, SubscriptionMessage,
 };
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
@@ -35,7 +35,7 @@ use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text::Shaping::Advanced;
 use iced::widget::{
-    Column, Container, Row, Space, button, container, row, scrollable, text, text_input, tooltip,
+    Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
 use meshtastic::Message as _;
@@ -79,6 +79,7 @@ pub enum DeviceViewMessage {
     StartForwardingMessage(ChannelViewEntry),
     ForwardMessage(ChannelId),
     StopForwardingMessage,
+    ClearFilter,
 }
 
 #[derive(Default)]
@@ -206,6 +207,7 @@ impl DeviceView {
                 let entry = self.forwarding_message.take();
                 return self.forward_message(channel_id, entry);
             }
+            ClearFilter => self.filter.clear(),
         }
 
         Task::none()
@@ -1068,12 +1070,25 @@ impl DeviceView {
     }
 
     fn search_box(&self) -> Element<'static, Message> {
-        row([text_input("Search for Channel or Node", &self.filter)
-            .style(text_input_style)
-            .padding([6, 6])
-            .on_input(|s| DeviceViewEvent(SearchInput(s)))
-            .into()])
-        .padding([0, 4]) // 6 pixels spacing minus the 2-pixel border width
-        .into()
+        let mut clear_button = button(text("⨂").shaping(Advanced).size(18))
+            .style(button_chip_style)
+            .padding(Padding::from([6, 6]));
+        if !self.filter.is_empty() {
+            clear_button = clear_button.on_press(DeviceViewEvent(ClearFilter));
+        }
+
+        Row::new()
+            .push(
+                text_input("Search for Channel or Node", &self.filter)
+                    .style(text_input_style)
+                    .padding([6, 6])
+                    .on_input(|s| DeviceViewEvent(SearchInput(s))),
+            )
+            .push(Space::new().width(4.0))
+            .push(clear_button)
+            .push(Space::new().width(4.0))
+            .padding([0, 4])
+            .align_y(Center)
+            .into()
     }
 }
