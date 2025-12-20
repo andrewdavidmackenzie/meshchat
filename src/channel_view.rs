@@ -24,7 +24,6 @@ use iced::font::Style::Italic;
 use iced::font::Weight;
 use iced::padding::right;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::text::Shaping::Advanced;
 use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
     Button, Column, Container, Row, Space, button, center, container, mouse_area, opaque,
@@ -268,16 +267,14 @@ impl ChannelView {
 
         // A row of action buttons at the bottom of the channel view - this could be made
         // a menu or something different in the future
-        let mut send_position_button =
-            button(text("Send Position 📌").shaping(Advanced)).style(button_chip_style);
+        let mut send_position_button = button(text("Send Position 📌")).style(button_chip_style);
         if enable_position {
             send_position_button = send_position_button.on_press(DeviceViewEvent(
                 SendPositionMessage(self.channel_id.clone()),
             ));
         }
 
-        let mut send_info_button =
-            button(text("Send Info ⓘ").shaping(Advanced)).style(button_chip_style);
+        let mut send_info_button = button(text("Send Info ⓘ")).style(button_chip_style);
         if enable_my_info {
             send_info_button = send_info_button
                 .on_press(DeviceViewEvent(SendInfoMessage(self.channel_id.clone())));
@@ -384,7 +381,7 @@ impl ChannelView {
         entry_id: &u32,
     ) -> Column<'a, Message> {
         if let Some(original_text) = ChannelViewEntry::reply_quote(&self.entries, entry_id) {
-            let cancel_reply_button: Button<Message> = button(text("⨂").shaping(Advanced).size(16))
+            let cancel_reply_button: Button<Message> = button(text("⨂").size(16))
                 .on_press(DeviceViewEvent(ChannelMsg(CancelPrepareReply)))
                 .style(button_chip_style)
                 .padding(0);
@@ -395,7 +392,7 @@ impl ChannelView {
                         .align_y(Center)
                         .padding(2)
                         .push(Space::new().width(24))
-                        .push(text(original_text).shaping(Advanced).font(Font {
+                        .push(text(original_text).font(Font {
                             style: Italic,
                             ..Default::default()
                         }))
@@ -455,7 +452,7 @@ impl ChannelView {
         let mut send_button = button(icons::send().size(18))
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
-        let mut clear_button = button(text("⨂").shaping(Advanced).size(18))
+        let mut clear_button = button(text("⨂").size(18))
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
         if !self.message.is_empty() {

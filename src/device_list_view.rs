@@ -12,7 +12,6 @@ use crate::styles::{button_chip_style, menu_button_style, text_input_style, tool
 use crate::{Message, View};
 use btleplug::api::BDAddr;
 use futures_channel::mpsc::Sender;
-use iced::advanced::text::Shaping::Advanced;
 use iced::futures::{SinkExt, Stream};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -167,8 +166,8 @@ impl DeviceListView {
             let name_element: Element<'a, Message> =
                 if let Some(alias) = config.device_aliases.get(mac_address) {
                     tooltip(
-                        text(alias).shaping(Advanced).width(250),
-                        text(format!("Original device name: {}", device_name)).shaping(Advanced),
+                        text(alias).width(250),
+                        text(format!("Original device name: {}", device_name)),
                         tooltip::Position::Right,
                     )
                     .style(tooltip_style)
@@ -183,7 +182,7 @@ impl DeviceListView {
                         .style(text_input_style)
                         .into()
                 } else {
-                    text(device_name).width(250).shaping(Advanced).into()
+                    text(device_name).width(250).into()
                 };
 
             device_row = device_row.push(name_element);

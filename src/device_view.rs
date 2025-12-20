@@ -33,7 +33,6 @@ use crate::styles::{
 use crate::{Message, View, icons};
 use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::text::Shaping::Advanced;
 use iced::widget::{
     Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
@@ -571,13 +570,10 @@ impl DeviceView {
                 .push(Space::new().width(Fill))
                 .push(button("Disconnected").style(button_chip_style)),
             Connecting(mac_address) => {
-                let name_button = button(
-                    text(format!(
-                        "📱 {}",
-                        device_list_view.device_name_or_alias(mac_address, config)
-                    ))
-                    .shaping(Advanced),
-                )
+                let name_button = button(text(format!(
+                    "📱 {}",
+                    device_list_view.device_name_or_alias(mac_address, config)
+                )))
                 .style(button_chip_style);
                 header = header.push(name_button);
                 header
@@ -586,13 +582,10 @@ impl DeviceView {
             }
             Connected(device) => {
                 let name_row = Row::new()
-                    .push(
-                        text(format!(
-                            "📱 {}",
-                            device_list_view.device_name_or_alias(device, config)
-                        ))
-                        .shaping(Advanced),
-                    )
+                    .push(text(format!(
+                        "📱 {}",
+                        device_list_view.device_name_or_alias(device, config)
+                    )))
                     .push(Space::new().width(4))
                     .push(Self::unread_counter(self.unread_count()));
                 let mut button = button(name_row).style(button_chip_style);
@@ -607,13 +600,10 @@ impl DeviceView {
                     .push(self.battery_level())
             }
             Disconnecting(device) => {
-                let button = button(
-                    text(format!(
-                        "📱 {}",
-                        device_list_view.device_name_or_alias(device, config)
-                    ))
-                    .shaping(Advanced),
-                )
+                let button = button(text(format!(
+                    "📱 {}",
+                    device_list_view.device_name_or_alias(device, config)
+                )))
                 .style(button_chip_style);
                 header = header.push(button);
                 header
@@ -628,14 +618,12 @@ impl DeviceView {
                 let index = *channel_index as usize;
                 if let Some(channel) = self.channels.get(index) {
                     let channel_name = Self::channel_name(channel);
-                    header = header
-                        .push(button(text(channel_name).shaping(Advanced)).style(button_chip_style))
+                    header = header.push(button(text(channel_name)).style(button_chip_style))
                 }
             }
             Some(Node(node_id)) => {
                 if let Some(node_name) = self.aliased_long_name(config, *node_id) {
-                    header = header
-                        .push(button(text(node_name).shaping(Advanced)).style(button_chip_style))
+                    header = header.push(button(text(node_name)).style(button_chip_style))
                 }
             }
             None => {}
@@ -934,7 +922,7 @@ impl DeviceView {
         select: fn(ChannelId) -> Message,
     ) -> Element<'static, Message> {
         let name_row = Row::new()
-            .push(text(name).shaping(Advanced))
+            .push(text(name))
             .push(Space::new().width(4))
             .push(Self::unread_counter(num_messages));
 
@@ -968,8 +956,8 @@ impl DeviceView {
 
         let name_element: Element<'a, Message> = if let Some(alias) = config.aliases.get(&node_id) {
             tooltip(
-                text(alias).shaping(Advanced),
-                text(format!("Original user name: {}", user_name)).shaping(Advanced),
+                text(alias),
+                text(format!("Original user name: {}", user_name)),
                 tooltip::Position::Right,
             )
             .style(tooltip_style)
@@ -983,7 +971,7 @@ impl DeviceView {
                 .style(text_input_style)
                 .into()
         } else {
-            text(user_name.to_string()).shaping(Advanced).into()
+            text(user_name.to_string()).into()
         };
 
         let name_row = Row::new()
@@ -1033,9 +1021,7 @@ impl DeviceView {
 
         node_row = node_row.push(
             tooltip(
-                button(text("👤").shaping(Advanced))
-                    .on_press(message)
-                    .style(fav_button_style),
+                button(text("👤")).on_press(message).style(fav_button_style),
                 tooltip_text,
                 tooltip::Position::Left,
             )
@@ -1049,7 +1035,7 @@ impl DeviceView {
         {
             node_row.push(
                 tooltip(
-                    button(text("📌").shaping(Advanced))
+                    button(text("📌"))
                         .style(fav_button_style)
                         .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
                     "Show node position in maps",
@@ -1085,7 +1071,7 @@ impl DeviceView {
     }
 
     fn search_box(&self) -> Element<'static, Message> {
-        let mut clear_button = button(text("⨂").shaping(Advanced).size(18))
+        let mut clear_button = button(text("⨂").size(18))
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
         if !self.filter.is_empty() {

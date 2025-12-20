@@ -17,7 +17,7 @@ hot = ["iced/hot"]
 # For communications with BLE connected radios running meshtastic firmware
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"] }
 # GUI framework
-iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "canvas", "x11", "wayland"] }
+iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "canvas", "x11", "wayland", "advanced-shaping"] }
 # for saving config files in platform-dependent directories
 directories = { version = "6.0.0", default-features = false }
 # for serialization and deserialization of config struct

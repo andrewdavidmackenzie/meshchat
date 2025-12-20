@@ -14,7 +14,6 @@ use crate::styles::{
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
-use iced::advanced::text::Shaping::Advanced;
 use iced::font::Weight;
 use iced::widget::{Column, Container, Row, Space, Text, button, sensor, text, tooltip};
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
@@ -213,9 +212,7 @@ impl ChannelViewEntry {
         let mut col = Column::new();
         for source in sources {
             col = col.push(
-                text(DeviceView::short_name(nodes, *source))
-                    .color(Self::color_from_id(*source))
-                    .shaping(Advanced),
+                text(DeviceView::short_name(nodes, *source)).color(Self::color_from_id(*source)),
             );
         }
         col.into()
@@ -251,26 +248,18 @@ impl ChannelViewEntry {
             AlertMessage(_) => text(message_text)
                 .style(alert_message_style)
                 .size(18)
-                .shaping(Advanced)
                 .into(),
-            NewTextMessage(_) | UserMessage(_) => text(message_text)
-                .style(message_text_style)
-                .size(18)
-                .shaping(Advanced)
-                .into(),
+            NewTextMessage(_) | UserMessage(_) => {
+                text(message_text).style(message_text_style).size(18).into()
+            }
             TextMessageReply(reply_to_id, _) => {
                 if let Some(reply_quote) = Self::reply_quote(entries, reply_to_id) {
-                    let quote_row =
-                        Row::new().push(text(reply_quote).color(COLOR_GREEN).shaping(Advanced));
+                    let quote_row = Row::new().push(text(reply_quote).color(COLOR_GREEN));
                     message_content_column = message_content_column.push(quote_row);
                 };
-                text(message_text)
-                    .style(message_text_style)
-                    .size(18)
-                    .shaping(Advanced)
-                    .into()
+                text(message_text).style(message_text_style).size(18).into()
             }
-            PositionMessage(lat, long) => button(text(message_text).shaping(Advanced))
+            PositionMessage(lat, long) => button(text(message_text))
                 .padding([1, 5])
                 .style(button_chip_style)
                 .on_press(ShowLocation(*lat, *long))
@@ -374,7 +363,6 @@ impl ChannelViewEntry {
 
         top_row = top_row.push(
             text(name)
-                .shaping(Advanced)
                 .font(Font {
                     weight: Weight::Bold,
                     ..Default::default()
@@ -402,7 +390,7 @@ impl ChannelViewEntry {
                 let tooltip_element: Element<'_, Message> = Self::list_of_nodes(nodes, sources);
                 emoji_row = emoji_row.push(
                     tooltip(
-                        text(emoji.clone()).size(18).align_y(Top).shaping(Advanced),
+                        text(emoji.clone()).size(18).align_y(Top),
                         tooltip_element,
                         tooltip::Position::Bottom,
                     )
