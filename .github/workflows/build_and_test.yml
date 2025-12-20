@@ -12,7 +12,7 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: -C instrument-coverage
-  LLVM_PROFILE_FILE: pigg-%p-%m.profraw
+  LLVM_PROFILE_FILE: meshchat-%p-%m.profraw
   RUST_BACKTRACE: 1
   GH_TOKEN: ${{ github.token }}
 
@@ -33,6 +33,16 @@ jobs:
           components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Install grcov
+        if: runner.os != 'Windows'
+        run: cargo install grcov
+
+      - name: Setup LCOV
+        if: runner.os != 'Windows'
+        uses: hrishikesh-kadam/setup-lcov@v1
+        with:
+          ref: HEAD
 
       - name: Install dependencies - Linux
         if: runner.os == 'Linux'
@@ -60,3 +70,19 @@ jobs:
           cargo test
         env:
           WAYLAND_DISPLAY: weston
+
+      - name: Clean up coverage
+        if: runner.os != 'Windows'
+        run: |
+          grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
+          lcov --remove lcov.info 'target/debug/build/**' 'target/release/build/**' '/usr*' '**/errors.rs' '**/build.rs' '*tests/*' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors inconsistent --ignore-errors empty,empty -o lcov.info --erase-functions "(?=^.*fmt).+"
+
+      - name: UploadCoverage
+        if: runner.os != 'Windows'
+        uses: codecov/codecov-action@v4
+        with:
+          fail_ci_if_error: true
+          file: lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          verbose: true
