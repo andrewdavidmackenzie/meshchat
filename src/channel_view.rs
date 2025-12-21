@@ -90,7 +90,7 @@ pub struct ChannelView {
     channel_id: ChannelId,
     message: String,                         // text message typed in so far
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
-    source: u32,
+    my_node_num: u32,
     preparing_reply: Option<u32>,
 }
 
@@ -102,7 +102,7 @@ impl ChannelView {
     pub fn new(channel_id: ChannelId, source: u32) -> Self {
         Self {
             channel_id,
-            source,
+            my_node_num: source,
             ..Default::default()
         }
     }
@@ -141,8 +141,8 @@ impl ChannelView {
         };
     }
 
-    /// Return the number of messages in the channel
-    pub fn num_unseen_messages(&self) -> usize {
+    /// Return the number of unread messages in the channel
+    pub fn unread_count(&self) -> usize {
         self.entries
             .values()
             .fold(0, |acc, e| if !e.seen { acc + 1 } else { acc })
@@ -249,7 +249,7 @@ impl ChannelView {
                     &self.entries,
                     nodes,
                     &self.channel_id,
-                    entry.source_node(self.source),
+                    entry.from() == self.my_node_num,
                 ));
             }
 
@@ -518,7 +518,7 @@ mod test {
         channel_view.new_message(middle_message.clone());
         channel_view.new_message(newest_message.clone());
 
-        assert_eq!(channel_view.num_unseen_messages(), 3);
+        assert_eq!(channel_view.unread_count(), 3);
 
         println!("Entries: {:#?}", channel_view.entries);
 

@@ -11,8 +11,9 @@ use crate::channel_view::ChannelId;
 use crate::config::{Config, load_config, save_config};
 use crate::device_list_view::{DeviceListEvent, DeviceListView, ble_discovery};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
+use crate::device_view::DeviceView;
+use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
-use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::linear::Linear;
 use crate::notification::{Notification, Notifications};
 use btleplug::api::BDAddr;
@@ -104,7 +105,7 @@ impl MeshChat {
     fn title(&self) -> String {
         let unread_count = self.device_view.unread_count();
         if unread_count > 0 {
-            format!("MeshChat ({} unread) ", unread_count)
+            format!("MeshChat ({} unread)", unread_count)
         } else {
             "MeshChat".to_string()
         }
@@ -262,15 +263,18 @@ impl MeshChat {
 
     /// Convert a location tuple to a URL that can be opened in a browser.
     fn location_url(lat: i32, long: i32) -> String {
-        let latitude = 0.0000001 * lat as f64;
-        let longitude = 0.0000001 * long as f64;
-        format!("https://maps.google.com/?q={},{}", latitude, longitude)
+        let latitude = 0.0000001 * (lat as f64);
+        let longitude = 0.0000001 * (long as f64);
+        format!(
+            "https://maps.google.com/?q={:.7},{:.7}",
+            latitude, longitude
+        )
     }
 
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![
-            iced::event::listen().map(WindowEvent),
+            event::listen().map(WindowEvent),
             Subscription::run(ble_discovery).map(DeviceListViewEvent),
             Subscription::run(device_subscription::subscribe)
                 .map(|m| DeviceViewEvent(SubscriptionMessage(m))),
@@ -303,5 +307,76 @@ impl MeshChat {
         } else {
             Task::none()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::channel_view_entry::Payload;
+    use crate::device_subscription::SubscriptionEvent::DevicePacket;
+    use crate::device_view::DeviceView;
+    use meshtastic::protobufs::channel::Role;
+    use meshtastic::protobufs::from_radio::PayloadVariant;
+    use meshtastic::protobufs::{Channel, ChannelSettings, FromRadio, MyNodeInfo};
+
+    #[test]
+    fn test_location_url() {
+        assert_eq!(
+            MeshChat::location_url(50, 1),
+            "https://maps.google.com/?q=0.0000050,0.0000001"
+        );
+    }
+
+    #[test]
+    fn title_no_unread() {
+        let meshchat = MeshChat::default();
+        assert_eq!(meshchat.title(), "MeshChat".to_string());
+    }
+
+    #[test]
+    fn title_10_unread() {
+        let mut meshchat = MeshChat::default();
+        let mut mock_device_view = DeviceView::default();
+        let mut radio_packet = FromRadio::default();
+        radio_packet.payload_variant = Some(PayloadVariant::MyInfo(MyNodeInfo {
+            my_node_num: 999,
+            reboot_count: 0,
+            min_app_version: 0,
+            device_id: vec![],
+            pio_env: "".to_string(),
+            firmware_edition: 0,
+            nodedb_count: 0,
+        }));
+
+        let _ = mock_device_view.update(SubscriptionMessage(DevicePacket(Box::new(radio_packet))));
+
+        let mut channel = Channel::default();
+        channel.settings = Some(ChannelSettings {
+            #[allow(deprecated)]
+            channel_num: 0,
+            psk: vec![],
+            name: "Test".to_string(),
+            id: 0,
+            uplink_enabled: false,
+            downlink_enabled: false,
+            module_settings: None,
+        });
+        channel.set_role(Role::Primary);
+
+        mock_device_view.add_channel(channel);
+        let channel_view = mock_device_view
+            .channel_views
+            .get_mut(&ChannelId::Channel(0))
+            .unwrap();
+
+        // add an unread message
+        let msg = Payload::NewTextMessage("Hello World".into());
+        let channel_view_entry = channel_view_entry::ChannelViewEntry::new(msg, 0, 1);
+        channel_view.new_message(channel_view_entry);
+
+        // Setup mocks
+        meshchat.device_view = mock_device_view;
+        assert_eq!(meshchat.title(), "MeshChat (1 unread)".to_string());
     }
 }

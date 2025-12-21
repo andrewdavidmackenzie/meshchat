@@ -90,7 +90,7 @@ pub struct DeviceView {
     my_info: bool,
     viewing_channel: Option<ChannelId>,
     /// Map of ChannelViews, indexed by ChannelId
-    channel_views: HashMap<ChannelId, ChannelView>,
+    pub channel_views: HashMap<ChannelId, ChannelView>,
     channels: Vec<Channel>,
     nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
     filter: String,
@@ -254,7 +254,7 @@ impl DeviceView {
         {
             let message_text = format!(
                 "FWD from '{}': {}\n",
-                Self::short_name(&self.nodes, channel_view_entry.from()),
+                short_name(&self.nodes, channel_view_entry.from()),
                 channel_view_entry.payload()
             );
             Task::perform(
@@ -264,16 +264,6 @@ impl DeviceView {
         } else {
             Task::none()
         }
-    }
-
-    /// Return a name to display in the message box as the source of a message.
-    /// If the message is from myself, then return None.
-    pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
-        nodes
-            .get(&from)
-            .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
-            .map(|user: &User| user.short_name.as_ref())
-            .unwrap_or("????")
     }
 
     /// Called when the user selects to alias a node name
@@ -393,7 +383,7 @@ impl DeviceView {
     }
 
     // Add a channel from the radio to the list if it is not disabled and has some Settings
-    fn add_channel(&mut self, mut channel: Channel) {
+    pub fn add_channel(&mut self, mut channel: Channel) {
         if !matches!(Role::try_from(channel.role).unwrap(), Disabled)
             && let Some(settings) = channel.settings.as_mut()
         {
@@ -665,7 +655,7 @@ impl DeviceView {
     pub fn unread_count(&self) -> usize {
         self.channel_views
             .values()
-            .fold(0, |acc, channel| acc + channel.num_unseen_messages())
+            .fold(0, |acc, channel| acc + channel.unread_count())
     }
 
     /// Create the Element that shows the channels, nodes, etc.
@@ -746,10 +736,7 @@ impl DeviceView {
             let channel_id = ChannelId::Channel(index as i32);
             let channel_row = Self::channel_row(
                 channel_name,
-                self.channel_views
-                    .get(&channel_id)
-                    .unwrap()
-                    .num_unseen_messages(),
+                self.channel_views.get(&channel_id).unwrap().unread_count(),
                 channel_id,
                 add_buttons,
                 select,
@@ -792,7 +779,7 @@ impl DeviceView {
                 let channel_id = Node(fav_node_id);
                 if let Some(channel_view) = self.channel_views.get(&channel_id) {
                     channels_list = channels_list.push(self.node_row(
-                        channel_view.num_unseen_messages(),
+                        channel_view.unread_count(),
                         fav_node_id,
                         true, // Favourite
                         config,
@@ -839,19 +826,14 @@ impl DeviceView {
             for node_id in other_nodes_list {
                 let channel_id = Node(*node_id);
 
-                channels_list = channels_list.push(
-                    self.node_row(
-                        self.channel_views
-                            .get(&channel_id)
-                            .unwrap()
-                            .num_unseen_messages(),
-                        *node_id,
-                        false, // Not a Favourite
-                        config,
-                        add_buttons,
-                        select,
-                    ),
-                );
+                channels_list = channels_list.push(self.node_row(
+                    self.channel_views.get(&channel_id).unwrap().unread_count(),
+                    *node_id,
+                    false, // Not a Favourite
+                    config,
+                    add_buttons,
+                    select,
+                ));
             }
         }
 
@@ -1092,4 +1074,14 @@ impl DeviceView {
             .align_y(Center)
             .into()
     }
+}
+
+/// Return a name to display in the message box as the source of a message.
+/// If the message is from myself, then return None.
+pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
+    nodes
+        .get(&from)
+        .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
+        .map(|user: &User| user.short_name.as_ref())
+        .unwrap_or("????")
 }

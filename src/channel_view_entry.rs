@@ -5,8 +5,8 @@ use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
-use crate::device_view::DeviceView;
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
+use crate::device_view::short_name;
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
@@ -116,11 +116,6 @@ impl ChannelViewEntry {
         &self.payload
     }
 
-    /// Return true if this message was sent from the specified node id
-    pub fn source_node(&self, node_id: u32) -> bool {
-        self.from == node_id
-    }
-
     /// Return the message_id
     pub fn message_id(&self) -> u32 {
         self.message_id
@@ -211,9 +206,7 @@ impl ChannelViewEntry {
     ) -> Element<'a, Message> {
         let mut col = Column::new();
         for source in sources {
-            col = col.push(
-                text(DeviceView::short_name(nodes, *source)).color(Self::color_from_id(*source)),
-            );
+            col = col.push(text(short_name(nodes, *source)).color(Self::color_from_id(*source)));
         }
         col.into()
     }
@@ -226,7 +219,7 @@ impl ChannelViewEntry {
         channel_id: &'a ChannelId,
         mine: bool,
     ) -> Element<'a, Message> {
-        let name = DeviceView::short_name(nodes, self.from);
+        let name = short_name(nodes, self.from);
 
         let message_text = match self.payload() {
             AlertMessage(text_msg) => text_msg.clone(),
