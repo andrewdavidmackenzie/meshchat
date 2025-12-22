@@ -1,6 +1,6 @@
 use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, ShowLocation};
-use crate::channel_view::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
+use crate::channel_view::ChannelViewMessage::MessageSeen;
 use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -416,7 +416,7 @@ impl ChannelViewEntry {
             (button("react ▶").style(button_chip_style).padding([4, 8])
         .width(Fill),
             menu_tpl_2(menu_items!(
-                (EmojiPicker::new().width(200).height(200).on_emoji_selected( move |emoji| DeviceViewEvent(ChannelMsg(ReplyWithEmoji(message_id, String::from(emoji))))))))),
+                (EmojiPicker::new())))),
             (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
             (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
             (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id))))),
