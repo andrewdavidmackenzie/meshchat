@@ -2565,6 +2565,7 @@ dependencies = [
  "meshtastic",
  "ringmap",
  "serde",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "toml 0.9.8",

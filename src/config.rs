@@ -102,3 +102,72 @@ pub fn load_config() -> Task<Message> {
         Task::none()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::config::{Config, load, save};
+    use btleplug::api::BDAddr;
+
+    fn assert_default(config: Config) {
+        assert!(config.device_mac_address.is_none());
+        assert!(config.channel_id.is_none());
+        assert!(config.fav_nodes.is_empty());
+        assert!(config.aliases.is_empty());
+        assert!(config.device_aliases.is_empty());
+    }
+
+    #[test]
+    fn default_config() {
+        let config = Config::default();
+        assert_default(config);
+    }
+
+    #[tokio::test]
+    async fn creates_file() {
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+        save(tempfile.path().join("config.toml"), Config::default())
+            .await
+            .expect("Could not save config file");
+        assert!(tempfile.path().join("config.toml").exists());
+    }
+
+    #[tokio::test]
+    async fn loads_default() {
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+        save(tempfile.path().join("config.toml"), Config::default())
+            .await
+            .expect("Could not save config file");
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert_default(returned);
+    }
+
+    #[tokio::test]
+    async fn mac_address_saved() {
+        let mut config = Config::default();
+        config.device_mac_address = Some(BDAddr::from([0, 1, 2, 3, 4, 6]));
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert_eq!(
+            returned.device_mac_address,
+            Some(BDAddr::from([0, 1, 2, 3, 4, 6]))
+        );
+    }
+}
