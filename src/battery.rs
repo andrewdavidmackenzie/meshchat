@@ -220,34 +220,52 @@ where
                 // Draw charging icon (lightning bolt)
                 use iced::advanced::graphics::mesh::{self, Mesh, SolidVertex2D};
 
-                let mesh = Mesh::Solid {
+                let triangle1 = Mesh::Solid {
                     buffers: mesh::Indexed {
                         vertices: vec![
                             SolidVertex2D {
-                                position: [0.0, 0.0],
+                                // Point 0
+                                position: [inner_width * 0.9, inner_height * 0.66],
                                 color: color::pack(custom_style.charging_color),
                             },
                             SolidVertex2D {
-                                position: [bounds.width, 0.0],
+                                // Point 1
+                                position: [inner_width * 0.45, inner_height * 0.1],
                                 color: color::pack(custom_style.charging_color),
                             },
                             SolidVertex2D {
-                                position: [bounds.width / 2.0, bounds.height],
+                                // Point 2
+                                position: [inner_width * 0.45, inner_height * 0.5],
+                                color: color::pack(custom_style.charging_color),
+                            },
+                            SolidVertex2D {
+                                // Point 3
+                                position: [inner_width * 0.55, inner_height * 0.5],
+                                color: color::pack(custom_style.charging_color),
+                            },
+                            SolidVertex2D {
+                                // Point 4
+                                position: [inner_width * 0.1, inner_height * 0.33],
+                                color: color::pack(custom_style.charging_color),
+                            },
+                            SolidVertex2D {
+                                // Point 5
+                                position: [inner_width * 0.55, inner_height * 0.9],
                                 color: color::pack(custom_style.charging_color),
                             },
                         ],
-                        indices: vec![
-                            0, 1, 2, // TL
-                        ],
+                        indices: vec![0, 1, 2, 3, 4, 5],
                     },
                     transformation: Transformation::IDENTITY,
                     clip_bounds: Rectangle::INFINITE,
                 };
 
-                renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
-                    renderer.draw_mesh(mesh);
-                });
-                //
+                renderer.with_translation(
+                    Vector::new(bounds.x + border_width, bounds.y + border_width),
+                    |renderer| {
+                        renderer.draw_mesh(triangle1);
+                    },
+                );
             }
             BatteryState::Charged(percentage) => {
                 // Clamp percentage to 0-100
