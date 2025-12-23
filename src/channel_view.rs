@@ -1,8 +1,8 @@
 use crate::Message::DeviceViewEvent;
 use crate::channel_view::ChannelId::{Channel, Node};
 use crate::channel_view::ChannelViewMessage::{
-    CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PickChannel, PrepareReply,
-    ReplyWithEmoji, SendMessage,
+    CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, PickChannel,
+    PrepareReply, ReplyWithEmoji, SendMessage,
 };
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -50,6 +50,7 @@ pub enum ChannelViewMessage {
     PickChannel(Option<ChannelId>),
     //EmojiReply(u32, String),     // we are replying to a message with an emoji
     ReplyWithEmoji(u32, String), // We received an emoji reply to a message
+    EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
@@ -94,6 +95,7 @@ pub struct ChannelView {
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
     my_node_num: u32,
     preparing_reply: Option<u32>,
+    emoji_picker: crate::emoji_picker::EmojiPicker,
 }
 
 async fn empty() {}
@@ -204,6 +206,15 @@ impl ChannelView {
                 }
                 Task::none()
             }
+            EmojiPickerMsg(picker_msg) => {
+                if let Some(msg) = self.emoji_picker.update(*picker_msg) {
+                    // Forward the wrapped message
+                    self.update(msg)
+                } else {
+                    // Internal state change only
+                    Task::none()
+                }
+            }
         }
     }
 
@@ -259,6 +270,7 @@ impl ChannelView {
                     nodes,
                     &self.channel_id,
                     entry.from() == self.my_node_num,
+                    &self.emoji_picker,
                 ));
             }
 

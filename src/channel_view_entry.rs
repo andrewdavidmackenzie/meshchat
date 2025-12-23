@@ -7,7 +7,6 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
 use crate::device_view::short_name;
-use crate::emoji_picker::EmojiPicker;
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
@@ -217,6 +216,7 @@ impl ChannelViewEntry {
         nodes: &'a HashMap<u32, NodeInfo>,
         channel_id: &'a ChannelId,
         mine: bool,
+        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
     ) -> Element<'a, Message> {
         let name = short_name(nodes, self.from);
 
@@ -232,8 +232,12 @@ impl ChannelViewEntry {
         let mut message_content_column = Column::new();
 
         if !mine {
-            message_content_column =
-                self.top_row(message_content_column, name, message_text.clone());
+            message_content_column = self.top_row(
+                message_content_column,
+                name,
+                message_text.clone(),
+                emoji_picker,
+            );
         }
 
         let content: Element<'static, Message> = match self.payload() {
@@ -345,12 +349,13 @@ impl ChannelViewEntry {
         message_content_column: Column<'a, Message>,
         name: &'a str,
         message: String,
+        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
     ) -> Column<'a, Message> {
         let text_color = Self::color_from_id(self.from);
         let mut top_row = Row::new().padding(0).align_y(Top);
 
         top_row = top_row
-            .push(self.menu_bar(name, message))
+            .push(self.menu_bar(name, message, emoji_picker))
             .push(Space::new().width(2.0));
 
         top_row = top_row.push(
@@ -402,6 +407,7 @@ impl ChannelViewEntry {
         &'a self,
         name: &'a str,
         message: String,
+        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
     ) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);
 
@@ -409,11 +415,20 @@ impl ChannelViewEntry {
 
         let message_id = self.message_id;
         let dm = format!("DM with {}", name);
+
+        let picker_element = emoji_picker
+            .view(move |emoji| ReplyWithEmoji(message_id, emoji))
+            .map(move |picker_msg| {
+                DeviceViewEvent(ChannelMsg(ChannelViewMessage::EmojiPickerMsg(Box::new(
+                    picker_msg,
+                ))))
+            });
+
         #[rustfmt::skip]
         let menu_items = menu_items!(
             (button("react ▶").style(button_chip_style).padding([4, 8]).width(Fill),
             menu_tpl_2(menu_items!(
-            (EmojiPicker::new().view(move |emoji| DeviceViewEvent(ChannelMsg(ReplyWithEmoji(message_id, emoji)))))))),
+            (picker_element)))),
             (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
             (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
             (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id))))),
