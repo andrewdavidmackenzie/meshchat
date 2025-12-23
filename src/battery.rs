@@ -25,13 +25,17 @@
 //!     .push(battery_unknown);
 //! ```
 
-use iced::advanced::layout;
+use iced::advanced::graphics::color;
+use iced::advanced::layout::{self, Layout};
 use iced::advanced::renderer;
-use iced::advanced::widget::tree::{self, Tree};
-use iced::advanced::{self, Clipboard, Layout, Shell, Widget};
+use iced::advanced::widget::{Tree, Widget};
+use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
-use iced::mouse;
-use iced::{Background, Border, Color, Element, Length, Rectangle, Size};
+use iced::{Background, Border, Color, advanced, mouse};
+
+use iced::{Element, Length, Rectangle, Size, Transformation, Vector};
+
+use iced::advanced::graphics::mesh::{self};
 
 /// The state of the battery widget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,8 +122,9 @@ where
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Battery<Theme>
 where
+    Message: Clone,
     Theme: StyleSheet,
-    Renderer: advanced::Renderer,
+    Renderer: advanced::Renderer + mesh::Renderer,
 {
     fn size(&self) -> Size<Length> {
         Size {
@@ -206,53 +211,50 @@ where
             Background::Color(custom_style.background_color),
         );
 
+        // Dimensions of the inner area of the battery body
+        let inner_width = battery_body.width - border_width * 2.0;
+        let inner_height = battery_body.height - border_width * 2.0;
+
         match self.state {
             BatteryState::Charging => {
                 // Draw charging icon (lightning bolt)
-                let icon_size = bounds.height * 0.6;
-                let icon_x = bounds.x + (battery_body.width - icon_size) / 2.0;
-                let icon_y = bounds.y + (bounds.height - icon_size) / 2.0;
+                use iced::advanced::graphics::mesh::{self, Mesh, SolidVertex2D};
 
-                // Draw a simple lightning bolt shape using two quads
-                // Top part of the lightning bolt
-                let top_part = Rectangle {
-                    x: icon_x + icon_size * 0.3,
-                    y: icon_y,
-                    width: icon_size * 0.2,
-                    height: icon_size * 0.5,
+                let mesh = Mesh::Solid {
+                    buffers: mesh::Indexed {
+                        vertices: vec![
+                            SolidVertex2D {
+                                position: [0.0, 0.0],
+                                color: color::pack(custom_style.charging_color),
+                            },
+                            SolidVertex2D {
+                                position: [bounds.width, 0.0],
+                                color: color::pack(custom_style.charging_color),
+                            },
+                            SolidVertex2D {
+                                position: [bounds.width / 2.0, bounds.height],
+                                color: color::pack(custom_style.charging_color),
+                            },
+                        ],
+                        indices: vec![
+                            0, 1, 2, // TL
+                        ],
+                    },
+                    transformation: Transformation::IDENTITY,
+                    clip_bounds: Rectangle::INFINITE,
                 };
 
-                // Bottom part of lightning bolt
-                let bottom_part = Rectangle {
-                    x: icon_x + icon_size * 0.2,
-                    y: icon_y + icon_size * 0.4,
-                    width: icon_size * 0.2,
-                    height: icon_size * 0.6,
-                };
-
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: top_part,
-                        ..renderer::Quad::default()
-                    },
-                    Background::Color(custom_style.charging_color),
-                );
-
-                renderer.fill_quad(
-                    renderer::Quad {
-                        bounds: bottom_part,
-                        ..renderer::Quad::default()
-                    },
-                    Background::Color(custom_style.charging_color),
-                );
+                renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+                    renderer.draw_mesh(mesh);
+                });
+                //
             }
             BatteryState::Charged(percentage) => {
                 // Clamp percentage to 0-100
                 let percentage = percentage.min(100);
 
                 // Calculate charge fill width
-                let fill_width =
-                    (battery_body.width - border_width * 2.0) * (percentage as f32 / 100.0);
+                let fill_width = inner_width * (percentage as f32 / 100.0);
 
                 if fill_width > 0.0 {
                     // Determine charge color based on percentage
@@ -269,7 +271,7 @@ where
                         x: bounds.x + border_width,
                         y: bounds.y + border_width,
                         width: fill_width,
-                        height: bounds.height - border_width * 2.0,
+                        height: inner_height,
                     };
 
                     renderer.fill_quad(
@@ -290,14 +292,6 @@ where
         }
     }
 
-    fn tag(&self) -> tree::Tag {
-        tree::Tag::of::<()>()
-    }
-
-    fn state(&self) -> tree::State {
-        tree::State::new(())
-    }
-
     fn update(
         &mut self,
         _tree: &mut Tree,
@@ -314,8 +308,9 @@ where
 
 impl<'a, Message, Theme, Renderer> From<Battery<Theme>> for Element<'a, Message, Theme, Renderer>
 where
+    Message: Clone + 'a,
     Theme: StyleSheet + 'a,
-    Renderer: advanced::Renderer + 'a,
+    Renderer: advanced::Renderer + 'a + mesh::Renderer,
 {
     fn from(battery: Battery<Theme>) -> Self {
         Self::new(battery)
