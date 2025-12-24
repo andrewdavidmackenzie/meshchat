@@ -1,4 +1,4 @@
-use crate::channel_view::ChannelId;
+use crate::channel_id::ChannelId;
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::device_subscription::SubscriberMessage::{
     Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,

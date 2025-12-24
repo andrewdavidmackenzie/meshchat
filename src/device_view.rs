@@ -1,6 +1,5 @@
 use crate::battery::{Battery, BatteryState};
-use crate::channel_view::ChannelId::Node;
-use crate::channel_view::{ChannelId, ChannelView, ChannelViewMessage};
+use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -26,6 +25,8 @@ use crate::Message::{
     AddNodeAlias, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation, ToggleNodeFavourite,
 };
 use crate::View::DeviceList;
+use crate::channel_id::ChannelId;
+use crate::channel_id::ChannelId::Node;
 use crate::device_list_view::DeviceListView;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,

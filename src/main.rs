@@ -7,7 +7,7 @@ use crate::Message::{
     RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
-use crate::channel_view::ChannelId;
+use crate::channel_id::ChannelId;
 use crate::config::{Config, load_config, save_config};
 use crate::device_list_view::{DeviceListEvent, DeviceListView, ble_discovery};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
@@ -38,6 +38,7 @@ mod styles;
 #[rustfmt::skip]
 /// Icons generated as a font using iced_fontello
 mod icons;
+mod channel_id;
 mod emoji_picker;
 mod notification;
 #[cfg(test)]

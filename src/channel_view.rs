@@ -1,5 +1,5 @@
 use crate::Message::DeviceViewEvent;
-use crate::channel_view::ChannelId::{Channel, Node};
+use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, PickChannel,
     PrepareReply, ReplyWithEmoji, SendMessage,
@@ -30,14 +30,9 @@ use iced::widget::{
     scrollable, stack, text, text_input,
 };
 use iced::{Center, Color, Element, Fill, Font, Padding, Pixels, Task};
-use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::NodeInfo;
-use meshtastic::types::{MeshChannel, NodeId};
 use ringmap::RingMap;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
-use std::hash::Hash;
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -50,39 +45,6 @@ pub enum ChannelViewMessage {
     PickChannel(Option<ChannelId>),
     ReplyWithEmoji(u32, String, ChannelId), // Send an emoji reply
     EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
-pub enum ChannelId {
-    Channel(i32), // Channel::index 0..7
-    Node(u32),    // NodeInfo::node number
-}
-
-impl Default for ChannelId {
-    fn default() -> Self {
-        Channel(0)
-    }
-}
-
-impl Display for ChannelId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:?}", self)
-    }
-}
-
-impl ChannelId {
-    pub fn to_destination(&self) -> (PacketDestination, MeshChannel) {
-        match self {
-            Channel(channel_number) => (
-                PacketDestination::Broadcast,
-                MeshChannel::from(*channel_number as u32),
-            ),
-            Node(node_id) => (
-                PacketDestination::Node(NodeId::from(*node_id)),
-                MeshChannel::default(),
-            ),
-        }
-    }
 }
 
 /// [ChannelView] implements view and update methods for Iced for a set of

@@ -1,7 +1,8 @@
 use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, ShowLocation};
+use crate::channel_id::ChannelId;
+use crate::channel_view::ChannelViewMessage;
 use crate::channel_view::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
-use crate::channel_view::{ChannelId, ChannelViewMessage};
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
