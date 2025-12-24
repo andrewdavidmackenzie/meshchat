@@ -108,8 +108,8 @@ impl ChannelView {
             channel_id,
             my_node_num: source,
             emoji_picker: crate::emoji_picker::EmojiPicker::new()
-                .height(800)
-                .width(800),
+                .height(400)
+                .width(400),
             ..Default::default()
         }
     }

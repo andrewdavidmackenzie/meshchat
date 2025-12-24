@@ -6,7 +6,7 @@ use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
-use iced::widget::{button, scrollable, text, text_input};
+use iced::widget::{button, container, scrollable, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 use iced_aw::menu;
 use iced_aw::style::colors::RED;
@@ -316,6 +316,92 @@ pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
     }
 }
 
+const TAB_RADIUS: Radius = Radius {
+    top_left: TEXT_INPUT_R,
+    top_right: 0.0,
+    bottom_right: 0.0,
+    bottom_left: TEXT_INPUT_R,
+};
+
+const CONTAINER_RADIUS: Radius = Radius {
+    top_left: 0.0,
+    top_right: 12.0,
+    bottom_right: 12.0,
+    bottom_left: 0.0,
+};
+
+const TAB_BORDER_ACTIVE: Border = Border {
+    radius: TAB_RADIUS, // rounded corners
+    width: 2.0,
+    color: CYAN,
+};
+
+const CONTAINER_BORDER_ACTIVE: Border = Border {
+    radius: CONTAINER_RADIUS, // rounded corners
+    width: 2.0,
+    color: CYAN,
+};
+
+pub fn container_style(_theme: &Theme) -> container::Style {
+    Style {
+        text_color: Some(Color::WHITE),
+        background: Some(Color::TRANSPARENT.into()),
+        border: NO_BORDER,
+        shadow: NO_SHADOW,
+        snap: false,
+    }
+}
+
+pub fn emoji_tooltip_style(theme: &Theme) -> Style {
+    Style {
+        background: Some(theme.palette().background.into()),
+        ..Default::default()
+    }
+}
+
+const TAB_BUTTON_BORDER: Border = Border {
+    radius: TAB_RADIUS, // rounded corners
+    width: 2.0,
+    color: CYAN,
+};
+
+pub fn emoji_tab_style(_theme: &Theme, status: Status, selected: bool) -> button::Style {
+    match status {
+        Status::Active => button::Style {
+            background: if selected {
+                Some(Background::Color(CYAN))
+            } else {
+                Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0)))
+            },
+            text_color: Color::WHITE,
+            border: TAB_BUTTON_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+        Hovered => button::Style {
+            background: Some(Background::Color(CYAN)),
+            text_color: Color::WHITE,
+            border: TAB_BUTTON_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+        Status::Pressed => button::Style {
+            background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
+            text_color: Color::WHITE,
+            border: TAB_BUTTON_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+        Status::Disabled => button::Style {
+            background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
+            text_color: Color::WHITE,
+            border: TAB_BUTTON_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+    }
+}
+
 const MESSAGE_BORDER: Border = Border {
     radius: RADIUS_12, // rounded corners
     width: 2.0,
@@ -523,6 +609,53 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
         horizontal_rail: Rail {
             background: Some(Background::Color(Color::TRANSPARENT)),
             border: NO_BORDER,
+            scroller: Scroller {
+                background: scrollbar_color,
+                border,
+            },
+        },
+        gap: None,
+        auto_scroll: AutoScroll {
+            background: Background::Color(Color::TRANSPARENT),
+            border,
+            shadow: NO_SHADOW,
+            icon: Default::default(),
+        },
+    }
+}
+
+pub fn emoji_scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable::Style {
+    let scrollbar_color = match status {
+        scrollable::Status::Active { .. } => Background::Color(Color::TRANSPARENT),
+        scrollable::Status::Hovered { .. } => Background::Color(CYAN),
+        scrollable::Status::Dragged { .. } => Background::Color(CYAN),
+    };
+
+    let border = match status {
+        scrollable::Status::Active { .. } => NO_BORDER,
+        scrollable::Status::Hovered { .. } => CYAN_BORDER,
+        scrollable::Status::Dragged { .. } => NO_BORDER,
+    };
+
+    scrollable::Style {
+        container: Style {
+            text_color: None,
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: CONTAINER_BORDER_ACTIVE,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+        vertical_rail: Rail {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: CONTAINER_BORDER_ACTIVE,
+            scroller: Scroller {
+                background: scrollbar_color,
+                border,
+            },
+        },
+        horizontal_rail: Rail {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: CONTAINER_BORDER_ACTIVE,
             scroller: Scroller {
                 background: scrollbar_color,
                 border,

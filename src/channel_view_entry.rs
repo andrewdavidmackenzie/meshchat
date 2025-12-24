@@ -409,8 +409,6 @@ impl ChannelViewEntry {
         message: String,
         emoji_picker: &'a crate::emoji_picker::EmojiPicker,
     ) -> MenuBar<'a, Message, Theme, Renderer> {
-        let menu_tpl_1 = |items| Menu::new(items).spacing(3);
-
         let menu_tpl_2 = |items| Menu::new(items).max_width(180.0).offset(15.0).spacing(5.0);
 
         let message_id = self.message_id;
@@ -426,7 +424,7 @@ impl ChannelViewEntry {
 
         #[rustfmt::skip]
         let menu_items = menu_items!(
-            (button("react ▶").style(button_chip_style).width(Fill),
+            (button(Row::new().push(text("react")).push(Space::new().width(Fill)).push(text("▶"))).style(button_chip_style).width(Fill),
             menu_tpl_2(menu_items!(
             (picker_element)))),
             (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
@@ -436,6 +434,7 @@ impl ChannelViewEntry {
         );
 
         // Create the menu bar with the root button and list of options
+        let menu_tpl_1 = |items| Menu::new(items).spacing(3);
         menu_bar!((menu_root_button("▼"), {
             menu_tpl_1(menu_items).width(140)
         }))

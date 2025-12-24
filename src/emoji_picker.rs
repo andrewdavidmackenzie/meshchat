@@ -1,10 +1,12 @@
-use crate::styles::{button_chip_style, scrollbar_style};
+use crate::styles::{
+    button_chip_style, container_style, emoji_scrollbar_style, emoji_tab_style, tooltip_style,
+};
 use emojis::Group;
+use iced::widget::Button;
+use iced::widget::button::Status;
 use iced::{
     Element, Length, Theme,
-    widget::{
-        button, column, container, grid, row, scrollable, text, text::Shaping::Advanced, tooltip,
-    },
+    widget::{button, column, container, grid, row, scrollable, text, tooltip},
 };
 
 /// Message type for EmojiPicker
@@ -64,7 +66,7 @@ impl EmojiPicker {
     /// Create the view for the emoji picker with group selection buttons
     /// The on_select closure is called with the selected emoji string and should return your Message type
     pub fn view<'a, Message>(
-        &self,
+        &'a self,
         on_select: impl Fn(String) -> Message + 'a,
     ) -> Element<'a, PickerMessage<Message>>
     where
@@ -72,34 +74,16 @@ impl EmojiPicker {
     {
         const SPACING: u32 = 3;
 
-        let groups = column![
-            button(text("😀"))
-                .on_press(PickerMessage::GroupSelected(Group::SmileysAndEmotion))
-                .style(button_chip_style),
-            button(text("👋"))
-                .on_press(PickerMessage::GroupSelected(Group::PeopleAndBody))
-                .style(button_chip_style),
-            button(text("🐒"))
-                .on_press(PickerMessage::GroupSelected(Group::AnimalsAndNature))
-                .style(button_chip_style),
-            button(text("🍉"))
-                .on_press(PickerMessage::GroupSelected(Group::FoodAndDrink))
-                .style(button_chip_style),
-            button(text("🗺️"))
-                .on_press(PickerMessage::GroupSelected(Group::TravelAndPlaces))
-                .style(button_chip_style),
-            button(text("🎉"))
-                .on_press(PickerMessage::GroupSelected(Group::Activities))
-                .style(button_chip_style),
-            button(text("📣"))
-                .on_press(PickerMessage::GroupSelected(Group::Objects))
-                .style(button_chip_style),
-            button(text("🚮"))
-                .on_press(PickerMessage::GroupSelected(Group::Symbols))
-                .style(button_chip_style),
-            button(text("🏁"))
-                .on_press(PickerMessage::GroupSelected(Group::Flags))
-                .style(button_chip_style),
+        let groups_column = column![
+            self.group_button("😀", Group::SmileysAndEmotion),
+            self.group_button("👋", Group::PeopleAndBody),
+            self.group_button("🐒", Group::AnimalsAndNature),
+            self.group_button("🍉", Group::FoodAndDrink),
+            self.group_button("🗺", Group::TravelAndPlaces),
+            self.group_button("🎉", Group::Activities),
+            self.group_button("📣", Group::Objects),
+            self.group_button("🚮", Group::Symbols),
+            self.group_button("🏁", Group::Flags),
         ]
         .spacing(SPACING);
 
@@ -109,16 +93,13 @@ impl EmojiPicker {
         for emoji in emojis {
             items.push(Element::from(
                 tooltip(
-                    button(text(emoji.as_str()).center().shaping(Advanced).size(30))
+                    button(text(emoji.as_str()).center().size(30))
                         .style(button_chip_style)
                         .on_press(PickerMessage::EmojiSelected(on_select(emoji.to_string()))),
                     text(emoji.name()),
                     tooltip::Position::default(),
                 )
-                .style(|theme: &Theme| container::Style {
-                    background: Some(theme.palette().background.into()),
-                    ..Default::default()
-                }),
+                .style(tooltip_style),
             ));
         }
 
@@ -126,14 +107,32 @@ impl EmojiPicker {
 
         container(
             row![
-                groups,
-                scrollable(grid).style(scrollbar_style).spacing(SPACING)
+                groups_column,
+                scrollable(container(grid).padding(6))
+                    .style(emoji_scrollbar_style)
+                    .spacing(SPACING)
             ]
-            .spacing(10),
+            .spacing(-1.0),
         )
         .width(self.width)
         .height(self.height)
+        .style(container_style)
         .into()
+    }
+
+    fn group_button<'a, Message>(
+        &'a self,
+        emoji: &'a str,
+        group: Group,
+    ) -> Button<'a, PickerMessage<Message>>
+    where
+        Message: 'a + Clone,
+    {
+        button(text(emoji))
+            .on_press(PickerMessage::GroupSelected(group))
+            .style(move |theme: &Theme, status: Status| {
+                emoji_tab_style(theme, status, self.group == group)
+            })
     }
 }
 
