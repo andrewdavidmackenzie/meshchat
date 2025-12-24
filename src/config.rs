@@ -1,5 +1,5 @@
 use crate::Message;
-use crate::channel_view::ChannelId;
+use crate::channel_id::ChannelId;
 use btleplug::api::BDAddr;
 use directories::ProjectDirs;
 use iced::Task;
@@ -151,8 +151,10 @@ mod tests {
 
     #[tokio::test]
     async fn mac_address_saved() {
-        let mut config = Config::default();
-        config.device_mac_address = Some(BDAddr::from([0, 1, 2, 3, 4, 6]));
+        let config = Config {
+            device_mac_address: Some(BDAddr::from([0, 1, 2, 3, 4, 6])),
+            ..Default::default()
+        };
 
         let tempfile = tempfile::Builder::new()
             .prefix("meshchat")

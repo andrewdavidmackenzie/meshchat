@@ -76,3 +76,37 @@ impl Notifications {
         Task::none()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::notification::{Notification, Notifications};
+
+    #[test]
+    fn test_empty_initially() {
+        let notifications = Notifications::default();
+        assert!(notifications.inner.is_empty());
+    }
+
+    #[test]
+    fn test_add() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("test".into(), "test".into()));
+        assert_eq!(notifications.inner.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_empty() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.remove(0);
+        assert_eq!(notifications.inner.len(), 0);
+    }
+
+    #[test]
+    fn test_add_and_remove() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("test1".into(), "test1".into()));
+        let _ = notifications.add(Notification::Info("test2".into(), "test2".into()));
+        let _ = notifications.remove(0);
+        assert_eq!(notifications.inner.len(), 1);
+    }
+}

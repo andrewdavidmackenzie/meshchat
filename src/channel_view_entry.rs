@@ -1,7 +1,8 @@
 use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, ShowLocation};
-use crate::channel_view::ChannelViewMessage::MessageSeen;
-use crate::channel_view::{ChannelId, ChannelViewMessage};
+use crate::channel_id::ChannelId;
+use crate::channel_view::ChannelViewMessage;
+use crate::channel_view::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
@@ -33,9 +34,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub enum Payload {
     AlertMessage(String),
     NewTextMessage(String),
-    /// TextMessageReply(reply_to_id, reply text)
     TextMessageReply(u32, String),
-    /// EmojiReply(reply_to_id, emoji_code string)
     EmojiReply(u32, String),
     PositionMessage(i32, i32),
     UserMessage(User),
@@ -218,6 +217,7 @@ impl ChannelViewEntry {
         nodes: &'a HashMap<u32, NodeInfo>,
         channel_id: &'a ChannelId,
         mine: bool,
+        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
     ) -> Element<'a, Message> {
         let name = short_name(nodes, self.from);
 
@@ -233,8 +233,13 @@ impl ChannelViewEntry {
         let mut message_content_column = Column::new();
 
         if !mine {
-            message_content_column =
-                self.top_row(message_content_column, name, message_text.clone());
+            message_content_column = self.top_row(
+                message_content_column,
+                name,
+                message_text.clone(),
+                emoji_picker,
+                channel_id,
+            );
         }
 
         let content: Element<'static, Message> = match self.payload() {
@@ -346,12 +351,14 @@ impl ChannelViewEntry {
         message_content_column: Column<'a, Message>,
         name: &'a str,
         message: String,
+        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        channel_id: &'a ChannelId,
     ) -> Column<'a, Message> {
         let text_color = Self::color_from_id(self.from);
         let mut top_row = Row::new().padding(0).align_y(Top);
 
         top_row = top_row
-            .push(self.menu_bar(name, message))
+            .push(self.menu_bar(name, message, emoji_picker, channel_id))
             .push(Space::new().width(2.0));
 
         top_row = top_row.push(
@@ -400,16 +407,30 @@ impl ChannelViewEntry {
     // TODO differentiate if we are in a node or channel view
     // if a node view, don't show the DM menu item
     fn menu_bar<'a>(
-        &self,
+        &'a self,
         name: &'a str,
         message: String,
+        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        channel_id: &'a ChannelId,
     ) -> MenuBar<'a, Message, Theme, Renderer> {
-        let menu_tpl_1 = |items| Menu::new(items).spacing(3);
+        let menu_tpl_2 = |items| Menu::new(items).max_width(180.0).offset(15.0).spacing(5.0);
 
+        let message_id = self.message_id;
         let dm = format!("DM with {}", name);
-        //(menu_button("react".into(), Message::None))
+
+        let picker_element = emoji_picker
+            .view(move |emoji| ReplyWithEmoji(message_id, emoji, channel_id.clone()))
+            .map(move |picker_msg| {
+                DeviceViewEvent(ChannelMsg(ChannelViewMessage::EmojiPickerMsg(Box::new(
+                    picker_msg,
+                ))))
+            });
+
         #[rustfmt::skip]
         let menu_items = menu_items!(
+            (button(Row::new().push(text("react")).push(Space::new().width(Fill)).push(text("▶"))).style(button_chip_style).width(Fill),
+            menu_tpl_2(menu_items!(
+            (picker_element)))),
             (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
             (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
             (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id))))),
@@ -417,6 +438,7 @@ impl ChannelViewEntry {
         );
 
         // Create the menu bar with the root button and list of options
+        let menu_tpl_1 = |items| Menu::new(items).spacing(3);
         menu_bar!((menu_root_button("▼"), {
             menu_tpl_1(menu_items).width(140)
         }))

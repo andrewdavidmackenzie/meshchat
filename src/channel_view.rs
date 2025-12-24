@@ -1,8 +1,8 @@
 use crate::Message::DeviceViewEvent;
-use crate::channel_view::ChannelId::{Channel, Node};
+use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage::{
-    CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PickChannel, PrepareReply,
-    SendMessage,
+    CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, PickChannel,
+    PrepareReply, ReplyWithEmoji, SendMessage,
 };
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -30,14 +30,9 @@ use iced::widget::{
     scrollable, stack, text, text_input,
 };
 use iced::{Center, Color, Element, Fill, Font, Padding, Pixels, Task};
-use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::NodeInfo;
-use meshtastic::types::{MeshChannel, NodeId};
 use ringmap::RingMap;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
-use std::hash::Hash;
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -48,39 +43,8 @@ pub enum ChannelViewMessage {
     CancelPrepareReply,
     MessageSeen(ChannelId, u32),
     PickChannel(Option<ChannelId>),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
-pub enum ChannelId {
-    Channel(i32), // Channel::index 0..7
-    Node(u32),    // NodeInfo::node number
-}
-
-impl Default for ChannelId {
-    fn default() -> Self {
-        Channel(0)
-    }
-}
-
-impl Display for ChannelId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:?}", self)
-    }
-}
-
-impl ChannelId {
-    pub fn to_destination(&self) -> (PacketDestination, MeshChannel) {
-        match self {
-            Channel(channel_number) => (
-                PacketDestination::Broadcast,
-                MeshChannel::from(*channel_number as u32),
-            ),
-            Node(node_id) => (
-                PacketDestination::Node(NodeId::from(*node_id)),
-                MeshChannel::default(),
-            ),
-        }
-    }
+    ReplyWithEmoji(u32, String, ChannelId), // Send an emoji reply
+    EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
 }
 
 /// [ChannelView] implements view and update methods for Iced for a set of
@@ -92,6 +56,7 @@ pub struct ChannelView {
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
     my_node_num: u32,
     preparing_reply: Option<u32>,
+    emoji_picker: crate::emoji_picker::EmojiPicker,
 }
 
 async fn empty() {}
@@ -103,6 +68,9 @@ impl ChannelView {
         Self {
             channel_id,
             my_node_num: source,
+            emoji_picker: crate::emoji_picker::EmojiPicker::new()
+                .height(400)
+                .width(400),
             ..Default::default()
         }
     }
@@ -148,6 +116,11 @@ impl ChannelView {
             .fold(0, |acc, e| if !e.seen { acc + 1 } else { acc })
     }
 
+    /// Cancel any interactive modes underway
+    pub fn cancel_interactive(&mut self) {
+        self.preparing_reply = None;
+    }
+
     /// Update the [ChannelView] state based on a [ChannelViewMessage]
     pub fn update(&mut self, channel_view_message: ChannelViewMessage) -> Task<Message> {
         match channel_view_message {
@@ -179,7 +152,9 @@ impl ChannelView {
                 }
             }
             PrepareReply(entry_id) => {
-                self.preparing_reply = Some(entry_id);
+                if entry_id < self.entries.len() as u32 {
+                    self.preparing_reply = Some(entry_id);
+                }
                 Task::none()
             }
             CancelPrepareReply => {
@@ -195,12 +170,21 @@ impl ChannelView {
             PickChannel(channel_id) => {
                 Task::perform(empty(), move |_| DeviceViewEvent(ShowChannel(channel_id)))
             }
+            ReplyWithEmoji(message_id, emoji, channel_id) => Task::perform(empty(), move |_| {
+                DeviceViewEvent(DeviceViewMessage::SendEmojiReplyMessage(
+                    message_id, emoji, channel_id,
+                ))
+            }),
+            EmojiPickerMsg(picker_msg) => {
+                if let Some(msg) = self.emoji_picker.update(*picker_msg) {
+                    // Forward the wrapped message
+                    self.update(msg)
+                } else {
+                    // Internal state change only
+                    Task::none()
+                }
+            }
         }
-    }
-
-    /// Cancel any interactive modes underway
-    pub fn cancel_interactive(&mut self) {
-        self.preparing_reply = None;
     }
 
     /// Construct an Element that displays the channel view
@@ -250,6 +234,7 @@ impl ChannelView {
                     nodes,
                     &self.channel_id,
                     entry.from() == self.my_node_num,
+                    &self.emoji_picker,
                 ));
             }
 
@@ -465,7 +450,7 @@ impl ChannelView {
         Row::new()
             .align_y(Center)
             .push(
-                text_input("Send Message", &self.message)
+                text_input("Type your message here", &self.message)
                     .style(text_input_style)
                     .on_input(|s| DeviceViewEvent(ChannelMsg(MessageInput(s))))
                     .on_submit(DeviceViewEvent(ChannelMsg(SendMessage(
@@ -490,6 +475,7 @@ impl ChannelView {
 
 #[cfg(test)]
 mod test {
+    use crate::channel_view::ChannelViewMessage::PrepareReply;
     use crate::channel_view::{ChannelId, ChannelView};
     use crate::channel_view_entry::ChannelViewEntry;
     use crate::channel_view_entry::Payload::NewTextMessage;
@@ -527,5 +513,41 @@ mod test {
         assert_eq!(iter.next().unwrap(), &oldest_message);
         assert_eq!(iter.next().unwrap(), &middle_message);
         assert_eq!(iter.next().unwrap(), &newest_message);
+    }
+
+    #[test]
+    fn test_initial_unread_count() {
+        let channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        assert_eq!(channel_view.unread_count(), 0);
+    }
+
+    #[test]
+    fn test_unread_count() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        channel_view.new_message(message.clone());
+        assert_eq!(channel_view.unread_count(), 1);
+    }
+
+    #[test]
+    fn test_replying_valid_entry() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        channel_view.new_message(message);
+
+        let _ = channel_view.update(PrepareReply(0));
+
+        assert_eq!(channel_view.preparing_reply, Some(0));
+    }
+
+    #[test]
+    fn test_replying_invalid_entry() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        channel_view.new_message(message);
+
+        let _ = channel_view.update(PrepareReply(1));
+
+        assert!(channel_view.preparing_reply.is_none());
     }
 }
