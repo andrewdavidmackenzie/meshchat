@@ -167,12 +167,13 @@ Major areas of work remaining I would call out are:
 - Review / Re-Implement a lot of the styling in Iced, using Themes and respecting the OS theme settings
 - Improve the testing, probably using new (0.14.0) Iced test facilities
 - Fix Windows bundling
+- Chat history persistence (or not, as
+  per [discussion](https://github.com/andrewdavidmackenzie/meshchat/discussions/145))
 
-As usual for such rust projects, much work is needed on CI, Releasing, Bundling for OS, etc. Help there would be great.
+If you want to help out, submit a well-written issue, start
+a [discussion](https://github.com/andrewdavidmackenzie/meshchat/discussions) or clone the repo and submit a PR.
 
-If you want to help out, submit a well-written issue, or start a conversation in
-the [discussions](https://github.com/andrewdavidmackenzie/meshchat/discussions) or clone the repo, make some improvement
-and submit a PR.
+### MeshCore Support
 
 I keep an eye on MeshCore too, and if there was a reasonable rust crate to talk to MeshCore radios, I would
 consider working on supporting both simultaneously. That would force cleaning up MeshTastic code that has
