@@ -296,7 +296,7 @@ async fn send_text_message(
         .await
 }
 
-/// Send a empji reply
+/// Send a emoji reply
 async fn send_emoji_reply(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
@@ -316,7 +316,7 @@ async fn send_emoji_reply(
             false, // want_ack
             false,
             true, // echo_response - via PacketRouter
-            None,
+            Some(reply_to_id),
             Some(reply_to_id),
         )
         .await

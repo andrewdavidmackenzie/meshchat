@@ -477,14 +477,14 @@ impl DeviceView {
                             NewTextMessage(String::from_utf8(data.payload.clone()).unwrap())
                         } else {
                             // Emoji reply to an earlier message
-                            if data.emoji == 1 {
-                                EmojiReply(
+                            if data.emoji == 0 {
+                                // Text reply to an earlier message
+                                TextMessageReply(
                                     data.reply_id,
                                     String::from_utf8(data.payload.clone()).unwrap(),
                                 )
                             } else {
-                                // Text reply to an earlier message
-                                TextMessageReply(
+                                EmojiReply(
                                     data.reply_id,
                                     String::from_utf8(data.payload.clone()).unwrap(),
                                 )
