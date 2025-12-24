@@ -237,6 +237,7 @@ impl ChannelViewEntry {
                 name,
                 message_text.clone(),
                 emoji_picker,
+                channel_id,
             );
         }
 
@@ -260,7 +261,7 @@ impl ChannelViewEntry {
                 .style(button_chip_style)
                 .on_press(ShowLocation(*lat, *long))
                 .into(),
-            EmojiReply(_, _) => text(message_text).into(), // TODO
+            EmojiReply(_, _) => text(message_text).into(),
         };
 
         // Create the row with message text and time and maybe an ACK tick mark
@@ -350,12 +351,13 @@ impl ChannelViewEntry {
         name: &'a str,
         message: String,
         emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        channel_id: &'a ChannelId,
     ) -> Column<'a, Message> {
         let text_color = Self::color_from_id(self.from);
         let mut top_row = Row::new().padding(0).align_y(Top);
 
         top_row = top_row
-            .push(self.menu_bar(name, message, emoji_picker))
+            .push(self.menu_bar(name, message, emoji_picker, channel_id))
             .push(Space::new().width(2.0));
 
         top_row = top_row.push(
@@ -408,6 +410,7 @@ impl ChannelViewEntry {
         name: &'a str,
         message: String,
         emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        channel_id: &'a ChannelId,
     ) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_2 = |items| Menu::new(items).max_width(180.0).offset(15.0).spacing(5.0);
 
@@ -415,7 +418,7 @@ impl ChannelViewEntry {
         let dm = format!("DM with {}", name);
 
         let picker_element = emoji_picker
-            .view(move |emoji| ReplyWithEmoji(message_id, emoji))
+            .view(move |emoji| ReplyWithEmoji(message_id, emoji, channel_id.clone()))
             .map(move |picker_msg| {
                 DeviceViewEvent(ChannelMsg(ChannelViewMessage::EmojiPickerMsg(Box::new(
                     picker_msg,

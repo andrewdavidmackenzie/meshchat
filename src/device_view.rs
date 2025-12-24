@@ -7,7 +7,7 @@ use crate::channel_view_entry::Payload::{
 };
 use crate::config::Config;
 use crate::device_subscription::SubscriberMessage::{
-    Connect, Disconnect, SendInfo, SendPosition, SendText,
+    Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, Ready,
@@ -16,8 +16,9 @@ use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
     AliasInput, ChannelMsg, ClearFilter, ConnectRequest, DisconnectRequest, ForwardMessage,
-    SearchInput, SendInfoMessage, SendPositionMessage, SendTextMessage, ShowChannel,
-    StartEditingAlias, StartForwardingMessage, StopForwardingMessage, SubscriptionMessage,
+    SearchInput, SendEmojiReplyMessage, SendInfoMessage, SendPositionMessage, SendTextMessage,
+    ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
+    SubscriptionMessage,
 };
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
@@ -70,6 +71,7 @@ pub enum DeviceViewMessage {
     ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
     SendTextMessage(String, ChannelId, Option<u32>), // optional reply to message id
+    SendEmojiReplyMessage(u32, String, ChannelId),   // optional reply to message id
     SendPositionMessage(ChannelId),
     SendInfoMessage(ChannelId),
     SearchInput(String),
@@ -105,13 +107,24 @@ async fn request_connection(sender: Sender<SubscriberMessage>, mac_address: BDAd
     let _ = sender.send(Connect(mac_address)).await;
 }
 
-async fn request_send(
+async fn request_send_text(
     sender: Sender<SubscriberMessage>,
     text: String,
     channel_id: ChannelId,
     reply_to_id: Option<u32>,
 ) {
     let _ = sender.send(SendText(text, channel_id, reply_to_id)).await;
+}
+
+async fn request_send_emoji_reply(
+    sender: Sender<SubscriberMessage>,
+    emoji: String,
+    channel_id: ChannelId,
+    reply_to_id: u32,
+) {
+    let _ = sender
+        .send(SendEmojiReply(emoji, channel_id, reply_to_id))
+        .await;
 }
 
 async fn request_send_position(
@@ -175,10 +188,10 @@ impl DeviceView {
             SubscriptionMessage(subscription_event) => {
                 return self.process_subscription_event(subscription_event);
             }
-            SendTextMessage(message, index, reply_to_id) => {
+            SendTextMessage(message, channel_id, reply_to_id) => {
                 if let Some(sender) = self.subscription_sender.clone() {
                     return Task::perform(
-                        request_send(sender, message, index, reply_to_id),
+                        request_send_text(sender, message, channel_id, reply_to_id),
                         |_| Message::None,
                     );
                 }
@@ -218,6 +231,14 @@ impl DeviceView {
                 return self.forward_message(channel_id, entry);
             }
             ClearFilter => self.filter.clear(),
+            SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
+                if let Some(sender) = self.subscription_sender.clone() {
+                    return Task::perform(
+                        request_send_emoji_reply(sender, emoji, channel_id, reply_to_id),
+                        |_| Message::None,
+                    );
+                }
+            }
         }
 
         Task::none()
@@ -258,7 +279,7 @@ impl DeviceView {
                 channel_view_entry.payload()
             );
             Task::perform(
-                request_send(sender, message_text, channel_id.clone(), None),
+                request_send_text(sender, message_text, channel_id.clone(), None),
                 |_| DeviceViewEvent(ShowChannel(Some(channel_id))),
             )
         } else {

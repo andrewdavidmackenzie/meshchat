@@ -48,8 +48,7 @@ pub enum ChannelViewMessage {
     CancelPrepareReply,
     MessageSeen(ChannelId, u32),
     PickChannel(Option<ChannelId>),
-    //EmojiReply(u32, String),     // we are replying to a message with an emoji
-    ReplyWithEmoji(u32, String), // We received an emoji reply to a message
+    ReplyWithEmoji(u32, String, ChannelId), // Send an emoji reply
     EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
 }
 
@@ -155,6 +154,11 @@ impl ChannelView {
             .fold(0, |acc, e| if !e.seen { acc + 1 } else { acc })
     }
 
+    /// Cancel any interactive modes underway
+    pub fn cancel_interactive(&mut self) {
+        self.preparing_reply = None;
+    }
+
     /// Update the [ChannelView] state based on a [ChannelViewMessage]
     pub fn update(&mut self, channel_view_message: ChannelViewMessage) -> Task<Message> {
         match channel_view_message {
@@ -186,7 +190,9 @@ impl ChannelView {
                 }
             }
             PrepareReply(entry_id) => {
-                self.preparing_reply = Some(entry_id);
+                if entry_id < self.entries.len() as u32 {
+                    self.preparing_reply = Some(entry_id);
+                }
                 Task::none()
             }
             CancelPrepareReply => {
@@ -202,13 +208,11 @@ impl ChannelView {
             PickChannel(channel_id) => {
                 Task::perform(empty(), move |_| DeviceViewEvent(ShowChannel(channel_id)))
             }
-            ReplyWithEmoji(message_id, emoji) => {
-                // TODO actually send the emoji reply
-                if let Some(channel_view_entry) = self.entries.get_mut(&message_id) {
-                    channel_view_entry.add_emoji(emoji, self.my_node_num);
-                }
-                Task::none()
-            }
+            ReplyWithEmoji(message_id, emoji, channel_id) => Task::perform(empty(), move |_| {
+                DeviceViewEvent(DeviceViewMessage::SendEmojiReplyMessage(
+                    message_id, emoji, channel_id,
+                ))
+            }),
             EmojiPickerMsg(picker_msg) => {
                 if let Some(msg) = self.emoji_picker.update(*picker_msg) {
                     // Forward the wrapped message
@@ -219,11 +223,6 @@ impl ChannelView {
                 }
             }
         }
-    }
-
-    /// Cancel any interactive modes underway
-    pub fn cancel_interactive(&mut self) {
-        self.preparing_reply = None;
     }
 
     /// Construct an Element that displays the channel view
@@ -514,6 +513,7 @@ impl ChannelView {
 
 #[cfg(test)]
 mod test {
+    use crate::channel_view::ChannelViewMessage::PrepareReply;
     use crate::channel_view::{ChannelId, ChannelView};
     use crate::channel_view_entry::ChannelViewEntry;
     use crate::channel_view_entry::Payload::NewTextMessage;
@@ -551,5 +551,41 @@ mod test {
         assert_eq!(iter.next().unwrap(), &oldest_message);
         assert_eq!(iter.next().unwrap(), &middle_message);
         assert_eq!(iter.next().unwrap(), &newest_message);
+    }
+
+    #[test]
+    fn test_initial_unread_count() {
+        let channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        assert_eq!(channel_view.unread_count(), 0);
+    }
+
+    #[test]
+    fn test_unread_count() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        channel_view.new_message(message.clone());
+        assert_eq!(channel_view.unread_count(), 1);
+    }
+
+    #[test]
+    fn test_replying_valid_entry() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        channel_view.new_message(message);
+
+        let _ = channel_view.update(PrepareReply(0));
+
+        assert_eq!(channel_view.preparing_reply, Some(0));
+    }
+
+    #[test]
+    fn test_replying_invalid_entry() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        channel_view.new_message(message);
+
+        let _ = channel_view.update(PrepareReply(1));
+
+        assert!(channel_view.preparing_reply.is_none());
     }
 }

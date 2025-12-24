@@ -1,7 +1,7 @@
 use crate::channel_view::ChannelId;
 use crate::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::device_subscription::SubscriberMessage::{
-    Connect, Disconnect, RadioPacket, SendInfo, SendPosition, SendText,
+    Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent,
@@ -42,6 +42,7 @@ pub enum SubscriberMessage {
     Connect(BDAddr),
     Disconnect,
     SendText(String, ChannelId, Option<u32>), // Optional reply to message id
+    SendEmojiReply(String, ChannelId, u32),
     SendPosition(ChannelId, Position),
     SendInfo(ChannelId),
     RadioPacket(Box<FromRadio>),
@@ -227,6 +228,19 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     r
                                 }
                                 RadioPacket(packet) => my_router.handle_from_radio(packet),
+                                SendEmojiReply(emoji, channel_id, reply_to_id) => {
+                                    let mut api = stream_api.take().unwrap();
+                                    let r = send_emoji_reply(
+                                        &mut api,
+                                        &mut my_router,
+                                        channel_id,
+                                        reply_to_id,
+                                        emoji,
+                                    )
+                                    .await;
+                                    let _none = stream_api.replace(api);
+                                    r
+                                }
                             };
 
                             if let Err(e) = result {
@@ -278,6 +292,32 @@ async fn send_text_message(
             true, // echo_response - via PacketRouter
             reply_to_id,
             None, // Used for emoji reply! https://github.com/andrewdavidmackenzie/meshchat/issues/91
+        )
+        .await
+}
+
+/// Send a empji reply
+async fn send_emoji_reply(
+    stream_api: &mut ConnectedStreamApi,
+    my_router: &mut MyRouter,
+    channel_id: ChannelId,
+    reply_to_id: u32,
+    emoji: String,
+) -> Result<(), Error> {
+    let (packet_destination, mesh_channel) = channel_id.to_destination();
+
+    stream_api
+        .send_mesh_packet(
+            my_router,
+            emoji.into_bytes().into(),
+            PortNum::TextMessageApp,
+            packet_destination,
+            mesh_channel,
+            false, // want_ack
+            false,
+            true, // echo_response - via PacketRouter
+            None,
+            Some(reply_to_id),
         )
         .await
 }
