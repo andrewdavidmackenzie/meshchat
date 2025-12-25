@@ -1,6 +1,6 @@
 # ![MeshChat Logo](assets/images/small_icon.png) MeshChat
 
-Meshchat ia an Iced cross-platform GUI application to interact with Meshtastic LoRa radios:
+Meshchat is an Iced cross-platform GUI application to interact with Meshtastic LoRa radios:
 
 - find Bluetooth Low Energy attached meshtastic devices
 - connect to one
