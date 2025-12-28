@@ -34,20 +34,20 @@ jobs:
             sudo apt-get update
             sudo apt install libdbus-1-dev pkg-config
           elif [ "${{ runner.os }}" == "Windows" ]; then
-                - name: Install WiX Toolset v3
-                shell: powershell
-                run: |
-                Write-Host "Downloading and installing WiX v3..."
-                Invoke-WebRequest -Uri "github.com" -OutFile "$env:TEMP\wix311.exe"
-                Start-Process -FilePath "$env:TEMP\wix311.exe" -ArgumentList "/install", "/quiet", "/norestart" -Wait
+            - name: Install WiX Toolset v3
+            shell: powershell
+            run: |
+             Write-Host "Downloading and installing WiX v3..."
+            Invoke-WebRequest -Uri "github.com" -OutFile "$env:TEMP\wix311.exe"
+             Start-Process -FilePath "$env:TEMP\wix311.exe" -ArgumentList "/install", "/quiet", "/norestart" -Wait
         
-                # Add WiX bin directory to PATH for subsequent steps
-                $wixDir = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
-                echo "::add-path::$wixDir"
+            # Add WiX bin directory to PATH for subsequent steps
+            $wixDir = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+            echo "::add-path::$wixDir"
 
-              - name: Verify WiX installation (optional)
-              run: candle.exe -?
-              shell: cmd
+            - name: Verify WiX installation (optional)
+            run: candle.exe -?
+            shell: cmd
           fi
           
       - name: Install cargo bundle
