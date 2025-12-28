@@ -44,7 +44,7 @@ jobs:
           Invoke-WebRequest -Uri $downloadUrl -OutFile $installerName
           ls c:/*.exe
           Invoke-Expression "& `$installerName install /quiet /norestart"
-          `C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe --help`
+          & 'C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe --help'
           
       - name: Install cargo bundle
         run: cargo install cargo-bundle
