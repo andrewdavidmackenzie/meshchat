@@ -27,12 +27,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install dependencies - Linux
-        if: runner.os == 'Linux'
+      - name: Install dependencies
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt install libdbus-1-dev pkg-config
-
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            sudo apt-get update
+            sudo apt install libdbus-1-dev pkg-config
+          elif [ "${{ runner.os }}" == "Windows" ]; then
+            dotnet tool install --global wix --version 3.14.1
+          fi
       - name: Install cargo bundle
         run: cargo install cargo-bundle
 
