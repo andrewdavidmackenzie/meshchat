@@ -37,9 +37,23 @@ jobs:
       - name: Install WiX Toolset v3 (Windows)
         # This is a dedicated step, not nested within the dependencies step
         if: runner.os == 'Windows'
-        # The 'wixtoolset/wix3-install@v1' action is a reliable way to install WiX
-        uses: wixtoolset/wix3-install@v1 
-          
+        - name: Download and Install WiX Toolset v3
+        shell: powershell
+        run: |
+          # Define the installer filename and download URL
+          $installerName = "wixToolset.msi"
+          $downloadUrl = "github.com" # Example URL, check for latest v3 release
+    
+          # Download the MSI installer
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $installerName
+    
+          # Perform a silent installation of the MSI package
+          # /i for install, /qn for no UI (silent), /norestart to prevent reboot
+          msiexec.exe /i $installerName /qn /norestart | Out-Null
+    
+          # Optional: Verify installation by checking the path (might require adjusting PATH or using full path)
+          # The tools are usually installed in 'C:\Program Files (x86)\WiX Toolset v3.11\'
+ 
       - name: Install cargo bundle
         run: cargo install cargo-bundle
 
