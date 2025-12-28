@@ -42,7 +42,7 @@ jobs:
           $installerName = "c:\wix314.exe"
           $downloadUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314.exe" # Example URL, check for latest v3 release
           Invoke-WebRequest -Uri $downloadUrl -OutFile $installerName
-          ls c:/*.exe
+          ls 'C:\Program Files (x86)'
           Invoke-Expression "& `$installerName install /quiet /norestart"
           & 'C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe --help'
           
