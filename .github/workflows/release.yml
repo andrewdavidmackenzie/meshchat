@@ -34,18 +34,18 @@ jobs:
           sudo apt install libdbus-1-dev pkg-config
         shell: bash
 
-      - name: Install WiX Toolset v3 - windows
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          # Define the installer filename and download URL
-          $installerName = "c:\temp\wix314.exe"
-          $downloadUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314.exe
-          $output = $installerName
-          Invoke-WebRequest -Uri $downloadUrl -OutFile $output
-          & "$installerName install /quiet /norestart"
-          ls 'C:\Program Files (x86)\WiX Toolset v3.14\bin\'
-          & 'C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe --help'
+ #     - name: Install WiX Toolset v3 - windows
+ #       if: runner.os == 'Windows'
+ #       shell: powershell
+ #       run: |
+#          # Define the installer filename and download URL
+#          $installerName = "c:\temp\wix314.exe"
+#          $downloadUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314.exe
+#          $output = $installerName
+#          Invoke-WebRequest -Uri $downloadUrl -OutFile $output
+#          & "$installerName install /quiet /norestart"
+#          ls 'C:\Program Files (x86)\WiX Toolset v3.14\bin\'
+#          & 'C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe --help'
           
       - name: Install cargo bundle
         run: cargo install cargo-bundle
