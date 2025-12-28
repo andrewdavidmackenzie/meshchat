@@ -27,31 +27,23 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install dependencies (Linux)
+      - name: Install dependencies - linux
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt install libdbus-1-dev pkg-config
         shell: bash
 
-      - name: Install WiX Toolset v3 (Windows)
+      - name: Install WiX Toolset v3 - windows
         if: runner.os == 'Windows'
-          shell: powershell
-          run: |
-            # Define the installer filename and download URL
-            $installerName = "wixToolset.msi"
-            $downloadUrl = "github.com" # Example URL, check for latest v3 release
-    
-            # Download the MSI installer
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $installerName
-    
-            # Perform a silent installation of the MSI package
-            # /i for install, /qn for no UI (silent), /norestart to prevent reboot
-            msiexec.exe /i $installerName /qn /norestart | Out-Null
-    
-            #  Optional: Verify installation by checking the path (might require adjusting PATH or using full path)
-            #  The tools are usually installed in 'C:\Program Files (x86)\WiX Toolset v3.11\'
- 
+        shell: powershell
+        run: |
+          # Define the installer filename and download URL
+          $installerName = "wixToolset.msi"
+          $downloadUrl = "github.com" # Example URL, check for latest v3 release
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $installerName
+          msiexec.exe /i $installerName /qn /norestart | Out-Null
+
       - name: Install cargo bundle
         run: cargo install cargo-bundle
 
