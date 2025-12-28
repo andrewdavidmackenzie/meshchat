@@ -39,9 +39,10 @@ jobs:
         shell: powershell
         run: |
           # Define the installer filename and download URL
-          $installerName = "wix314.exe"
+          $installerName = "c:\wix314.exe"
           $downloadUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314.exe" # Example URL, check for latest v3 release
           Invoke-WebRequest -Uri $downloadUrl -OutFile $installerName
+          ls
           Invoke-Expression "& `$installerName install /quiet /norestart"
           
       - name: Install cargo bundle
