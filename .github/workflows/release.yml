@@ -45,6 +45,7 @@ jobs:
           else
             cargo bundle --release
           fi
+          
       - name: Find and prepare bundle artifacts
         id: find-bundles
         shell: bash
