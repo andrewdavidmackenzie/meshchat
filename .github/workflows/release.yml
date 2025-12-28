@@ -37,15 +37,16 @@ jobs:
         run: cargo install cargo-bundle
 
       - name: Build bundle
-        # Use shell: bash to ensure consistent behavior across OS
+        # Added 'shell: bash' to make standard scripts work on Windows runners
         shell: bash
         run: |
           if [ "${{ runner.os }}" == "Windows" ]; then
+            # Windows requires specific target for MSI bundling
             cargo bundle --release --target x86_64-pc-windows-msvc
           else
             cargo bundle --release
           fi
-          
+
       - name: Find and prepare bundle artifacts
         id: find-bundles
         shell: bash
