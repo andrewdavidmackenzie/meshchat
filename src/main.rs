@@ -108,6 +108,7 @@ fn main() -> iced::Result {
         .resizable(true)
         .font(icons::FONT)
         .title(MeshChat::title)
+		.window(window_settings)
         .run()
 }
 
