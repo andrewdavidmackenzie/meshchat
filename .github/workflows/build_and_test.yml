@@ -54,8 +54,11 @@ jobs:
         run: cargo build
 
       - name: Publish dry-run
+        if: runner.os != 'Windows'
         run: cargo build --release && cargo publish --dry-run --allow-dirty --no-verify
-
+        if: runner.os == 'Windows'
+        run: cargo build --release --target x86_64-pc-windows-msvc
+        
       - name: test - non-Linux
         if: runner.os != 'Linux'
         run: cargo test
