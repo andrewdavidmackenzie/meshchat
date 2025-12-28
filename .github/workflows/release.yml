@@ -36,14 +36,15 @@ jobs:
       - name: Install cargo bundle
         run: cargo install cargo-bundle
 
-      - name: Build bundle - Windows
-        if: runner.os == 'Windows'
-        run: cargo bundle --release --target x86_64-pc-windows-msvc
-
-      -name: Build bundle - Linux and Macos
-        if: runner.os  != 'Windows'
-        run: cargo bundle --release
-
+      - name: Build bundle
+        # Use shell: bash to ensure consistent behavior across OS
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cargo bundle --release --target x86_64-pc-windows-msvc
+          else
+            cargo bundle --release
+          fi
       - name: Find and prepare bundle artifacts
         id: find-bundles
         shell: bash
