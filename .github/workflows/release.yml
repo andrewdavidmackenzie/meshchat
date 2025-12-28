@@ -36,9 +36,11 @@ jobs:
       - name: Install cargo bundle
         run: cargo install cargo-bundle
 
-      - name: Build bundle
+      - name: Build bundle - Windows
         if: runner.os == 'Windows'
         run: cargo bundle --release --target x86_64-pc-windows-msvc
+
+      -name:Build bundle - Linux and Macos
         if: runner.os  != 'Windows'
         run: cargo bundle --release
 
