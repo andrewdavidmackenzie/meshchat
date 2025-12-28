@@ -37,7 +37,11 @@ jobs:
         run: cargo install cargo-bundle
 
       - name: Build bundle
-        run: cargo bundle --release
+        if [ "${{ runner.os }}" == "Linux" ]; then
+          run: cargo bundle --release --target x86_64-pc-windows-msvc
+        else
+          run: cargo bundle --release
+        fi
 
       - name: Find and prepare bundle artifacts
         id: find-bundles
