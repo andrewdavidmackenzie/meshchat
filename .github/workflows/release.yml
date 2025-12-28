@@ -16,7 +16,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-15 ] # windows-latest - pending to be fixed
+        os: [ ubuntu-latest, macos-15, windows-latest ] # windows-latest - pending to be fixed
 
     steps:
       - name: Checkout
@@ -37,7 +37,7 @@ jobs:
         run: cargo install cargo-bundle
 
       - name: Build bundle
-        if [ "${{ runner.os }}" == "Linux" ]; then
+        if [ "${{ runner.os }}" == "Windows" ]; then
           run: cargo bundle --release --target x86_64-pc-windows-msvc
         else
           run: cargo bundle --release
