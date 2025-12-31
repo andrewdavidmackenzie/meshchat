@@ -38,9 +38,6 @@ jobs:
       - name: install cargo wix
         run: cargo install cargo-wix
 
-      - name: cargo wix init
-        run: cargo wix init --verbose
-
       - name: cargo wix
         run: cargo wix --verbose
 
