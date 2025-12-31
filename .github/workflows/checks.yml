@@ -38,6 +38,9 @@ jobs:
       - name: install cargo wix
         run: cargo install cargo-wix
 
+      - name: try cargo wix directly
+        run: cargo wix init && cargo wix
+
       - name: Install cargo bundle
         run: cargo install cargo-bundle
 
