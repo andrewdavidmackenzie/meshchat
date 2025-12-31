@@ -4,6 +4,7 @@ description = "A cross platform Iced Gui application for chatting on the Meshtas
 version = "0.2.0"
 edition = "2024"
 readme = "README.md"
+authors = [" Andrew Mackenzie andrew@mackenzie-serres.net"]
 repository = "https://github.com/andrewdavidmackenzie/meshchat"
 license = "GPL-3.0"
 include = ["src", "assets", "build.rs", "README.md", "LICENSE"]
