@@ -41,6 +41,9 @@ jobs:
       - name: cargo wix
         run: cargo wix --verbose
 
+      - name: tree target
+        run: TREE D:\a\meshchat\meshchat\target /F
+
       - name: Install cargo bundle
         run: cargo install cargo-bundle
 
