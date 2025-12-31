@@ -18,7 +18,7 @@ hot = ["iced/hot"]
 # For communications with BLE connected radios running meshtastic firmware
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"] }
 # GUI framework
-iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "canvas", "x11", "wayland", "advanced-shaping"] }
+iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "canvas", "x11", "wayland", "advanced-shaping", "image"] }
 # for saving config files in platform-dependent directories
 directories = { version = "6.0.0", default-features = false }
 # for serialization and deserialization of config struct
@@ -43,12 +43,17 @@ webbrowser = { version = "1.0", default-features = false }
 iced_aw = { version = "0.13", default-features = false, features = ["menu"] }
 btleplug = "0.11.8"
 emojis = "0.8.0"
+image = "0.25.0" # Use the latest version found on crates.io
 
 [dev-dependencies]
 tempfile = "3.23.0"
 
 [build-dependencies]
 iced_fontello = "0.13"
+winres = "0.1"
+
+[build]
+incremental = true
 
 # With the standard release profile, binary size was: 10,756,272 (10.7MB)
 # With these changes the binary size reduced to: 5,596,848 (5.56MB)
@@ -68,11 +73,12 @@ panic = "abort"
 incremental = false
 overflow-checks = false
 
+
 # For creation of OS bundles
 [package.metadata.bundle]
 identifier = "meshchat.mackenzie-serres.net"
-icon = ["assets/images/icon.png"]
-resources = []
+icon = ["assets/images/icon.png","assets/images/icon.ico"]
+resources = ["assets"]
 category = "public.app-category.social-networking" # would prefer to find a better category
 short_description = "An application for chatting on the Meshtastic LoRa MESH via connected Bluetooth LE radios"
 osx_frameworks = []
