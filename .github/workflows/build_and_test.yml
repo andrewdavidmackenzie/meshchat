@@ -53,6 +53,30 @@ jobs:
       - name: debug build
         run: cargo build
 
+      # Testing
+      - name: Add msbuild to PATH
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Install WiX
+        if: runner.os == 'Windows'
+        run: dotnet tool install --global wix
+
+      - name: Install cargo wix for Windows
+        if: runner.os == 'Windows'
+        run: cargo install cargo-wix
+
+      - name: Run cargo wix on Windows
+        if: runner.os == 'Windows'
+        run: cargo wix --verbose
+
+      - name: Dump env
+        if: runner.os == 'Windows'
+        run: |
+          env
+          echo $PATH
+          echo $WIX
+
       - name: Publish dry-run
         run: cargo build --release && cargo publish --dry-run --allow-dirty --no-verify
 
