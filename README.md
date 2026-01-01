@@ -1,3 +1,5 @@
+NOTE!!!: you are in a fock of the main repository of meshchat.  If you don't know what that means you are in the wrong place.
+
 # ![MeshChat Logo](assets/images/small_icon.png) MeshChat
 
 Meshchat is an Iced cross-platform GUI application to interact with Meshtastic LoRa radios:
