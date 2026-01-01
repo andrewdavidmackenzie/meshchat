@@ -50,7 +50,7 @@ jobs:
 
       - name: Build WiX on Windows
         if: runner.os == 'Windows'
-        run: wix build .\nexus.wxs
+        run: wix build .\wix\main.wxs
 
       - name: Install cargo wix for Windows
         if: runner.os == 'Windows'
