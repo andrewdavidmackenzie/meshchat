@@ -21,8 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        #os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm ]
-        os: [ windows-11-arm ]
+        os: [ ubuntu-latest, windows-latest, macos-15, ubuntu-24.04-arm ] # windows-11-arm, 
 
     steps:
       - name: Checkout
@@ -53,30 +52,6 @@ jobs:
 
       - name: debug build
         run: cargo build
-
-      # Testing
-      - name: Add msbuild to PATH
-        if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v1.1
-
-      - name: Install WiX
-        if: runner.os == 'Windows'
-        run: dotnet tool install --global wix
-
-      - name: Install cargo wix for Windows
-        if: runner.os == 'Windows'
-        run: cargo install cargo-wix
-
-      - name: Dump env
-        run: |
-          env
-          echo $PATH
-          echo $GITHUB_PATH
-          echo $WIX
-
-      - name: Run cargo wix on Windows
-        if: runner.os == 'Windows'
-        run: cargo wix --verbose
 
       - name: Publish dry-run
         run: cargo build --release && cargo publish --dry-run --allow-dirty --no-verify
