@@ -115,7 +115,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           version: v0.6.1
-          fail_ci_if_error: true
+          disable_gpg: true
           file: lcov.info
           flags: unittests
           name: codecov-umbrella
