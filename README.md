@@ -56,9 +56,9 @@ to improve it.
 
 Here are some of the newer features I have added in recent releases:
 
-### 0.2.0 Release
+### 0.2.1 Release
 
-This is the first "real" release I've done via GitHub releases. It includes:
+This release includes:
 
 - Discover nearby MeshTastic compatible radios via Bluetooth and list them in the Device View
 - Connect to a MeshTastic radio, then view a list of Channels and Nodes it knows about
@@ -69,7 +69,7 @@ This is the first "real" release I've done via GitHub releases. It includes:
   (Text, Text Reply, Position, Alert, NodeInfo)
 - Acknowledgement indicator on a message to show it was received by the other side
 - Unread message count indicator on Channels, Nodes and Device overall
-- macOS and Linux application bundles are included in the GH Release Artifacts (Windows is still broken)
+- macOS and Linux application bundles are included in the GH Release Artifacts
 - Ability to Reply to a message, show replies quoting the original message
 - Ability to Forward a message to another Channel or Node
 - Ability to Copy a message to the clipboard to be pasted elsewhere
@@ -97,12 +97,13 @@ about [storing chat history locally](https://github.com/andrewdavidmackenzie/mes
 Meshchat uses the `Iced`, `Meshtastic` and other rust crates that are all cross-platform, so it should run on
 many Operating Systems, including macOS, Windows and Linux.
 
-So far, I have used it successfully on:
+So far, it has been confirmed to run correctly on:
 
-* macOS (Tahoe)
+* macOS (Tahoe, Apple Silicon / ARM)
 * Linux (Pop OS!)
     * Known [bug](https://github.com/andrewdavidmackenzie/meshchat/issues/16) in BLE device discovery—it detects all
       BlueTooth devices, not just Meshtastic radios
+* Windows (both x86 and ARM)
 
 If you successfully run it on other OS or variants of the above, drop me a message in the repo's
 [discussions](https://github.com/andrewdavidmackenzie/meshchat/discussions) with some details, and I will add to a list
@@ -125,22 +126,24 @@ radios.
 
 ## Installing
 
-For now, it's very rust-developer-oriented. If you have a working rust toolchain installed, then use:
+After a bit of optimizing I did, the release binary size is around 5.6 MBytes
+
+### Download an installer
+
+Each release contains installers for macOS, Linux and Windows that you can download and run from
+[Latest Release on GitHub](https://github.com/andrewdavidmackenzie/meshchat/releases/latest)
+
+### Cargo install
+
+If you have a working rust toolchain installed, you can use:
 
 `cargo install meshchat`
 
 to get the binary built and installed and in your `$PATH`.
 
-Later I may work on pre-build binaries attached to GitHub releases,
-or `cargo binstall` support to make it easier.
+### Build and run from source
 
-### Binary Size
-
-After a bit of optimizing I did, the release binary size is around 5.6 MBytes
-
-## Running
-
-If you clone the repo, you can run meshchat directly with:
+Clone the repo, then run meshchat directly with:
 
 `cargo run --release`
 
@@ -169,7 +172,6 @@ Major areas of work remaining I would call out are:
 
 - Review / Re-Implement a lot of the styling in Iced, using Themes and respecting the OS theme settings
 - Improve the testing, probably using new (0.14.0) Iced test facilities
-- Fix Windows bundling
 - Chat history persistence (or not, as
   per [discussion](https://github.com/andrewdavidmackenzie/meshchat/discussions/145))
 
