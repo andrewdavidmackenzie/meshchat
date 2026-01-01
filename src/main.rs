@@ -19,9 +19,9 @@ use crate::notification::{Notification, Notifications};
 use btleplug::api::BDAddr;
 use iced::keyboard::key;
 use iced::widget::{Column, Space, operation};
+use iced::window::icon;
 use iced::{Element, Fill, event};
 use iced::{Event, Subscription, Task, clipboard, keyboard, window};
-use iced::window::icon;
 use std::cmp::PartialEq;
 use std::time::Duration;
 
