@@ -71,21 +71,33 @@ jobs:
         env:
           WAYLAND_DISPLAY: weston
 
-      - name: Clean up coverage
-        if: runner.os != 'Windows'
+      # -------------------------
+      # Codecov coverage upload
+      # -------------------------
+      - name: Generate coverage (Linux only)
+        if: runner.os == 'Linux'
         run: |
-          grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
-          lcov --remove lcov.info 'target/debug/build/**' 'target/release/build/**' '/usr*' '**/errors.rs' '**/build.rs' '*tests/*' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors inconsistent --ignore-errors empty,empty -o lcov.info --erase-functions "(?=^.*fmt).+"
-    
-#      - name: Save artifacts
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: debug-artifacts
-#          path: /home/runner/work/meshchat/meshchat
-  
-      
+          grcov . --binary-path target/debug/ -s . -t lcov --branch \
+            --ignore-not-existing --ignore "/*" -o lcov.info
+          # Remove irrelevant paths and generated files
+          lcov --remove lcov.info \
+            'target/debug/build/**' \
+            'target/release/build/**' \
+            '/usr*' \
+            '**/errors.rs' \
+            '**/build.rs' \
+            '*tests/*' \
+            --ignore-errors unused,unsupported,inconsistent,empty \
+            --erase-functions "(?=^.*fmt).+" \
+            -o lcov.info
+
+
+
+      # Upload coverage only from supported platforms
       - name: UploadCoverage
-        if: runner.os == 'Linux' && runner.arch == 'X64'
+        if: >
+          (runner.os == 'Linux' && runner.arch == 'X64') ||
+          (runner.os == 'Windows' && runner.arch == 'X64')
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
