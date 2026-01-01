@@ -85,13 +85,12 @@ jobs:
   
       
       - name: UploadCoverage
-        if: runner.os != 'Windows'
+        if: runner.os == 'Linux' && runner.arch == 'X64'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           version: v0.6.1
-          disable_gpg: true
-          file: lcov.info
+          files: lcov.info
           flags: unittests
           name: codecov-umbrella
           verbose: true
