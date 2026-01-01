@@ -101,7 +101,10 @@ jobs:
         run: |
           grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
           lcov --remove lcov.info 'target/debug/build/**' 'target/release/build/**' '/usr*' '**/errors.rs' '**/build.rs' '*tests/*' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors inconsistent --ignore-errors empty,empty -o lcov.info --erase-functions "(?=^.*fmt).+"
-
+    
+      - name: Save Artifacts
+        run: actions/upload-artifact 
+      
       - name: UploadCoverage
         if: runner.os != 'Windows'
         uses: codecov/codecov-action@v4
