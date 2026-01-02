@@ -93,8 +93,7 @@ pub enum Message {
 fn main() -> iced::Result {
 	let icon_bytes = include_bytes!("../assets/images/icon.ico");
 	
-	let app_icon = icon::from_file_data(icon_bytes, None)
-    .expect("Failed to load icon data");
+	let app_icon = icon::from_file_data(icon_bytes, None);
 	
     //let icon = window::icon::from_file_data(icon_bytes, None)
     //    .expect("Failed to load window icon from bytes");
