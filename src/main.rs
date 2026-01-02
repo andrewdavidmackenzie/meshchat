@@ -19,6 +19,7 @@ use crate::notification::{Notification, Notifications};
 use btleplug::api::BDAddr;
 use iced::keyboard::key;
 use iced::widget::{Column, Space, operation};
+use iced::window::icon;
 use iced::{Element, Fill, event};
 use iced::{Event, Subscription, Task, clipboard, keyboard, window};
 use std::cmp::PartialEq;
@@ -90,12 +91,25 @@ pub enum Message {
 }
 
 fn main() -> iced::Result {
+	let icon_bytes = include_bytes!("../assets/images/icon.ico");
+	
+	let app_icon = icon::from_file_data(icon_bytes, None);
+	
+    //let icon = window::icon::from_file_data(icon_bytes, None)
+    //    .expect("Failed to load window icon from bytes");
+	
+	let window_settings = window::Settings {
+		icon: Some(app_icon),
+		..Default::default()
+	};
+	
     iced::application(MeshChat::new, MeshChat::update, MeshChat::view)
         .subscription(MeshChat::subscription)
         .exit_on_close_request(false)
         .resizable(true)
         .font(icons::FONT)
         .title(MeshChat::title)
+		.window(window_settings)
         .run()
 }
 
