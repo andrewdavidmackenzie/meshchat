@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm ] #
+        os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm ]
 
     steps:
       - name: Checkout
@@ -71,38 +71,18 @@ jobs:
         env:
           WAYLAND_DISPLAY: weston
 
-      # -------------------------
-      # Codecov coverage upload
-      # -------------------------
-      - name: Generate coverage (Linux only)
-        if: runner.os == 'Linux'
+      - name: Clean up coverage
+        if: runner.os != 'Windows'
         run: |
-          grcov . --binary-path target/debug/ -s . -t lcov --branch \
-            --ignore-not-existing --ignore "/*" -o lcov.info
-          # Remove irrelevant paths and generated files
-          lcov --remove lcov.info \
-            'target/debug/build/**' \
-            'target/release/build/**' \
-            '/usr*' \
-            '**/errors.rs' \
-            '**/build.rs' \
-            '*tests/*' \
-            --ignore-errors unused,unsupported,inconsistent,empty \
-            --erase-functions "(?=^.*fmt).+" \
-            -o lcov.info
+          grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
+          lcov --remove lcov.info 'target/debug/build/**' 'target/release/build/**' '/usr*' '**/errors.rs' '**/build.rs' '*tests/*' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors inconsistent --ignore-errors empty,empty -o lcov.info --erase-functions "(?=^.*fmt).+"
 
-
-
-      # Upload coverage only from supported platforms
       - name: UploadCoverage
-        if: >
-          (runner.os == 'Linux' && runner.arch == 'X64') ||
-          (runner.os == 'Windows' && runner.arch == 'X64')
+        if: runner.os != 'Windows'
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          version: v0.6.1
-          files: lcov.info
+          fail_ci_if_error: true
+          file: lcov.info
           flags: unittests
           name: codecov-umbrella
           verbose: true
