@@ -35,6 +35,17 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # Testing wix
+      - name: Add msbuild to PATH
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Check wix # want V3 for cargo wix
+        if: runner.os == 'Windows'
+        run: |
+          which wix
+          wix --version
+
       - name: Install grcov
         if: runner.os != 'Windows'
         run: cargo install grcov
@@ -54,17 +65,6 @@ jobs:
       - name: debug build
         run: cargo build
 
-      # Testing
-      - name: Add msbuild to PATH
-        if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v1.1
-
-      - name: Install WiX V3.14.1
-        if: runner.os == 'Windows'
-        run: |
-          dotnet tool install --global wix --version 3.14.1
-          which wix
-          wix --version
 
       - name: Install cargo wix for Windows
         if: runner.os == 'Windows'
