@@ -91,25 +91,21 @@ pub enum Message {
 }
 
 fn main() -> iced::Result {
-	let icon_bytes = include_bytes!("../assets/images/icon.ico");
-	
-	let app_icon = icon::from_file_data(icon_bytes, None);
-	
-    //let icon = window::icon::from_file_data(icon_bytes, None)
-    //    .expect("Failed to load window icon from bytes");
-	
-	let window_settings = window::Settings {
-		icon: Some(app_icon),
-		..Default::default()
-	};
-	
+    let mut window_settings = window::Settings::default();
+
+    // Try and add an icon to the window::Settings
+    let icon_bytes = include_bytes!("../assets/images/icon.ico");
+    if let Ok(app_icon) = icon::from_file_data(icon_bytes, None) {
+        window_settings.icon = Some(app_icon);
+    }
+
     iced::application(MeshChat::new, MeshChat::update, MeshChat::view)
         .subscription(MeshChat::subscription)
         .exit_on_close_request(false)
         .resizable(true)
         .font(icons::FONT)
         .title(MeshChat::title)
-		.window(window_settings)
+        .window(window_settings)
         .run()
 }
 
