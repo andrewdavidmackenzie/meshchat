@@ -59,10 +59,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v1.1
 
-      - name: Install WiX
+      - name: Install WiX V3.14.1
         if: runner.os == 'Windows'
         run: |
-          dotnet tool install --global wix
+          dotnet tool install --global wix --version 3.14.1
           which wix
           wix --version
 
