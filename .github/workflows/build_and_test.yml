@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm  ]
+        os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm ]
 
     steps:
       - name: Checkout
@@ -75,7 +75,9 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
-          lcov --remove lcov.info 'target/debug/build/**' 'target/release/build/**' '/usr*' '**/errors.rs' '**/build.rs' '*tests/*' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors inconsistent --ignore-errors empty,empty -o lcov.info --erase-functions "(?=^.*fmt).+"
+          lcov --remove lcov.info 'target/debug/build/**' 'target/release/build/**' '/usr*' '**/errors.rs' \
+          '**/build.rs' '*tests/*' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors \
+          inconsistent --ignore-errors empty,empty -o lcov.info --erase-functions "(?=^.*fmt).+"
 
       - name: UploadCoverage
         if: runner.os != 'Windows'
