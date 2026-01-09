@@ -296,7 +296,7 @@ async fn send_text_message(
         .await
 }
 
-/// Send a emoji reply
+/// Send an emoji reply
 async fn send_emoji_reply(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
