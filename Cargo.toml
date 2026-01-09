@@ -52,9 +52,6 @@ iced_fontello = "0.13"
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
 
-[build]
-incremental = true
-
 # With the standard release profile, binary size was: 10,756,272 (10.7MB)
 # With these changes the binary size reduced to: 5,596,848 (5.56MB)
 # After removing smol and futures_lite dependencies: 5,281,344 (5.3MB)
