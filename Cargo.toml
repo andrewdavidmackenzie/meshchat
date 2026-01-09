@@ -49,6 +49,11 @@ tempfile = "3.23.0"
 
 [build-dependencies]
 iced_fontello = "0.13"
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+
+[build]
+incremental = true
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
