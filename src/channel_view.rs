@@ -2,7 +2,7 @@ use crate::Message::DeviceViewEvent;
 use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, PickChannel,
-    PrepareReply, ReplyWithEmoji, SendMessage,
+    PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -26,7 +26,7 @@ use iced::padding::right;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
-    Button, Column, Container, Row, Space, button, center, container, mouse_area, opaque,
+    Button, Column, Container, Row, Space, button, center, container, mouse_area, opaque, row,
     scrollable, stack, text, text_input,
 };
 use iced::{Center, Color, Element, Fill, Font, Padding, Pixels, Task};
@@ -45,6 +45,7 @@ pub enum ChannelViewMessage {
     PickChannel(Option<ChannelId>),
     ReplyWithEmoji(u32, String, ChannelId), // Send an emoji reply
     EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
+    ShareMeshChat,
 }
 
 /// [ChannelView] implements view and update methods for Iced for a set of
@@ -184,6 +185,13 @@ impl ChannelView {
                     Task::none()
                 }
             }
+            ShareMeshChat => {
+                self.message = String::from(
+                    "I am using the MeshChat app. Its available for macOS/Windows/Linux from: \
+                https://github.com/andrewdavidmackenzie/meshchat/releases/latest",
+                );
+                Task::none()
+            }
         }
     }
 
@@ -265,11 +273,19 @@ impl ChannelView {
                 .on_press(DeviceViewEvent(SendInfoMessage(self.channel_id.clone())));
         }
 
+        // a button to allow easy sharing of this app
+        let share_meshchat_button =
+            button(row([text("Share MeshChat ").into(), icons::share().into()]))
+                .style(button_chip_style)
+                .on_press(DeviceViewEvent(ChannelMsg(ShareMeshChat)));
+
         let channel_buttons = Row::new()
             .padding([2, 0])
             .push(send_position_button)
             .push(Space::new().width(6))
-            .push(send_info_button);
+            .push(send_info_button)
+            .push(Space::new().width(6))
+            .push(share_meshchat_button);
 
         // Place the scrollable in a column, with a row of buttons at the bottom
         let mut column = Column::new()

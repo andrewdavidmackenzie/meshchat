@@ -1,13 +1,17 @@
 // Generated automatically by iced_fontello at build time.
 // Do not edit manually. Source: ../assets/fonts/icons.toml
-// 555179be61bd876469fd674a261017127e7946db7d41f14a582b361a3e23c646
-use iced::widget::{text, Text};
+// d0a59281658de0a6a8792be5cae0c4116ea839df0870d4fac7a335040354dbe2
 use iced::Font;
+use iced::widget::{Text, text};
 
 pub const FONT: &[u8] = include_bytes!("../assets/fonts/icons.ttf");
 
 pub fn send<'a>() -> Text<'a> {
     icon("\u{2709}")
+}
+
+pub fn share<'a>() -> Text<'a> {
+    icon("\u{F1E0}")
 }
 
 pub fn star<'a>() -> Text<'a> {
