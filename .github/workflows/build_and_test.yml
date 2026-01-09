@@ -30,14 +30,13 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v1.1
 
-      - name: Install WiX v3.14.1
+      - name: Install WiX v3.14.1 - we neex pre-V4 for cargo wix
         if: runner.os == 'Windows'
         run: |
-          # dotnet tool install --global wix --version 3.14.1
           # Download WiX Toolset v3.14.1 installer
           curl -L -o wix3141.exe https://github.com/wixtoolset/wix3/releases/download/wix3141/wix3141.exe
           # Run installer silently
-          wix3141.exe /quiet /norestart
+          .\wix3141.exe /quiet /norestart
 
       - name: Check wix
         if: runner.os == 'Windows'
@@ -45,6 +44,7 @@ jobs:
           which wix.exe
           wix --version
           which candle.exe
+          which light.exe
 
       - name: Checkout
         uses: actions/checkout@v4
