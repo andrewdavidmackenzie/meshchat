@@ -81,3 +81,4 @@ osx_frameworks = []
 osx_minimum_system_version = "10.11"
 #osx_url_schemes = ""
 osx_info_plist_exts = ["assets/plist_exts/bluetooth.txt"]
+deb_depends = ["openssl-devel", "libdbus-sys"]
