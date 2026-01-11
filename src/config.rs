@@ -7,9 +7,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::fs::DirBuilder;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HistoryLength {
+    NumberOfMessages(usize),
+    Duration(Duration),
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
@@ -20,6 +27,7 @@ pub struct Config {
     pub aliases: HashMap<u32, String>, // node name aliases
     #[serde(default = "HashMap::new")]
     pub device_aliases: HashMap<BDAddr, String>, // node name aliases
+    pub history_length: Option<HistoryLength>,
 }
 
 // Private methods for async reading and writing of config files
@@ -73,7 +81,7 @@ pub fn load_config() -> Task<Message> {
         if config_path.exists() {
             Task::perform(load(config_path.clone()), {
                 move |result| match result {
-                    Ok(config) => Message::NewConfig(config),
+                    Ok(config) => Message::ConfigLoaded(config),
                     Err(e) => Message::AppError(
                         format!(
                             "Error loading config file: '{}'",

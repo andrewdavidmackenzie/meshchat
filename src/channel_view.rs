@@ -83,13 +83,6 @@ impl ChannelView {
         }
     }
 
-    /// Add an emoji reply to a message.
-    fn add_emoji_to(&mut self, request_id: u32, emoji_string: String, from: u32) {
-        if let Some(entry) = self.entries.get_mut(&request_id) {
-            entry.add_emoji(emoji_string, from);
-        }
-    }
-
     /// Add a new [ChannelViewEntry] message to the [ChannelView]
     pub fn new_message(&mut self, new_message: ChannelViewEntry) {
         match &new_message.payload() {
@@ -98,14 +91,21 @@ impl ChannelView {
             | PositionMessage(_, _)
             | UserMessage(_)
             | TextMessageReply(_, _) => {
+                // Insert new message, ordered by receive date/time
                 self.entries.insert_sorted_by(
                     new_message.message_id(),
                     new_message,
                     ChannelViewEntry::sort_by_rx_time,
                 );
+
+                // if there is an active config for the maximum length of history, then trim
+                // the list of entries
+                // TODO
             }
             EmojiReply(reply_to_id, emoji_string) => {
-                self.add_emoji_to(*reply_to_id, emoji_string.clone(), new_message.from());
+                if let Some(entry) = self.entries.get_mut(reply_to_id) {
+                    entry.add_emoji(emoji_string.to_string(), new_message.from());
+                }
             }
         };
     }

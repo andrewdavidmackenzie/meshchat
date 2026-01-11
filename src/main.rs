@@ -2,8 +2,8 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, CopyToClipBoard,
-    DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, NewConfig, RemoveDeviceAlias,
+    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, ConfigLoaded,
+    CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, RemoveDeviceAlias,
     RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
@@ -74,7 +74,7 @@ pub enum Message {
     DeviceListViewEvent(DeviceListEvent),
     DeviceViewEvent(DeviceViewMessage),
     Exit,
-    NewConfig(Config),
+    ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
     ShowLocation(i32, i32), // lat and long / 1_000_000
     AppNotification(String, String),
@@ -149,8 +149,10 @@ impl MeshChat {
                 self.notifications.add(Notification::Error(summary, detail))
             }
             Message::None => Task::none(),
-            NewConfig(config) => {
+            ConfigLoaded(config) => {
                 self.config = config;
+                // If the config requests to re-connect to a device, ask the device view to do so
+                // optionally on a specific Node/Channel also
                 if let Some(mac_address) = &self.config.device_mac_address {
                     self.device_view.update(DeviceViewMessage::ConnectRequest(
                         *mac_address,
