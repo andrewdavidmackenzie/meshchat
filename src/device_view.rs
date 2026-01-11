@@ -379,7 +379,7 @@ impl DeviceView {
                 });
             }
             Some(_) => {}
-            _ => println!("Error parsing packet: {:?}", packet.payload_variant),
+            _ => println!("Unexpected packet: {:?}", packet.payload_variant),
         }
 
         Task::none()
@@ -406,7 +406,7 @@ impl DeviceView {
 
     // Add a channel from the radio to the list if it is not disabled and has some Settings
     pub fn add_channel(&mut self, mut channel: Channel) {
-        if !matches!(Role::try_from(channel.role).unwrap(), Disabled)
+        if Role::try_from(channel.role) != Ok(Disabled)
             && let Some(settings) = channel.settings.as_mut()
         {
             if settings.name.is_empty() {

@@ -13,9 +13,7 @@ use meshtastic::api::{ConnectedStreamApi, StreamApi};
 use meshtastic::errors::Error;
 use meshtastic::packet::{PacketReceiver, PacketRouter};
 use meshtastic::protobufs::config::device_config::Role;
-use meshtastic::protobufs::from_radio::PayloadVariant::{
-    Channel, ClientNotification, MyInfo, NodeInfo, Packet,
-};
+use meshtastic::protobufs::from_radio::PayloadVariant::{MyInfo, NodeInfo};
 use meshtastic::protobufs::{FromRadio, MeshPacket, PortNum, Position, User};
 use meshtastic::types::NodeId;
 use meshtastic::utils::stream::BleId;
@@ -84,38 +82,37 @@ impl MyRouter {
 
     /// Handle [FromRadio] packets received from the radio, filter down to packets we know the App/Gui
     /// is interested in and forward those to the Gui using the provided `gui_sender`
-    fn handle_from_radio(&mut self, packet: Box<FromRadio>) -> Result<(), Error> {
-        let payload_variant = packet.payload_variant.as_ref().unwrap();
-        // Filter to only send packets UI is interested in
-        if matches!(
-            payload_variant,
-            Packet(_) | MyInfo(_) | NodeInfo(_) | Channel(_) | ClientNotification(_)
-        ) {
-            // Capture my own node number
-            if let MyInfo(my_info) = &payload_variant {
-                self.my_node_num = Some(my_info.my_node_num);
-            }
+    fn handle_packet_from_radio(&mut self, packet: Box<FromRadio>) {
+        match packet.payload_variant.as_ref() {
+            Some(payload_variant) => {
+                // Capture my own node number
+                if let MyInfo(my_info) = &payload_variant {
+                    self.my_node_num = Some(my_info.my_node_num);
+                }
 
-            // Once I know my own node id number, then I can capture my own node's [User] info
-            if let NodeInfo(node_info) = &payload_variant
-                && Some(node_info.num) == self.my_node_num
-                && let Some(user) = &node_info.user
-            {
-                self.my_user = user.clone();
-            }
+                // Once I know my own node id number, then I can capture my own node's [User] info
+                if let NodeInfo(node_info) = &payload_variant
+                    && Some(node_info.num) == self.my_node_num
+                    && let Some(user) = &node_info.user
+                {
+                    self.my_user = user.clone();
+                }
 
-            self.gui_sender
-                .try_send(DevicePacket(packet))
-                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                self.gui_sender
+                    .try_send(DevicePacket(packet))
+                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+            }
+            None => {
+                eprintln!("Payload Variant not found");
+            }
         }
-
-        Ok(())
     }
 }
 
 impl PacketRouter<(), Error> for MyRouter {
     fn handle_packet_from_radio(&mut self, packet: FromRadio) -> Result<(), Error> {
-        self.handle_from_radio(Box::new(packet))
+        self.handle_packet_from_radio(Box::new(packet));
+        Ok(())
     }
 
     fn handle_mesh_packet(&mut self, packet: MeshPacket) -> Result<(), Error> {
@@ -227,7 +224,10 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     let _none = stream_api.replace(api);
                                     r
                                 }
-                                RadioPacket(packet) => my_router.handle_from_radio(packet),
+                                RadioPacket(packet) => {
+                                    my_router.handle_packet_from_radio(packet);
+                                    Ok(())
+                                }
                                 SendEmojiReply(emoji, channel_id, reply_to_id) => {
                                     let mut api = stream_api.take().unwrap();
                                     let r = send_emoji_reply(
