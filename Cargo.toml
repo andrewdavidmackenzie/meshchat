@@ -24,7 +24,7 @@ directories = { version = "6.0.0", default-features = false }
 # for serialization and deserialization of config struct
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }
 # for serialization and deserialization of Config to toml format
-toml = { version = "0.9.7", default-features = false, features = ["serde", "parse", "display"] }
+toml = { version = "0.9.11", default-features = false, features = ["serde", "parse", "display"] }
 # For gui.send to send messages to UI from device_subscription.rs
 futures = { version = "0.3.31", default-features = false }
 # For receiving messages from UI in device_subscription.rs
