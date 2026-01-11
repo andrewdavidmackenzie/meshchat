@@ -112,7 +112,7 @@ fn main() -> iced::Result {
 impl MeshChat {
     /// Create a new instance of the app and load the config asynchronously
     fn new() -> (Self, Task<Message>) {
-        (Self::default(), Task::batch(vec![load_config()]))
+        (Self::default(), load_config())
     }
 
     /// Return the title of the app, which is used in the window title bar
