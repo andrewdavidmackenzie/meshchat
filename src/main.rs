@@ -45,6 +45,8 @@ mod notification;
 #[cfg(test)]
 mod test_helper;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
     #[default]
@@ -115,14 +117,14 @@ impl MeshChat {
         (Self::default(), load_config())
     }
 
-    /// Return the title of the app, which is used in the window title bar
-    /// This could vary with state, such as number of devices or unread messages or similar
+    /// Return the title of the app, which is used in the window title bar.
+    /// Include the version number of the app and the number of unread messages if any
     fn title(&self) -> String {
         let unread_count = self.device_view.unread_count();
         if unread_count > 0 {
-            format!("MeshChat ({} unread)", unread_count)
+            format!("MeshChat {} ({} unread)", VERSION, unread_count)
         } else {
-            "MeshChat".to_string()
+            format!("MeshChat {}", VERSION)
         }
     }
 
@@ -328,7 +330,8 @@ impl MeshChat {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel_view_entry::Payload;
+    use crate::channel_view_entry::Payload::NewTextMessage;
+    use crate::channel_view_entry::{ChannelViewEntry, Payload};
 
     #[test]
     fn test_location_url() {
@@ -366,5 +369,24 @@ mod tests {
         let mut meshchat = test_helper::test_app();
         let _ = meshchat.update(Navigation(View::Device(None)));
         assert_eq!(meshchat.current_view, View::Device(None));
+    }
+
+    #[test]
+    fn test_title_no_unreads() {
+        let meshchat = test_helper::test_app();
+        assert_eq!(meshchat.title(), format!("MeshChat {}", VERSION));
+    }
+
+    #[test]
+    fn test_title_unreads() {
+        let mut meshchat = test_helper::test_app();
+        let channel_view = meshchat
+            .device_view
+            .channel_views
+            .get_mut(&ChannelId::Channel(0))
+            .expect("Could not get channel_view for channel #0");
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        channel_view.new_message(message, &None);
+        assert_eq!(meshchat.title(), format!("MeshChat {} (1 unread)", VERSION));
     }
 }
