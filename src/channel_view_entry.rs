@@ -95,7 +95,7 @@ impl ChannelViewEntry {
     }
 
     /// Get the time now as a [DateTime<Local>]
-    fn now() -> DateTime<Local> {
+    pub fn now() -> DateTime<Local> {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())

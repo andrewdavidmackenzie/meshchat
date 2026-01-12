@@ -7,7 +7,7 @@ use crate::channel_view::ChannelViewMessage::{
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
-use crate::config::Config;
+use crate::config::{Config, HistoryLength};
 use crate::device_view::DeviceViewMessage::{
     ChannelMsg, ForwardMessage, SendInfoMessage, SendPositionMessage, ShowChannel,
     StopForwardingMessage,
@@ -83,24 +83,48 @@ impl ChannelView {
         }
     }
 
+    /// Remove older messages according to the passed in history_length setting
+    fn trim_history(&mut self, history_length: &Option<HistoryLength>) {
+        // if there is an active config for the maximum length of history, then trim
+        // the list of entries
+        match history_length {
+            Some(HistoryLength::NumberOfMessages(number)) => {
+                while self.entries.len() > *number {
+                    self.entries.pop_front();
+                }
+            }
+            Some(HistoryLength::Duration(duration)) => {
+                let oldest = ChannelViewEntry::now() - *duration;
+                while self
+                    .entries
+                    .pop_front_if(|_k, v| v.time() < oldest)
+                    .is_some()
+                {}
+            }
+            _ => { /* leave all messages as no limit set */ }
+        }
+    }
+
     /// Add a new [ChannelViewEntry] message to the [ChannelView]
-    pub fn new_message(&mut self, new_message: ChannelViewEntry) {
+    pub fn new_message(
+        &mut self,
+        new_message: ChannelViewEntry,
+        history_length: &Option<HistoryLength>,
+    ) {
         match &new_message.payload() {
             AlertMessage(_)
             | NewTextMessage(_)
             | PositionMessage(_, _)
             | UserMessage(_)
             | TextMessageReply(_, _) => {
-                // Insert new message, ordered by receive date/time
+                // Insert a new message, ordered by receive date/time
                 self.entries.insert_sorted_by(
                     new_message.message_id(),
                     new_message,
                     ChannelViewEntry::sort_by_rx_time,
                 );
 
-                // if there is an active config for the maximum length of history, then trim
-                // the list of entries
-                // TODO
+                self.trim_history(history_length);
             }
             EmojiReply(reply_to_id, emoji_string) => {
                 if let Some(entry) = self.entries.get_mut(reply_to_id) {
@@ -516,9 +540,9 @@ mod test {
         let newest_message = ChannelViewEntry::new(NewTextMessage("Hello 3".to_string()), 1, 500);
 
         // Add them in order
-        channel_view.new_message(oldest_message.clone());
-        channel_view.new_message(middle_message.clone());
-        channel_view.new_message(newest_message.clone());
+        channel_view.new_message(oldest_message.clone(), &None);
+        channel_view.new_message(middle_message.clone(), &None);
+        channel_view.new_message(newest_message.clone(), &None);
 
         assert_eq!(channel_view.unread_count(), 3);
 
@@ -541,7 +565,7 @@ mod test {
     fn test_unread_count() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
-        channel_view.new_message(message.clone());
+        channel_view.new_message(message.clone(), &None);
         assert_eq!(channel_view.unread_count(), 1);
     }
 
@@ -549,7 +573,7 @@ mod test {
     fn test_replying_valid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
-        channel_view.new_message(message);
+        channel_view.new_message(message, &None);
 
         let _ = channel_view.update(PrepareReply(0));
 
@@ -560,7 +584,7 @@ mod test {
     fn test_replying_invalid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
-        channel_view.new_message(message);
+        channel_view.new_message(message, &None);
 
         let _ = channel_view.update(PrepareReply(1));
 

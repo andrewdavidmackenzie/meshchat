@@ -150,7 +150,10 @@ impl MeshChat {
             }
             Message::None => Task::none(),
             ConfigLoaded(config) => {
+                self.device_view
+                    .set_history_length(config.history_length.clone());
                 self.config = config;
+
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
                 if let Some(mac_address) = &self.config.device_mac_address {
