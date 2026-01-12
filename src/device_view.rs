@@ -4,7 +4,7 @@ use crate::channel_view_entry::ChannelViewEntry;
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
-use crate::config::Config;
+use crate::config::{Config, HistoryLength};
 use crate::device_subscription::SubscriberMessage::{
     Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
@@ -102,6 +102,7 @@ pub struct DeviceView {
     editing_alias: Option<u32>,
     alias: String,
     pub forwarding_message: Option<ChannelViewEntry>,
+    history_length: Option<HistoryLength>,
 }
 
 async fn request_connection(sender: Sender<SubscriberMessage>, mac_address: BDAddr) {
@@ -161,6 +162,11 @@ impl DeviceView {
         {
             channel_view.cancel_interactive();
         }
+    }
+
+    /// Set how many/how long we will store messages for
+    pub fn set_history_length(&mut self, history_length: Option<HistoryLength>) {
+        self.history_length = history_length;
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
@@ -465,7 +471,7 @@ impl DeviceView {
                             mesh_packet.id,
                         );
 
-                        channel_view.new_message(new_message);
+                        channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("No channel for packet");
                     }
@@ -494,7 +500,7 @@ impl DeviceView {
                         let new_message =
                             ChannelViewEntry::new(message, mesh_packet.from, mesh_packet.id);
 
-                        channel_view.new_message(new_message);
+                        channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("No channel for packet");
                     }
@@ -512,7 +518,7 @@ impl DeviceView {
                                 mesh_packet.from,
                                 mesh_packet.id,
                             );
-                            channel_view.new_message(new_message);
+                            channel_view.new_message(new_message, &self.history_length);
                         } else {
                             eprintln!("No lat/lon for Position: {:?}", position);
                         }
@@ -539,7 +545,7 @@ impl DeviceView {
                             mesh_packet.from,
                             mesh_packet.id,
                         );
-                        channel_view.new_message(new_message);
+                        channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("NodeInfoApp: No channel for: {}", user.long_name);
                     }

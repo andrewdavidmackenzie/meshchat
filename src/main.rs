@@ -2,8 +2,8 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, CopyToClipBoard,
-    DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, NewConfig, RemoveDeviceAlias,
+    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, ConfigLoaded,
+    CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, RemoveDeviceAlias,
     RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
@@ -74,7 +74,7 @@ pub enum Message {
     DeviceListViewEvent(DeviceListEvent),
     DeviceViewEvent(DeviceViewMessage),
     Exit,
-    NewConfig(Config),
+    ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
     ShowLocation(i32, i32), // lat and long / 1_000_000
     AppNotification(String, String),
@@ -112,7 +112,7 @@ fn main() -> iced::Result {
 impl MeshChat {
     /// Create a new instance of the app and load the config asynchronously
     fn new() -> (Self, Task<Message>) {
-        (Self::default(), Task::batch(vec![load_config()]))
+        (Self::default(), load_config())
     }
 
     /// Return the title of the app, which is used in the window title bar
@@ -149,8 +149,13 @@ impl MeshChat {
                 self.notifications.add(Notification::Error(summary, detail))
             }
             Message::None => Task::none(),
-            NewConfig(config) => {
+            ConfigLoaded(config) => {
+                self.device_view
+                    .set_history_length(config.history_length.clone());
                 self.config = config;
+
+                // If the config requests to re-connect to a device, ask the device view to do so
+                // optionally on a specific Node/Channel also
                 if let Some(mac_address) = &self.config.device_mac_address {
                     self.device_view.update(DeviceViewMessage::ConnectRequest(
                         *mac_address,

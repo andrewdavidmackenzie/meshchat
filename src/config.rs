@@ -7,19 +7,30 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::PathBuf;
+use std::time::Duration;
 use tokio::fs::DirBuilder;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum HistoryLength {
+    #[serde(rename = "messages")]
+    NumberOfMessages(usize),
+    #[serde(rename = "duration")]
+    Duration(Duration),
+}
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     pub device_mac_address: Option<BDAddr>,
     pub channel_id: Option<ChannelId>,
+    #[serde(default)]
     pub fav_nodes: HashSet<u32>,
     #[serde(default = "HashMap::new")]
     pub aliases: HashMap<u32, String>, // node name aliases
     #[serde(default = "HashMap::new")]
     pub device_aliases: HashMap<BDAddr, String>, // node name aliases
+    pub history_length: Option<HistoryLength>,
 }
 
 // Private methods for async reading and writing of config files
@@ -73,7 +84,7 @@ pub fn load_config() -> Task<Message> {
         if config_path.exists() {
             Task::perform(load(config_path.clone()), {
                 move |result| match result {
-                    Ok(config) => Message::NewConfig(config),
+                    Ok(config) => Message::ConfigLoaded(config),
                     Err(e) => Message::AppError(
                         format!(
                             "Error loading config file: '{}'",
@@ -105,8 +116,10 @@ pub fn load_config() -> Task<Message> {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{Config, load, save};
+    use crate::config::{Config, HistoryLength, load, save};
     use btleplug::api::BDAddr;
+    use std::io;
+    use std::time::Duration;
 
     fn assert_default(config: Config) {
         assert!(config.device_mac_address.is_none());
@@ -170,6 +183,66 @@ mod tests {
         assert_eq!(
             returned.device_mac_address,
             Some(BDAddr::from([0, 1, 2, 3, 4, 6]))
+        );
+    }
+
+    #[tokio::test]
+    async fn history_length_messages_saved() {
+        let config = Config {
+            history_length: Some(HistoryLength::NumberOfMessages(10)),
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert_eq!(
+            returned.history_length,
+            Some(HistoryLength::NumberOfMessages(10))
+        );
+    }
+
+    #[tokio::test]
+    async fn history_length_duration_saved() {
+        let config = Config {
+            history_length: Some(HistoryLength::Duration(Duration::from_secs(60 * 60 * 24))),
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert_eq!(
+            returned.history_length,
+            Some(HistoryLength::Duration(Duration::from_secs(86_400)))
+        );
+    }
+
+    #[tokio::test]
+    async fn history_duration_deser() {
+        let config_str = "[history_length.duration]\nsecs = 86400\nnanos = 0";
+        let returned: Config = toml::from_str(&config_str)
+            .map_err(io::Error::other)
+            .expect("Could not deserialize config");
+        assert_eq!(
+            returned.history_length,
+            Some(HistoryLength::Duration(Duration::from_secs(86_400)))
         );
     }
 }
