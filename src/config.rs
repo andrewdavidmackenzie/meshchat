@@ -24,6 +24,7 @@ pub enum HistoryLength {
 pub struct Config {
     pub device_mac_address: Option<BDAddr>,
     pub channel_id: Option<ChannelId>,
+    #[serde(default)]
     pub fav_nodes: HashSet<u32>,
     #[serde(default = "HashMap::new")]
     pub aliases: HashMap<u32, String>, // node name aliases
@@ -117,6 +118,8 @@ pub fn load_config() -> Task<Message> {
 mod tests {
     use crate::config::{Config, HistoryLength, load, save};
     use btleplug::api::BDAddr;
+    use std::io;
+    use std::time::Duration;
 
     fn assert_default(config: Config) {
         assert!(config.device_mac_address.is_none());
@@ -184,7 +187,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn history_length_saved() {
+    async fn history_length_messages_saved() {
         let config = Config {
             history_length: Some(HistoryLength::NumberOfMessages(10)),
             ..Default::default()
@@ -204,6 +207,42 @@ mod tests {
         assert_eq!(
             returned.history_length,
             Some(HistoryLength::NumberOfMessages(10))
+        );
+    }
+
+    #[tokio::test]
+    async fn history_length_duration_saved() {
+        let config = Config {
+            history_length: Some(HistoryLength::Duration(Duration::from_secs(60 * 60 * 24))),
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert_eq!(
+            returned.history_length,
+            Some(HistoryLength::Duration(Duration::from_secs(86_400)))
+        );
+    }
+
+    #[tokio::test]
+    async fn history_duration_deser() {
+        let config_str = "[history_length.duration]\nsecs = 86400\nnanos = 0";
+        let returned: Config = toml::from_str(&config_str)
+            .map_err(io::Error::other)
+            .expect("Could not deserialize config");
+        assert_eq!(
+            returned.history_length,
+            Some(HistoryLength::Duration(Duration::from_secs(86_400)))
         );
     }
 }

@@ -147,6 +147,28 @@ Clone the repo, then run meshchat directly with:
 
 `cargo run --release`
 
+## Configuration Options
+
+There are some configuration options that can be done manually for now, pending deciding on providing a
+UI for them or not.
+
+First locate the `config.toml` config file in your home directory (e.g., `~/.config/meshchat/config.toml` on Linux, or
+in `~/Libarary/Application Support/net.Mackenzie-Serres.meshchat/config.toml` on macOS) then with the app closed
+edit the `.toml` file manually to add the following lines:
+
+```
+[history_length]
+messages = 100
+```
+
+or
+
+```
+[history_length.duration]
+secs = 86400
+nanos = 0
+```
+
 ## Users wanted! / Help wanted!
 
 I did this as a bit of an experiment to see if I could get it working with real hardware and the mesh, which
