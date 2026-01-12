@@ -331,7 +331,6 @@ impl MeshChat {
 mod tests {
     use super::*;
     use crate::channel_view_entry::Payload::NewTextMessage;
-    use crate::channel_view_entry::{ChannelViewEntry, Payload};
 
     #[test]
     fn test_location_url() {
@@ -339,23 +338,6 @@ mod tests {
             MeshChat::location_url(50, 1),
             "https://maps.google.com/?q=0.0000050,0.0000001"
         );
-    }
-
-    #[test]
-    fn title_no_unread() {
-        let meshchat = MeshChat::default();
-        assert_eq!(meshchat.title(), "MeshChat".to_string());
-    }
-
-    #[test]
-    fn title_1_unread() {
-        let mut test_app = test_helper::test_app();
-
-        // add an unread message
-        test_app.new_message(Payload::NewTextMessage("Hello World".into()));
-
-        // Setup mocks
-        assert_eq!(test_app.title(), "MeshChat (1 unread)".to_string());
     }
 
     #[test]
@@ -374,19 +356,16 @@ mod tests {
     #[test]
     fn test_title_no_unreads() {
         let meshchat = test_helper::test_app();
-        assert_eq!(meshchat.title(), format!("MeshChat {}", VERSION));
+        assert_eq!(
+            meshchat.title(),
+            format!("MeshChat {}", env!("CARGO_PKG_VERSION"))
+        );
     }
 
     #[test]
     fn test_title_unreads() {
         let mut meshchat = test_helper::test_app();
-        let channel_view = meshchat
-            .device_view
-            .channel_views
-            .get_mut(&ChannelId::Channel(0))
-            .expect("Could not get channel_view for channel #0");
-        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
-        channel_view.new_message(message, &None);
+        meshchat.new_message(NewTextMessage("Hello World".into()));
         assert_eq!(meshchat.title(), format!("MeshChat {} (1 unread)", VERSION));
     }
 }

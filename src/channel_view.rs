@@ -546,8 +546,6 @@ mod test {
 
         assert_eq!(channel_view.unread_count(), 3);
 
-        println!("Entries: {:#?}", channel_view.entries);
-
         // Check the order is correct
         let mut iter = channel_view.entries.values();
         assert_eq!(iter.next().unwrap(), &oldest_message);
