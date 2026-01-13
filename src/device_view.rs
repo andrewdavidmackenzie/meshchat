@@ -107,14 +107,6 @@ pub struct DeviceView {
     history_length: Option<HistoryLength>,
 }
 
-/// Send an async connection request to the subscription sender
-async fn request_connection(
-    sender: Sender<SubscriberMessage>,
-    mac_address: BDAddr,
-) -> Result<(), SendError<SubscriberMessage>> {
-    sender.send(Connect(mac_address)).await
-}
-
 async fn request_disconnection(sender: Sender<SubscriberMessage>) {
     let _ = sender.send(Disconnect).await;
 }
@@ -252,6 +244,14 @@ impl DeviceView {
         Task::none()
     }
 
+    /// Send an async connection request to the subscription sender
+    async fn request_connection(
+        sender: Sender<SubscriberMessage>,
+        mac_address: BDAddr,
+    ) -> Result<(), SendError<SubscriberMessage>> {
+        sender.send(Connect(mac_address)).await
+    }
+
     /// Send a connection request to the device_subscription and handle errors
     fn connect_request(
         &mut self,
@@ -262,7 +262,7 @@ impl DeviceView {
         self.connection_state = Connecting(mac_address);
         if let Some(sender) = self.subscription_sender.clone() {
             Task::perform(
-                request_connection(sender, mac_address),
+                Self::request_connection(sender, mac_address),
                 |result| match result {
                     Ok(()) => Navigation(View::Device(channel_id)),
                     Err(e) => {
