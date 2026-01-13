@@ -52,7 +52,7 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::SendError;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ConnectionState {
     Disconnected(Option<BDAddr>, Option<String>),
     Connecting(BDAddr),
@@ -248,9 +248,10 @@ impl DeviceView {
         mac_address: BDAddr,
         channel_id: Option<ChannelId>,
     ) -> Task<Message> {
-        // save the desired channel to show for when the connection is completed later
-        self.connection_state = Connecting(mac_address);
         if let Some(sender) = self.subscription_sender.clone() {
+            // save the desired channel to show for when the connection is completed later
+            self.connection_state = Connecting(mac_address);
+
             Task::perform(
                 Self::request_connection(sender, mac_address),
                 |result| match result {
@@ -279,9 +280,10 @@ impl DeviceView {
 
     /// Send a disconnect request to the device_subscription and handle errors
     fn disconnect_request(&mut self, mac_address: BDAddr, exit: bool) -> Task<Message> {
-        self.exit_pending = exit;
-        self.connection_state = Disconnecting(mac_address);
         if let Some(sender) = self.subscription_sender.clone() {
+            self.exit_pending = exit;
+            self.connection_state = Disconnecting(mac_address);
+
             Task::perform(Self::request_disconnection(sender), |result| match result {
                 Ok(()) => Navigation(DeviceList),
                 Err(e) => AppError(
@@ -1161,4 +1163,37 @@ pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
         .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
         .map(|user: &User| user.short_name.as_ref())
         .unwrap_or("????")
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::device_subscription::SubscriberMessage;
+    use crate::device_view::ConnectionState::{Connecting, Disconnected};
+    use crate::test_helper;
+    use btleplug::api::BDAddr;
+    use tokio::sync::mpsc::channel;
+
+    #[tokio::test]
+    async fn test_connect_request_fail() {
+        let mut meshchat = test_helper::test_app();
+        // Subscription won't be ready
+        let _task = meshchat
+            .device_view
+            .connect_request(BDAddr::from([0, 0, 0, 0, 0, 0]), None);
+        assert_eq!(
+            meshchat.device_view.connection_state,
+            Disconnected(None, None)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_connect_request_ready() {
+        let mut meshchat = test_helper::test_app();
+        // show Subscription is ready
+        let (subscriber_sender, _subscriber_receiver) = channel::<SubscriberMessage>(100);
+        meshchat.device_view.subscription_sender = Some(subscriber_sender);
+        let mac = BDAddr::from([0, 0, 0, 0, 0, 0]);
+        let _task = meshchat.device_view.connect_request(mac, None);
+        assert_eq!(meshchat.device_view.connection_state, Connecting(mac));
+    }
 }
