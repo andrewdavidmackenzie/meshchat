@@ -237,7 +237,7 @@ mod tests {
     #[tokio::test]
     async fn history_duration_deser() {
         let config_str = "[history_length.duration]\nsecs = 86400\nnanos = 0";
-        let returned: Config = toml::from_str(&config_str)
+        let returned: Config = toml::from_str(config_str)
             .map_err(io::Error::other)
             .expect("Could not deserialize config");
         assert_eq!(

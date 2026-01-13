@@ -22,7 +22,8 @@ use crate::device_view::DeviceViewMessage::{
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{
-    AddNodeAlias, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation, ToggleNodeFavourite,
+    AddNodeAlias, AppError, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation,
+    ToggleNodeFavourite,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -49,6 +50,7 @@ use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position, User};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::error::SendError;
 
 #[derive(Clone, PartialEq)]
 pub enum ConnectionState {
@@ -105,8 +107,16 @@ pub struct DeviceView {
     history_length: Option<HistoryLength>,
 }
 
-async fn request_connection(sender: Sender<SubscriberMessage>, mac_address: BDAddr) {
-    let _ = sender.send(Connect(mac_address)).await;
+/// Send an async connection request to the subscription sender
+async fn request_connection(
+    sender: Sender<SubscriberMessage>,
+    mac_address: BDAddr,
+) -> Result<(), SendError<SubscriberMessage>> {
+    sender.send(Connect(mac_address)).await
+}
+
+async fn request_disconnection(sender: Sender<SubscriberMessage>) {
+    let _ = sender.send(Disconnect).await;
 }
 
 async fn request_send_text(
@@ -141,10 +151,6 @@ async fn request_send_info(sender: Sender<SubscriberMessage>, channel_id: Channe
     let _ = sender.send(SendInfo(channel_id)).await;
 }
 
-async fn request_disconnection(sender: Sender<SubscriberMessage>) {
-    let _ = sender.send(Disconnect).await;
-}
-
 async fn empty() {}
 
 impl DeviceView {
@@ -173,12 +179,7 @@ impl DeviceView {
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
             ConnectRequest(mac_address, channel_id) => {
-                // save the desired channel to show for when the connection is completed later
-                self.connection_state = Connecting(mac_address);
-                let sender = self.subscription_sender.clone();
-                return Task::perform(request_connection(sender.unwrap(), mac_address), |_| {
-                    Navigation(View::Device(channel_id))
-                });
+                return self.connect_request(mac_address, channel_id);
             }
             DisconnectRequest(mac_address, exit) => {
                 self.exit_pending = exit;
@@ -249,6 +250,35 @@ impl DeviceView {
         }
 
         Task::none()
+    }
+
+    /// Send a connection request to the device_subscription and handle errors
+    fn connect_request(
+        &mut self,
+        mac_address: BDAddr,
+        channel_id: Option<ChannelId>,
+    ) -> Task<Message> {
+        // save the desired channel to show for when the connection is completed later
+        self.connection_state = Connecting(mac_address);
+        if let Some(sender) = self.subscription_sender.clone() {
+            Task::perform(
+                request_connection(sender, mac_address),
+                |result| match result {
+                    Ok(()) => Navigation(View::Device(channel_id)),
+                    Err(e) => {
+                        AppError("Error connecting to device".to_string(), format!("{:?}", e))
+                    }
+                },
+            )
+        } else {
+            Task::perform(empty(), move |e| {
+                DeviceViewEvent(SubscriptionMessage(ConnectionError(
+                    mac_address,
+                    "Subscription not ready".to_string(),
+                    format!("{:?}", e),
+                )))
+            })
+        }
     }
 
     /// ave the new channel (which could be None) and if we are connected to a device
@@ -354,7 +384,7 @@ impl DeviceView {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                 Task::perform(empty(), |_| Navigation(DeviceList))
                     .chain(Task::perform(empty(), move |_| {
-                        Message::AppError(summary.clone(), detail.clone())
+                        AppError(summary.clone(), detail.clone())
                     }))
             }
         }
