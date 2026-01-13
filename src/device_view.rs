@@ -107,10 +107,6 @@ pub struct DeviceView {
     history_length: Option<HistoryLength>,
 }
 
-async fn request_disconnection(sender: Sender<SubscriberMessage>) {
-    let _ = sender.send(Disconnect).await;
-}
-
 async fn request_send_text(
     sender: Sender<SubscriberMessage>,
     text: String,
@@ -174,13 +170,7 @@ impl DeviceView {
                 return self.connect_request(mac_address, channel_id);
             }
             DisconnectRequest(mac_address, exit) => {
-                self.exit_pending = exit;
-                self.connection_state = Disconnecting(mac_address);
-                // Send a message to the subscription to disconnect
-                let sender = self.subscription_sender.clone();
-                return Task::perform(request_disconnection(sender.unwrap()), |_| {
-                    Navigation(DeviceList)
-                });
+                return self.disconnect_request(mac_address, exit);
             }
             ShowChannel(channel_id) => {
                 return self.channel_change(channel_id.clone());
@@ -270,6 +260,35 @@ impl DeviceView {
                     }
                 },
             )
+        } else {
+            Task::perform(empty(), move |e| {
+                DeviceViewEvent(SubscriptionMessage(ConnectionError(
+                    mac_address,
+                    "Subscription not ready".to_string(),
+                    format!("{:?}", e),
+                )))
+            })
+        }
+    }
+
+    async fn request_disconnection(
+        sender: Sender<SubscriberMessage>,
+    ) -> Result<(), SendError<SubscriberMessage>> {
+        sender.send(Disconnect).await
+    }
+
+    /// Send a disconnect request to the device_subscription and handle errors
+    fn disconnect_request(&mut self, mac_address: BDAddr, exit: bool) -> Task<Message> {
+        self.exit_pending = exit;
+        self.connection_state = Disconnecting(mac_address);
+        if let Some(sender) = self.subscription_sender.clone() {
+            Task::perform(Self::request_disconnection(sender), |result| match result {
+                Ok(()) => Navigation(DeviceList),
+                Err(e) => AppError(
+                    "Error disconnecting from device".to_string(),
+                    format!("{:?}", e),
+                ),
+            })
         } else {
             Task::perform(empty(), move |e| {
                 DeviceViewEvent(SubscriptionMessage(ConnectionError(
