@@ -1168,7 +1168,7 @@ pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
 #[cfg(test)]
 mod tests {
     use crate::device_subscription::SubscriberMessage;
-    use crate::device_view::ConnectionState::{Connecting, Disconnected};
+    use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
     use crate::test_helper;
     use btleplug::api::BDAddr;
     use tokio::sync::mpsc::channel;
@@ -1187,7 +1187,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_connect_request_ready() {
+    async fn test_connect_request() {
         let mut meshchat = test_helper::test_app();
         // show Subscription is ready
         let (subscriber_sender, _subscriber_receiver) = channel::<SubscriberMessage>(100);
@@ -1195,5 +1195,31 @@ mod tests {
         let mac = BDAddr::from([0, 0, 0, 0, 0, 0]);
         let _task = meshchat.device_view.connect_request(mac, None);
         assert_eq!(meshchat.device_view.connection_state, Connecting(mac));
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_request_fail() {
+        let mut meshchat = test_helper::test_app();
+        // Subscription won't be ready
+        let _task = meshchat
+            .device_view
+            .disconnect_request(BDAddr::from([0, 0, 0, 0, 0, 0]), false);
+        assert_eq!(
+            meshchat.device_view.connection_state,
+            Disconnected(None, None)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_request() {
+        let mut meshchat = test_helper::test_app();
+        // show Subscription is ready
+        let (subscriber_sender, _subscriber_receiver) = channel::<SubscriberMessage>(100);
+        meshchat.device_view.subscription_sender = Some(subscriber_sender);
+        let mac = BDAddr::from([0, 0, 0, 0, 0, 0]);
+        meshchat.device_view.connection_state = Connected(mac);
+        assert_eq!(meshchat.device_view.connection_state, Connected(mac));
+        let _task = meshchat.device_view.disconnect_request(mac, false);
+        assert_eq!(meshchat.device_view.connection_state, Disconnecting(mac));
     }
 }
