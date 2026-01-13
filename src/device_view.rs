@@ -142,8 +142,15 @@ impl DeviceView {
                 return self.disconnect_request();
             }
             ForwardMessage(channel_id) => {
-                let entry = self.forwarding_message.take();
-                return self.forward_message(channel_id, entry);
+                if let Some(entry) = self.forwarding_message.take() {
+                    let message_text = format!(
+                        "FWD from '{}': {}\n",
+                        short_name(&self.nodes, entry.from()),
+                        entry.payload()
+                    );
+
+                    return self.forward_message(channel_id, message_text);
+                }
             }
             SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
                 if let Some(sender) = self.subscription_sender.clone() {
@@ -232,19 +239,8 @@ impl DeviceView {
     }
 
     /// Forward a message by sending to a channel - with the prefix "FWD:"
-    fn forward_message(
-        &mut self,
-        channel_id: ChannelId,
-        entry: Option<ChannelViewEntry>,
-    ) -> Task<Message> {
-        if let Some(channel_view_entry) = entry
-            && let Some(sender) = self.subscription_sender.clone()
-        {
-            let message_text = format!(
-                "FWD from '{}': {}\n",
-                short_name(&self.nodes, channel_view_entry.from()),
-                channel_view_entry.payload()
-            );
+    fn forward_message(&mut self, channel_id: ChannelId, message_text: String) -> Task<Message> {
+        if let Some(sender) = self.subscription_sender.clone() {
             Task::perform(
                 Self::request_send_text(sender, message_text, channel_id.clone(), None),
                 |_| DeviceViewEvent(ShowChannel(Some(channel_id))),
