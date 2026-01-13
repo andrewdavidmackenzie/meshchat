@@ -118,7 +118,7 @@ impl MeshChat {
     }
 
     /// Return the title of the app, which is used in the window title bar.
-    /// Include the version number of the app and the number of unread messages if any
+    /// Include the version number of the app and the number of unread messages, if any
     fn title(&self) -> String {
         let unread_count = self.device_view.unread_count();
         if unread_count > 0 {
@@ -315,9 +315,8 @@ impl MeshChat {
     /// Handle window events, like close button or minimize button
     fn window_handler(&mut self, event: Event) -> Task<Message> {
         if let Event::Window(window::Event::CloseRequested) = event {
-            if let Connected(mac_address) = self.device_view.connection_state() {
-                self.device_view
-                    .update(DisconnectRequest(*mac_address, true))
+            if let Connected(_) = self.device_view.connection_state() {
+                self.device_view.update(DisconnectRequest(true))
             } else {
                 window::latest().and_then(window::close)
             }

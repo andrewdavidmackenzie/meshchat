@@ -9,7 +9,8 @@ use crate::device_subscription::SubscriberMessage::{
     Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, Ready,
+    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceMeshPacket, DevicePacket,
+    DisconnectedEvent, DisconnectingEvent, NotReady, Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
@@ -22,7 +23,8 @@ use crate::device_view::DeviceViewMessage::{
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{
-    AddNodeAlias, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation, ToggleNodeFavourite,
+    AddNodeAlias, AppError, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation,
+    ToggleNodeFavourite,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -50,7 +52,7 @@ use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, P
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ConnectionState {
     Disconnected(Option<BDAddr>, Option<String>),
     Connecting(BDAddr),
@@ -67,7 +69,7 @@ impl Default for ConnectionState {
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
     ConnectRequest(BDAddr, Option<ChannelId>),
-    DisconnectRequest(BDAddr, bool), // bool is to exit or not
+    DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
@@ -104,47 +106,6 @@ pub struct DeviceView {
     pub forwarding_message: Option<ChannelViewEntry>,
     history_length: Option<HistoryLength>,
 }
-
-async fn request_connection(sender: Sender<SubscriberMessage>, mac_address: BDAddr) {
-    let _ = sender.send(Connect(mac_address)).await;
-}
-
-async fn request_send_text(
-    sender: Sender<SubscriberMessage>,
-    text: String,
-    channel_id: ChannelId,
-    reply_to_id: Option<u32>,
-) {
-    let _ = sender.send(SendText(text, channel_id, reply_to_id)).await;
-}
-
-async fn request_send_emoji_reply(
-    sender: Sender<SubscriberMessage>,
-    emoji: String,
-    channel_id: ChannelId,
-    reply_to_id: u32,
-) {
-    let _ = sender
-        .send(SendEmojiReply(emoji, channel_id, reply_to_id))
-        .await;
-}
-
-async fn request_send_position(
-    sender: Sender<SubscriberMessage>,
-    channel_id: ChannelId,
-    position: Position,
-) {
-    let _ = sender.send(SendPosition(channel_id, position)).await;
-}
-
-async fn request_send_info(sender: Sender<SubscriberMessage>, channel_id: ChannelId) {
-    let _ = sender.send(SendInfo(channel_id)).await;
-}
-
-async fn request_disconnection(sender: Sender<SubscriberMessage>) {
-    let _ = sender.send(Disconnect).await;
-}
-
 async fn empty() {}
 
 impl DeviceView {
@@ -173,51 +134,50 @@ impl DeviceView {
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
             ConnectRequest(mac_address, channel_id) => {
-                // save the desired channel to show for when the connection is completed later
-                self.connection_state = Connecting(mac_address);
-                let sender = self.subscription_sender.clone();
-                return Task::perform(request_connection(sender.unwrap(), mac_address), |_| {
-                    Navigation(View::Device(channel_id))
-                });
+                return self
+                    .subscriber_send(Connect(mac_address), Navigation(View::Device(channel_id)));
             }
-            DisconnectRequest(mac_address, exit) => {
+            DisconnectRequest(exit) => {
                 self.exit_pending = exit;
-                self.connection_state = Disconnecting(mac_address);
-                // Send a message to the subscription to disconnect
-                let sender = self.subscription_sender.clone();
-                return Task::perform(request_disconnection(sender.unwrap()), |_| {
-                    Navigation(DeviceList)
-                });
+                return self.subscriber_send(Disconnect, Navigation(DeviceList));
+            }
+            ForwardMessage(channel_id) => {
+                if let Some(entry) = self.forwarding_message.take() {
+                    let message_text = format!(
+                        "FWD from '{}': {}\n",
+                        short_name(&self.nodes, entry.from()),
+                        entry.payload()
+                    );
+
+                    return self.subscriber_send(
+                        SendText(message_text, channel_id.clone(), None),
+                        DeviceViewEvent(ShowChannel(Some(channel_id))),
+                    );
+                }
+            }
+            SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
+                return self.subscriber_send(
+                    SendEmojiReply(emoji, channel_id, reply_to_id),
+                    Message::None,
+                );
+            }
+            SendTextMessage(message, channel_id, reply_to_id) => {
+                return self
+                    .subscriber_send(SendText(message, channel_id, reply_to_id), Message::None);
+            }
+            SendPositionMessage(channel_id) => {
+                if let Some(position) = self.my_position {
+                    return self.subscriber_send(SendPosition(channel_id, position), Message::None);
+                }
+            }
+            SendInfoMessage(channel_id) => {
+                return self.subscriber_send(SendInfo(channel_id), Message::None);
             }
             ShowChannel(channel_id) => {
                 return self.channel_change(channel_id.clone());
             }
             SubscriptionMessage(subscription_event) => {
                 return self.process_subscription_event(subscription_event);
-            }
-            SendTextMessage(message, channel_id, reply_to_id) => {
-                if let Some(sender) = self.subscription_sender.clone() {
-                    return Task::perform(
-                        request_send_text(sender, message, channel_id, reply_to_id),
-                        |_| Message::None,
-                    );
-                }
-            }
-            SendPositionMessage(channel_id) => {
-                if let Some(position) = &self.my_position
-                    && let Some(sender) = self.subscription_sender.clone()
-                {
-                    return Task::perform(
-                        request_send_position(sender, channel_id, *position),
-                        |_| Message::None,
-                    );
-                }
-            }
-            SendInfoMessage(channel_id) => {
-                let sender = self.subscription_sender.clone();
-                return Task::perform(request_send_info(sender.unwrap(), channel_id), |_| {
-                    Message::None
-                });
             }
             ChannelMsg(msg) => {
                 if let Some(channel_id) = &self.viewing_channel
@@ -233,22 +193,27 @@ impl DeviceView {
                 self.forwarding_message = Some(channel_view_entry)
             }
             StopForwardingMessage => self.forwarding_message = None,
-            ForwardMessage(channel_id) => {
-                let entry = self.forwarding_message.take();
-                return self.forward_message(channel_id, entry);
-            }
             ClearFilter => self.filter.clear(),
-            SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
-                if let Some(sender) = self.subscription_sender.clone() {
-                    return Task::perform(
-                        request_send_emoji_reply(sender, emoji, channel_id, reply_to_id),
-                        |_| Message::None,
-                    );
-                }
-            }
         }
 
         Task::none()
+    }
+
+    /// Send a disconnect request to the device_subscription and handle errors
+    fn subscriber_send(
+        &mut self,
+        subscriber_message: SubscriberMessage,
+        success_message: Message,
+    ) -> Task<Message> {
+        if let Some(sender) = self.subscription_sender.clone() {
+            let future = async move { sender.send(subscriber_message).await };
+            Task::perform(future, |result| match result {
+                Ok(()) => success_message,
+                Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
+            })
+        } else {
+            Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
+        }
     }
 
     /// ave the new channel (which could be None) and if we are connected to a device
@@ -271,29 +236,6 @@ impl DeviceView {
         Task::none()
     }
 
-    /// Forward a message by sending to a channel - with the prefix "FWD:"
-    fn forward_message(
-        &mut self,
-        channel_id: ChannelId,
-        entry: Option<ChannelViewEntry>,
-    ) -> Task<Message> {
-        if let Some(channel_view_entry) = entry
-            && let Some(sender) = self.subscription_sender.clone()
-        {
-            let message_text = format!(
-                "FWD from '{}': {}\n",
-                short_name(&self.nodes, channel_view_entry.from()),
-                channel_view_entry.payload()
-            );
-            Task::perform(
-                request_send_text(sender, message_text, channel_id.clone(), None),
-                |_| DeviceViewEvent(ShowChannel(Some(channel_id))),
-            )
-        } else {
-            Task::none()
-        }
-    }
-
     /// Called when the user selects to alias a node name
     fn start_editing_alias(&mut self, node_id: u32) {
         self.editing_alias = Some(node_id);
@@ -312,6 +254,10 @@ impl DeviceView {
         subscription_event: SubscriptionEvent,
     ) -> Task<Message> {
         match subscription_event {
+            ConnectingEvent(mac_address) => {
+                self.connection_state = Connecting(mac_address);
+                Task::none()
+            },
             ConnectedEvent(mac_address) => {
                 self.connection_state = Connected(mac_address);
                 match &self.viewing_channel {
@@ -331,6 +277,10 @@ impl DeviceView {
                         })
                     }
                 }
+            }
+            DisconnectingEvent(mac_address) => {
+                self.connection_state = Disconnecting(mac_address);
+                Task::none()
             }
             DisconnectedEvent(id) => {
                 if self.exit_pending {
@@ -354,7 +304,14 @@ impl DeviceView {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                 Task::perform(empty(), |_| Navigation(DeviceList))
                     .chain(Task::perform(empty(), move |_| {
-                        Message::AppError(summary.clone(), detail.clone())
+                        AppError(summary.clone(), detail.clone())
+                    }))
+            }
+            NotReady => {
+                Task::perform(empty(), |_| Navigation(DeviceList))
+                    .chain(Task::perform(empty(), move |_| {
+                        AppError("Subscription not ready".to_string(),
+                                 "An attempt was made to communicate to radio prior to the subscription being Ready".to_string())
                     }))
             }
         }
@@ -648,10 +605,10 @@ impl DeviceView {
         }
 
         // Add a disconnect button on the right if we are connected
-        if let Connected(mac_address) = state {
+        if let Connected(_) = state {
             header = header.push(Space::new().width(Fill)).push(
                 button("Disconnect")
-                    .on_press(DeviceViewEvent(DisconnectRequest(*mac_address, false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(false)))
                     .style(button_chip_style),
             )
         }
@@ -1112,4 +1069,42 @@ pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
         .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
         .map(|user: &User| user.short_name.as_ref())
         .unwrap_or("????")
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Message::Navigation;
+    use crate::View::DeviceList;
+    use crate::device_subscription::SubscriberMessage::{Connect, Disconnect};
+    use crate::device_view::ConnectionState::Disconnected;
+    use crate::test_helper;
+    use btleplug::api::BDAddr;
+
+    #[tokio::test]
+    async fn test_connect_request_fail() {
+        let mut meshchat = test_helper::test_app();
+        // Subscription won't be ready
+        let _task = meshchat.device_view.subscriber_send(
+            Connect(BDAddr::from([0, 0, 0, 0, 0, 0])),
+            Navigation(DeviceList),
+        );
+
+        assert_eq!(
+            meshchat.device_view.connection_state,
+            Disconnected(None, None)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_disconnect_request_fail() {
+        let mut meshchat = test_helper::test_app();
+        // Subscription won't be ready
+        let _task = meshchat
+            .device_view
+            .subscriber_send(Disconnect, Navigation(DeviceList));
+        assert_eq!(
+            meshchat.device_view.connection_state,
+            Disconnected(None, None)
+        );
+    }
 }

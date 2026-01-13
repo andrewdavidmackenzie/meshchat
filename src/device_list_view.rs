@@ -138,10 +138,10 @@ impl DeviceListView {
         });
 
         // Add a disconnect button on the right if we are connected
-        if let Connected(mac_address) = state {
+        if let Connected(_) = state {
             header = header.push(Space::new().width(Fill)).push(
                 button("Disconnect")
-                    .on_press(DeviceViewEvent(DisconnectRequest(*mac_address, false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(false)))
                     .style(button_chip_style),
             )
         }
@@ -195,13 +195,10 @@ impl DeviceListView {
 
             device_row = device_row.push(Space::new().width(6));
             match &connection_state {
-                Connected(connected_mac_address) => {
+                Connected(_) => {
                     device_row = device_row.push(
                         button("Disconnect")
-                            .on_press(DeviceViewEvent(DisconnectRequest(
-                                *connected_mac_address,
-                                false,
-                            )))
+                            .on_press(DeviceViewEvent(DisconnectRequest(false)))
                             .style(button_chip_style),
                     );
                 }
