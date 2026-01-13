@@ -51,7 +51,6 @@ use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position, User};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::error::SendError;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConnectionState {
@@ -135,11 +134,12 @@ impl DeviceView {
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
             ConnectRequest(mac_address, channel_id) => {
-                return self.connect_request(mac_address, channel_id);
+                return self
+                    .subscriber_send(Connect(mac_address), Navigation(View::Device(channel_id)));
             }
             DisconnectRequest(exit) => {
                 self.exit_pending = exit;
-                return self.disconnect_request();
+                return self.subscriber_send(Disconnect, Navigation(DeviceList));
             }
             ForwardMessage(channel_id) => {
                 if let Some(entry) = self.forwarding_message.take() {
@@ -149,41 +149,29 @@ impl DeviceView {
                         entry.payload()
                     );
 
-                    return self.forward_message(channel_id, message_text);
+                    return self.subscriber_send(
+                        SendText(message_text, channel_id.clone(), None),
+                        DeviceViewEvent(ShowChannel(Some(channel_id))),
+                    );
                 }
             }
             SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
-                if let Some(sender) = self.subscription_sender.clone() {
-                    return Task::perform(
-                        Self::request_send_emoji_reply(sender, emoji, channel_id, reply_to_id),
-                        |_| Message::None,
-                    );
-                }
+                return self.subscriber_send(
+                    SendEmojiReply(emoji, channel_id, reply_to_id),
+                    Message::None,
+                );
             }
             SendTextMessage(message, channel_id, reply_to_id) => {
-                if let Some(sender) = self.subscription_sender.clone() {
-                    return Task::perform(
-                        Self::request_send_text(sender, message, channel_id, reply_to_id),
-                        |_| Message::None,
-                    );
-                }
+                return self
+                    .subscriber_send(SendText(message, channel_id, reply_to_id), Message::None);
             }
             SendPositionMessage(channel_id) => {
-                if let Some(position) = &self.my_position
-                    && let Some(sender) = self.subscription_sender.clone()
-                {
-                    return Task::perform(
-                        Self::request_send_position(sender, channel_id, *position),
-                        |_| Message::None,
-                    );
+                if let Some(position) = self.my_position {
+                    return self.subscriber_send(SendPosition(channel_id, position), Message::None);
                 }
             }
             SendInfoMessage(channel_id) => {
-                if let Some(sender) = self.subscription_sender.clone() {
-                    return Task::perform(Self::request_send_info(sender, channel_id), |_| {
-                        Message::None
-                    });
-                }
+                return self.subscriber_send(SendInfo(channel_id), Message::None);
             }
             ShowChannel(channel_id) => {
                 return self.channel_change(channel_id.clone());
@@ -211,93 +199,21 @@ impl DeviceView {
         Task::none()
     }
 
-    /// Send an async connection request to the subscription sender
-    async fn request_connection(
-        sender: Sender<SubscriberMessage>,
-        mac_address: BDAddr,
-    ) -> Result<(), SendError<SubscriberMessage>> {
-        sender.send(Connect(mac_address)).await
-    }
-
-    /// Send a connection request to the device_subscription and handle errors
-    fn connect_request(
+    /// Send a disconnect request to the device_subscription and handle errors
+    fn subscriber_send(
         &mut self,
-        mac_address: BDAddr,
-        channel_id: Option<ChannelId>,
+        subscriber_message: SubscriberMessage,
+        success_message: Message,
     ) -> Task<Message> {
         if let Some(sender) = self.subscription_sender.clone() {
-            Task::perform(
-                Self::request_connection(sender, mac_address),
-                |result| match result {
-                    Ok(()) => Navigation(View::Device(channel_id)),
-                    Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
-                },
-            )
-        } else {
-            Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
-        }
-    }
-
-    /// Forward a message by sending to a channel - with the prefix "FWD:"
-    fn forward_message(&mut self, channel_id: ChannelId, message_text: String) -> Task<Message> {
-        if let Some(sender) = self.subscription_sender.clone() {
-            Task::perform(
-                Self::request_send_text(sender, message_text, channel_id.clone(), None),
-                |_| DeviceViewEvent(ShowChannel(Some(channel_id))),
-            )
-        } else {
-            Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
-        }
-    }
-
-    async fn request_disconnection(
-        sender: Sender<SubscriberMessage>,
-    ) -> Result<(), SendError<SubscriberMessage>> {
-        sender.send(Disconnect).await
-    }
-
-    /// Send a disconnect request to the device_subscription and handle errors
-    fn disconnect_request(&mut self) -> Task<Message> {
-        if let Some(sender) = self.subscription_sender.clone() {
-            Task::perform(Self::request_disconnection(sender), |result| match result {
-                Ok(()) => Navigation(DeviceList),
+            let future = async move { sender.send(subscriber_message).await };
+            Task::perform(future, |result| match result {
+                Ok(()) => success_message,
                 Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
             })
         } else {
             Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
         }
-    }
-
-    async fn request_send_text(
-        sender: Sender<SubscriberMessage>,
-        text: String,
-        channel_id: ChannelId,
-        reply_to_id: Option<u32>,
-    ) {
-        let _ = sender.send(SendText(text, channel_id, reply_to_id)).await;
-    }
-
-    async fn request_send_emoji_reply(
-        sender: Sender<SubscriberMessage>,
-        emoji: String,
-        channel_id: ChannelId,
-        reply_to_id: u32,
-    ) {
-        let _ = sender
-            .send(SendEmojiReply(emoji, channel_id, reply_to_id))
-            .await;
-    }
-
-    async fn request_send_position(
-        sender: Sender<SubscriberMessage>,
-        channel_id: ChannelId,
-        position: Position,
-    ) {
-        let _ = sender.send(SendPosition(channel_id, position)).await;
-    }
-
-    async fn request_send_info(sender: Sender<SubscriberMessage>, channel_id: ChannelId) {
-        let _ = sender.send(SendInfo(channel_id)).await;
     }
 
     /// ave the new channel (which could be None) and if we are connected to a device
@@ -1157,57 +1073,38 @@ pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use crate::device_subscription::SubscriberMessage;
-    use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
+    use crate::Message::Navigation;
+    use crate::View::DeviceList;
+    use crate::device_subscription::SubscriberMessage::{Connect, Disconnect};
+    use crate::device_view::ConnectionState::Disconnected;
     use crate::test_helper;
     use btleplug::api::BDAddr;
-    use tokio::sync::mpsc::channel;
 
     #[tokio::test]
     async fn test_connect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
-        let _task = meshchat
-            .device_view
-            .connect_request(BDAddr::from([0, 0, 0, 0, 0, 0]), None);
+        let _task = meshchat.device_view.subscriber_send(
+            Connect(BDAddr::from([0, 0, 0, 0, 0, 0])),
+            Navigation(DeviceList),
+        );
+
         assert_eq!(
             meshchat.device_view.connection_state,
             Disconnected(None, None)
         );
-    }
-
-    #[tokio::test]
-    async fn test_connect_request() {
-        let mut meshchat = test_helper::test_app();
-        // show Subscription is ready
-        let (subscriber_sender, _subscriber_receiver) = channel::<SubscriberMessage>(100);
-        meshchat.device_view.subscription_sender = Some(subscriber_sender);
-        let mac = BDAddr::from([0, 0, 0, 0, 0, 0]);
-        let _task = meshchat.device_view.connect_request(mac, None);
-        assert_eq!(meshchat.device_view.connection_state, Connecting(mac));
     }
 
     #[tokio::test]
     async fn test_disconnect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
-        let _task = meshchat.device_view.disconnect_request();
+        let _task = meshchat
+            .device_view
+            .subscriber_send(Disconnect, Navigation(DeviceList));
         assert_eq!(
             meshchat.device_view.connection_state,
             Disconnected(None, None)
         );
-    }
-
-    #[tokio::test]
-    async fn test_disconnect_request() {
-        let mut meshchat = test_helper::test_app();
-        // show Subscription is ready
-        let (subscriber_sender, _subscriber_receiver) = channel::<SubscriberMessage>(100);
-        meshchat.device_view.subscription_sender = Some(subscriber_sender);
-        let mac = BDAddr::from([0, 0, 0, 0, 0, 0]);
-        meshchat.device_view.connection_state = Connected(mac);
-        assert_eq!(meshchat.device_view.connection_state, Connected(mac));
-        let _task = meshchat.device_view.disconnect_request();
-        assert_eq!(meshchat.device_view.connection_state, Disconnecting(mac));
     }
 }
