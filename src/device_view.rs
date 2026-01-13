@@ -138,7 +138,8 @@ impl DeviceView {
                 return self.connect_request(mac_address, channel_id);
             }
             DisconnectRequest(exit) => {
-                return self.disconnect_request(exit);
+                self.exit_pending = exit;
+                return self.disconnect_request();
             }
             ForwardMessage(channel_id) => {
                 let entry = self.forwarding_message.take();
@@ -260,9 +261,8 @@ impl DeviceView {
     }
 
     /// Send a disconnect request to the device_subscription and handle errors
-    fn disconnect_request(&mut self, exit: bool) -> Task<Message> {
+    fn disconnect_request(&mut self) -> Task<Message> {
         if let Some(sender) = self.subscription_sender.clone() {
-            self.exit_pending = exit;
             Task::perform(Self::request_disconnection(sender), |result| match result {
                 Ok(()) => Navigation(DeviceList),
                 Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
@@ -1195,7 +1195,7 @@ mod tests {
     async fn test_disconnect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
-        let _task = meshchat.device_view.disconnect_request(false);
+        let _task = meshchat.device_view.disconnect_request();
         assert_eq!(
             meshchat.device_view.connection_state,
             Disconnected(None, None)
@@ -1211,7 +1211,7 @@ mod tests {
         let mac = BDAddr::from([0, 0, 0, 0, 0, 0]);
         meshchat.device_view.connection_state = Connected(mac);
         assert_eq!(meshchat.device_view.connection_state, Connected(mac));
-        let _task = meshchat.device_view.disconnect_request(false);
+        let _task = meshchat.device_view.disconnect_request();
         assert_eq!(meshchat.device_view.connection_state, Disconnecting(mac));
     }
 }
