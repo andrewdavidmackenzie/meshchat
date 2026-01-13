@@ -9,8 +9,8 @@ use crate::device_subscription::SubscriberMessage::{
     Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, NotReady,
-    Ready,
+    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceMeshPacket, DevicePacket,
+    DisconnectedEvent, DisconnectingEvent, NotReady, Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
@@ -70,7 +70,7 @@ impl Default for ConnectionState {
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
     ConnectRequest(BDAddr, Option<ChannelId>),
-    DisconnectRequest(BDAddr, bool), // bool is to exit or not
+    DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
     ChannelMsg(ChannelViewMessage),
@@ -137,8 +137,8 @@ impl DeviceView {
             ConnectRequest(mac_address, channel_id) => {
                 return self.connect_request(mac_address, channel_id);
             }
-            DisconnectRequest(mac_address, exit) => {
-                return self.disconnect_request(mac_address, exit);
+            DisconnectRequest(exit) => {
+                return self.disconnect_request(exit);
             }
             ForwardMessage(channel_id) => {
                 let entry = self.forwarding_message.take();
@@ -218,9 +218,6 @@ impl DeviceView {
         channel_id: Option<ChannelId>,
     ) -> Task<Message> {
         if let Some(sender) = self.subscription_sender.clone() {
-            // save the desired channel to show for when the connection is completed later
-            self.connection_state = Connecting(mac_address);
-
             Task::perform(
                 Self::request_connection(sender, mac_address),
                 |result| match result {
@@ -263,11 +260,9 @@ impl DeviceView {
     }
 
     /// Send a disconnect request to the device_subscription and handle errors
-    fn disconnect_request(&mut self, mac_address: BDAddr, exit: bool) -> Task<Message> {
+    fn disconnect_request(&mut self, exit: bool) -> Task<Message> {
         if let Some(sender) = self.subscription_sender.clone() {
             self.exit_pending = exit;
-            self.connection_state = Disconnecting(mac_address);
-
             Task::perform(Self::request_disconnection(sender), |result| match result {
                 Ok(()) => Navigation(DeviceList),
                 Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
@@ -347,6 +342,10 @@ impl DeviceView {
         subscription_event: SubscriptionEvent,
     ) -> Task<Message> {
         match subscription_event {
+            ConnectingEvent(mac_address) => {
+                self.connection_state = Connecting(mac_address);
+                Task::none()
+            },
             ConnectedEvent(mac_address) => {
                 self.connection_state = Connected(mac_address);
                 match &self.viewing_channel {
@@ -366,6 +365,10 @@ impl DeviceView {
                         })
                     }
                 }
+            }
+            DisconnectingEvent(mac_address) => {
+                self.connection_state = Disconnecting(mac_address);
+                Task::none()
             }
             DisconnectedEvent(id) => {
                 if self.exit_pending {
@@ -690,10 +693,10 @@ impl DeviceView {
         }
 
         // Add a disconnect button on the right if we are connected
-        if let Connected(mac_address) = state {
+        if let Connected(_) = state {
             header = header.push(Space::new().width(Fill)).push(
                 button("Disconnect")
-                    .on_press(DeviceViewEvent(DisconnectRequest(*mac_address, false)))
+                    .on_press(DeviceViewEvent(DisconnectRequest(false)))
                     .style(button_chip_style),
             )
         }
@@ -1192,9 +1195,7 @@ mod tests {
     async fn test_disconnect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
-        let _task = meshchat
-            .device_view
-            .disconnect_request(BDAddr::from([0, 0, 0, 0, 0, 0]), false);
+        let _task = meshchat.device_view.disconnect_request(false);
         assert_eq!(
             meshchat.device_view.connection_state,
             Disconnected(None, None)
@@ -1210,7 +1211,7 @@ mod tests {
         let mac = BDAddr::from([0, 0, 0, 0, 0, 0]);
         meshchat.device_view.connection_state = Connected(mac);
         assert_eq!(meshchat.device_view.connection_state, Connected(mac));
-        let _task = meshchat.device_view.disconnect_request(mac, false);
+        let _task = meshchat.device_view.disconnect_request(false);
         assert_eq!(meshchat.device_view.connection_state, Disconnecting(mac));
     }
 }

@@ -4,7 +4,8 @@ use crate::device_subscription::SubscriberMessage::{
     Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent,
+    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceMeshPacket, DevicePacket,
+    DisconnectedEvent, DisconnectingEvent,
 };
 use btleplug::api::BDAddr;
 use futures::SinkExt;
@@ -29,6 +30,8 @@ pub enum SubscriptionEvent {
     /// A message from the subscription to indicate it is ready to receive messages
     Ready(Sender<SubscriberMessage>),
     ConnectedEvent(BDAddr),
+    ConnectingEvent(BDAddr),
+    DisconnectingEvent(BDAddr),
     DisconnectedEvent(BDAddr),
     DevicePacket(Box<FromRadio>),
     DeviceMeshPacket(Box<MeshPacket>),
@@ -158,6 +161,11 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         // Wait for a message from the UI to request that we connect to a device
                         // No need to wait for any messages from a radio, as we are not connected to one
                         if let Some(Connect(mac_address)) = subscriber_receiver.next().await {
+                            gui_sender
+                                .send(ConnectingEvent(mac_address))
+                                .await
+                                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
                             match do_connect(&mac_address).await {
                                 Ok((packet_receiver, stream)) => {
                                     device_state = Connected(mac_address, packet_receiver);
@@ -257,6 +265,11 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
 
                         // Disconnect
+                        gui_sender
+                            .send(DisconnectingEvent(mac_address))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
                         let api = stream_api.take().unwrap();
                         device_state = Disconnected;
                         let _ = do_disconnect(api).await;
