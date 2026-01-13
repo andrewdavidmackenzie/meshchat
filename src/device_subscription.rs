@@ -33,6 +33,7 @@ pub enum SubscriptionEvent {
     DevicePacket(Box<FromRadio>),
     DeviceMeshPacket(Box<MeshPacket>),
     ConnectionError(BDAddr, String, String),
+    NotReady,
 }
 
 /// A message type sent from the UI to the subscriber

@@ -9,7 +9,8 @@ use crate::device_subscription::SubscriberMessage::{
     Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, Ready,
+    ConnectedEvent, ConnectionError, DeviceMeshPacket, DevicePacket, DisconnectedEvent, NotReady,
+    Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
@@ -106,39 +107,6 @@ pub struct DeviceView {
     pub forwarding_message: Option<ChannelViewEntry>,
     history_length: Option<HistoryLength>,
 }
-
-async fn request_send_text(
-    sender: Sender<SubscriberMessage>,
-    text: String,
-    channel_id: ChannelId,
-    reply_to_id: Option<u32>,
-) {
-    let _ = sender.send(SendText(text, channel_id, reply_to_id)).await;
-}
-
-async fn request_send_emoji_reply(
-    sender: Sender<SubscriberMessage>,
-    emoji: String,
-    channel_id: ChannelId,
-    reply_to_id: u32,
-) {
-    let _ = sender
-        .send(SendEmojiReply(emoji, channel_id, reply_to_id))
-        .await;
-}
-
-async fn request_send_position(
-    sender: Sender<SubscriberMessage>,
-    channel_id: ChannelId,
-    position: Position,
-) {
-    let _ = sender.send(SendPosition(channel_id, position)).await;
-}
-
-async fn request_send_info(sender: Sender<SubscriberMessage>, channel_id: ChannelId) {
-    let _ = sender.send(SendInfo(channel_id)).await;
-}
-
 async fn empty() {}
 
 impl DeviceView {
@@ -172,16 +140,22 @@ impl DeviceView {
             DisconnectRequest(mac_address, exit) => {
                 return self.disconnect_request(mac_address, exit);
             }
-            ShowChannel(channel_id) => {
-                return self.channel_change(channel_id.clone());
+            ForwardMessage(channel_id) => {
+                let entry = self.forwarding_message.take();
+                return self.forward_message(channel_id, entry);
             }
-            SubscriptionMessage(subscription_event) => {
-                return self.process_subscription_event(subscription_event);
+            SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
+                if let Some(sender) = self.subscription_sender.clone() {
+                    return Task::perform(
+                        Self::request_send_emoji_reply(sender, emoji, channel_id, reply_to_id),
+                        |_| Message::None,
+                    );
+                }
             }
             SendTextMessage(message, channel_id, reply_to_id) => {
                 if let Some(sender) = self.subscription_sender.clone() {
                     return Task::perform(
-                        request_send_text(sender, message, channel_id, reply_to_id),
+                        Self::request_send_text(sender, message, channel_id, reply_to_id),
                         |_| Message::None,
                     );
                 }
@@ -191,16 +165,23 @@ impl DeviceView {
                     && let Some(sender) = self.subscription_sender.clone()
                 {
                     return Task::perform(
-                        request_send_position(sender, channel_id, *position),
+                        Self::request_send_position(sender, channel_id, *position),
                         |_| Message::None,
                     );
                 }
             }
             SendInfoMessage(channel_id) => {
-                let sender = self.subscription_sender.clone();
-                return Task::perform(request_send_info(sender.unwrap(), channel_id), |_| {
-                    Message::None
-                });
+                if let Some(sender) = self.subscription_sender.clone() {
+                    return Task::perform(Self::request_send_info(sender, channel_id), |_| {
+                        Message::None
+                    });
+                }
+            }
+            ShowChannel(channel_id) => {
+                return self.channel_change(channel_id.clone());
+            }
+            SubscriptionMessage(subscription_event) => {
+                return self.process_subscription_event(subscription_event);
             }
             ChannelMsg(msg) => {
                 if let Some(channel_id) = &self.viewing_channel
@@ -216,19 +197,7 @@ impl DeviceView {
                 self.forwarding_message = Some(channel_view_entry)
             }
             StopForwardingMessage => self.forwarding_message = None,
-            ForwardMessage(channel_id) => {
-                let entry = self.forwarding_message.take();
-                return self.forward_message(channel_id, entry);
-            }
             ClearFilter => self.filter.clear(),
-            SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
-                if let Some(sender) = self.subscription_sender.clone() {
-                    return Task::perform(
-                        request_send_emoji_reply(sender, emoji, channel_id, reply_to_id),
-                        |_| Message::None,
-                    );
-                }
-            }
         }
 
         Task::none()
@@ -256,19 +225,34 @@ impl DeviceView {
                 Self::request_connection(sender, mac_address),
                 |result| match result {
                     Ok(()) => Navigation(View::Device(channel_id)),
-                    Err(e) => {
-                        AppError("Error connecting to device".to_string(), format!("{:?}", e))
-                    }
+                    Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
                 },
             )
         } else {
-            Task::perform(empty(), move |e| {
-                DeviceViewEvent(SubscriptionMessage(ConnectionError(
-                    mac_address,
-                    "Subscription not ready".to_string(),
-                    format!("{:?}", e),
-                )))
-            })
+            Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
+        }
+    }
+
+    /// Forward a message by sending to a channel - with the prefix "FWD:"
+    fn forward_message(
+        &mut self,
+        channel_id: ChannelId,
+        entry: Option<ChannelViewEntry>,
+    ) -> Task<Message> {
+        if let Some(channel_view_entry) = entry
+            && let Some(sender) = self.subscription_sender.clone()
+        {
+            let message_text = format!(
+                "FWD from '{}': {}\n",
+                short_name(&self.nodes, channel_view_entry.from()),
+                channel_view_entry.payload()
+            );
+            Task::perform(
+                Self::request_send_text(sender, message_text, channel_id.clone(), None),
+                |_| DeviceViewEvent(ShowChannel(Some(channel_id))),
+            )
+        } else {
+            Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
         }
     }
 
@@ -286,20 +270,43 @@ impl DeviceView {
 
             Task::perform(Self::request_disconnection(sender), |result| match result {
                 Ok(()) => Navigation(DeviceList),
-                Err(e) => AppError(
-                    "Error disconnecting from device".to_string(),
-                    format!("{:?}", e),
-                ),
+                Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
             })
         } else {
-            Task::perform(empty(), move |e| {
-                DeviceViewEvent(SubscriptionMessage(ConnectionError(
-                    mac_address,
-                    "Subscription not ready".to_string(),
-                    format!("{:?}", e),
-                )))
-            })
+            Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
         }
+    }
+
+    async fn request_send_text(
+        sender: Sender<SubscriberMessage>,
+        text: String,
+        channel_id: ChannelId,
+        reply_to_id: Option<u32>,
+    ) {
+        let _ = sender.send(SendText(text, channel_id, reply_to_id)).await;
+    }
+
+    async fn request_send_emoji_reply(
+        sender: Sender<SubscriberMessage>,
+        emoji: String,
+        channel_id: ChannelId,
+        reply_to_id: u32,
+    ) {
+        let _ = sender
+            .send(SendEmojiReply(emoji, channel_id, reply_to_id))
+            .await;
+    }
+
+    async fn request_send_position(
+        sender: Sender<SubscriberMessage>,
+        channel_id: ChannelId,
+        position: Position,
+    ) {
+        let _ = sender.send(SendPosition(channel_id, position)).await;
+    }
+
+    async fn request_send_info(sender: Sender<SubscriberMessage>, channel_id: ChannelId) {
+        let _ = sender.send(SendInfo(channel_id)).await;
     }
 
     /// ave the new channel (which could be None) and if we are connected to a device
@@ -320,29 +327,6 @@ impl DeviceView {
             }
         }
         Task::none()
-    }
-
-    /// Forward a message by sending to a channel - with the prefix "FWD:"
-    fn forward_message(
-        &mut self,
-        channel_id: ChannelId,
-        entry: Option<ChannelViewEntry>,
-    ) -> Task<Message> {
-        if let Some(channel_view_entry) = entry
-            && let Some(sender) = self.subscription_sender.clone()
-        {
-            let message_text = format!(
-                "FWD from '{}': {}\n",
-                short_name(&self.nodes, channel_view_entry.from()),
-                channel_view_entry.payload()
-            );
-            Task::perform(
-                request_send_text(sender, message_text, channel_id.clone(), None),
-                |_| DeviceViewEvent(ShowChannel(Some(channel_id))),
-            )
-        } else {
-            Task::none()
-        }
     }
 
     /// Called when the user selects to alias a node name
@@ -406,6 +390,13 @@ impl DeviceView {
                 Task::perform(empty(), |_| Navigation(DeviceList))
                     .chain(Task::perform(empty(), move |_| {
                         AppError(summary.clone(), detail.clone())
+                    }))
+            }
+            NotReady => {
+                Task::perform(empty(), |_| Navigation(DeviceList))
+                    .chain(Task::perform(empty(), move |_| {
+                        AppError("Subscription not ready".to_string(),
+                                 "An attempt was made to communicate to radio prior to the subscription being Ready".to_string())
                     }))
             }
         }
