@@ -1,5 +1,6 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
+use crate::content::Content;
 use crate::styles::{button_chip_style, error_notification_style, info_notification_style};
 use iced::widget::container::Style;
 use iced::widget::{Column, Container, Row, button, text};
@@ -9,8 +10,8 @@ use iced::{Element, Fill, Right, Task, Theme};
 /// - Error(summary, detail)
 /// - Info(summary, detail)
 pub enum Notification {
-    Error(String, String),
-    Info(String, String),
+    Error(String, Content),
+    Info(String, Content),
 }
 
 /// A collection of notifications that should be shown on screen
@@ -42,10 +43,10 @@ impl Notifications {
     fn notification_box<'a>(
         id: usize,
         summary: &'a str,
-        detail: &'a str,
+        detail: &'a Content,
         style: impl Fn(&Theme) -> Style + 'static,
     ) -> Element<'a, Message> {
-        let row = Row::new().width(Fill).push(text(summary).size(20)).push(
+        let summary_row = Row::new().width(Fill).push(text(summary).size(20)).push(
             Column::new().width(Fill).align_x(Right).push(
                 button("OK")
                     .style(button_chip_style)
@@ -53,7 +54,7 @@ impl Notifications {
             ),
         );
 
-        Container::new(Column::new().push(row).push(text(detail).size(14)))
+        Container::new(Column::new().push(summary_row).push(detail.view()))
             .padding([6, 12])
             .style(style)
             .width(Fill)

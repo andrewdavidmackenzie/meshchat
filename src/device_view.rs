@@ -209,7 +209,7 @@ impl DeviceView {
             let future = async move { sender.send(subscriber_message).await };
             Task::perform(future, |result| match result {
                 Ok(()) => success_message,
-                Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
+                Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e).into()),
             })
         } else {
             Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
@@ -304,14 +304,14 @@ impl DeviceView {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                 Task::perform(empty(), |_| Navigation(DeviceList))
                     .chain(Task::perform(empty(), move |_| {
-                        AppError(summary.clone(), detail.clone())
+                        AppError(summary.clone(), detail.into())
                     }))
             }
             NotReady => {
                 Task::perform(empty(), |_| Navigation(DeviceList))
                     .chain(Task::perform(empty(), move |_| {
                         AppError("Subscription not ready".to_string(),
-                                 "An attempt was made to communicate to radio prior to the subscription being Ready".to_string())
+                                 "An attempt was made to communicate to radio prior to the subscription being Ready".into())
                     }))
             }
         }
@@ -337,7 +337,7 @@ impl DeviceView {
                 return Task::perform(empty(), move |_| {
                     Message::AppNotification(
                         "Radio Notification".to_string(),
-                        notification.message.clone(),
+                        notification.message.into(),
                     )
                 });
             }

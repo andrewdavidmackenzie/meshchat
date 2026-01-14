@@ -68,7 +68,7 @@ pub fn save_config(config: &Config) -> Task<Message> {
                         "Error saving config file: '{}'",
                         config_path.to_string_lossy()
                     ),
-                    e.to_string(),
+                    e.to_string().into(),
                 ),
             }
         })
@@ -90,7 +90,7 @@ pub fn load_config() -> Task<Message> {
                             "Error loading config file: '{}'",
                             config_path.to_string_lossy()
                         ),
-                        e.to_string(),
+                        e.to_string().into(),
                     ),
                 }
             })
@@ -104,7 +104,7 @@ pub fn load_config() -> Task<Message> {
                             "Error creating config file: '{}'",
                             config_path.to_string_lossy()
                         ),
-                        e.to_string(),
+                        e.to_string().into(),
                     ),
                 }
             })

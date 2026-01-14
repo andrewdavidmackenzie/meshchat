@@ -62,7 +62,7 @@ impl DeviceListView {
             }
             Error(e) => {
                 return Task::perform(empty(), move |_| {
-                    Message::AppError("Discovery Error".to_string(), e.to_string())
+                    Message::AppError("Discovery Error".to_string(), e.to_string().into())
                 });
             }
             StartEditingAlias(device) => self.start_editing_alias(device),

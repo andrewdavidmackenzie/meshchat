@@ -9,6 +9,7 @@ use crate::Message::{
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
 use crate::config::{Config, load_config, save_config};
+use crate::content::Content;
 use crate::device_list_view::{DeviceListEvent, DeviceListView, ble_discovery};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
 use crate::device_view::DeviceView;
@@ -40,6 +41,7 @@ mod styles;
 /// Icons generated as a font using iced_fontello
 mod icons;
 mod channel_id;
+mod content;
 mod emoji_picker;
 mod notification;
 #[cfg(test)]
@@ -79,8 +81,8 @@ pub enum Message {
     ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
     ShowLocation(i32, i32), // lat and long / 1_000_000
-    AppNotification(String, String),
-    AppError(String, String),
+    AppNotification(String, Content),
+    AppError(String, Content),
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
     CopyToClipBoard(String),
