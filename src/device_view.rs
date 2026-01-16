@@ -1058,13 +1058,22 @@ impl DeviceView {
     }
 }
 
-/// Return a name to display in the message box as the source of a message.
+/// Return a short name to display in the message box as the source of a message.
 /// If the message is from myself, then return None.
 pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
     nodes
         .get(&from)
         .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
         .map(|user: &User| user.short_name.as_ref())
+        .unwrap_or("????")
+}
+
+/// Return a long name for the source node
+pub fn long_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
+    nodes
+        .get(&from)
+        .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
+        .map(|user: &User| user.long_name.as_ref())
         .unwrap_or("????")
 }
 

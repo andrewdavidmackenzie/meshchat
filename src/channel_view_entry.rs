@@ -7,16 +7,16 @@ use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
-use crate::device_view::short_name;
+use crate::device_view::{long_name, short_name};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
-    menu_button_style, message_text_style,
+    menu_button_style, message_text_style, tooltip_style,
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::font::Weight;
-use iced::widget::{Column, Container, Row, Space, Text, button, sensor, text, tooltip};
+use iced::widget::{Column, Container, Row, Space, Text, Tooltip, button, sensor, text, tooltip};
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use iced_aw::menu::Menu;
 use iced_aw::{MenuBar, menu_bar, menu_items};
@@ -219,8 +219,6 @@ impl ChannelViewEntry {
         mine: bool,
         emoji_picker: &'a crate::emoji_picker::EmojiPicker,
     ) -> Element<'a, Message> {
-        let name = short_name(nodes, self.from);
-
         let message_text = match self.payload() {
             AlertMessage(text_msg) => text_msg.clone(),
             NewTextMessage(text_msg) => text_msg.clone(),
@@ -235,7 +233,8 @@ impl ChannelViewEntry {
         if !mine {
             message_content_column = self.top_row(
                 message_content_column,
-                name,
+                short_name(nodes, self.from),
+                long_name(nodes, self.from),
                 message_text.clone(),
                 emoji_picker,
                 channel_id,
@@ -349,7 +348,8 @@ impl ChannelViewEntry {
     fn top_row<'a>(
         &'a self,
         message_content_column: Column<'a, Message>,
-        name: &'a str,
+        short_name: &'a str,
+        long_name: &'a str,
         message: String,
         emoji_picker: &'a crate::emoji_picker::EmojiPicker,
         channel_id: &'a ChannelId,
@@ -357,18 +357,21 @@ impl ChannelViewEntry {
         let text_color = Self::color_from_id(self.from);
         let mut top_row = Row::new().padding(0).align_y(Top);
 
-        top_row = top_row
-            .push(self.menu_bar(name, message, emoji_picker, channel_id))
-            .push(Space::new().width(2.0));
+        let short_name_text: Text = text(short_name)
+            .font(Font {
+                weight: Weight::Bold,
+                ..Default::default()
+            })
+            .color(text_color);
 
-        top_row = top_row.push(
-            text(name)
-                .font(Font {
-                    weight: Weight::Bold,
-                    ..Default::default()
-                })
-                .color(text_color),
-        );
+        let short_name_tooltip: Tooltip<Message> =
+            tooltip(short_name_text, text(long_name), tooltip::Position::Right)
+                .style(tooltip_style);
+
+        top_row = top_row
+            .push(self.menu_bar(short_name, message, emoji_picker, channel_id))
+            .push(Space::new().width(2.0))
+            .push(short_name_tooltip);
 
         message_content_column.push(top_row)
     }
