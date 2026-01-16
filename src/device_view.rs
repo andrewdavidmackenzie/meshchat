@@ -677,7 +677,7 @@ impl DeviceView {
         select: fn(ChannelId) -> Message,
     ) -> Element<'a, Message> {
         // If not viewing a channel/user, show the list of channels and users
-        let mut channels_list = self.channel_list(add_buttons, select);
+        let mut channels_list = self.channel_list(select);
 
         // Add the favourite nodes to the list if there are any
         channels_list = self.favourite_nodes(channels_list, config, add_buttons, select);
@@ -698,35 +698,33 @@ impl DeviceView {
     }
 
     /// Create a column with a set of rows, one for each channel
-    fn channel_list(
-        &self,
-        add_buttons: bool,
-        select: fn(ChannelId) -> Message,
-    ) -> Column<'_, Message> {
+    fn channel_list(&self, select: fn(ChannelId) -> Message) -> Column<'_, Message> {
         let mut channels_list = Column::new();
 
-        if !self.channels.is_empty() {
-            channels_list = channels_list
-                .push(self.section_header(format!("Channels ({})", self.channels.len())));
-        }
-
+        let mut filtered_channels: Vec<(usize, String)> = vec![];
         for (index, channel) in self.channels.iter().enumerate() {
             let channel_name = Self::channel_name(channel);
 
             // If there is a filter and the channel name does not contain it, don't show this row
-            if !channel_name.contains(&self.filter) {
-                continue;
+            if channel_name.contains(&self.filter) {
+                filtered_channels.push((index, channel_name));
             }
+        }
 
-            let channel_id = ChannelId::Channel(index as i32);
-            let channel_row = Self::channel_row(
-                channel_name,
-                self.channel_views.get(&channel_id).unwrap().unread_count(),
-                channel_id,
-                add_buttons,
-                select,
-            );
-            channels_list = channels_list.push(channel_row);
+        if !filtered_channels.is_empty() {
+            channels_list = channels_list
+                .push(self.section_header(format!("Channels ({})", self.channels.len())));
+
+            for (index, channel_name) in filtered_channels {
+                let channel_id = ChannelId::Channel(index as i32);
+                let channel_row = Self::channel_row(
+                    channel_name,
+                    self.channel_views.get(&channel_id).unwrap().unread_count(),
+                    channel_id,
+                    select,
+                );
+                channels_list = channels_list.push(channel_row);
+            }
         }
 
         channels_list
@@ -885,7 +883,6 @@ impl DeviceView {
         name: String,
         num_messages: usize,
         channel_id: ChannelId,
-        _add_buttons: bool,
         select: fn(ChannelId) -> Message,
     ) -> Element<'static, Message> {
         let name_row = Row::new()
