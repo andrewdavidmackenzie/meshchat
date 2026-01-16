@@ -1074,7 +1074,7 @@ pub fn long_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
         .get(&from)
         .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
         .map(|user: &User| user.long_name.as_ref())
-        .unwrap_or("????")
+        .unwrap_or("Node information not available")
 }
 
 #[cfg(test)]
