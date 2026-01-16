@@ -3,8 +3,9 @@
 
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, ConfigLoaded,
-    CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, RemoveDeviceAlias,
-    RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
+    CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, OpenUrl,
+    RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite,
+    WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -79,6 +80,7 @@ pub enum Message {
     ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
     ShowLocation(i32, i32), // lat and long / 1_000_000
+    OpenUrl(String),
     AppNotification(String, String),
     AppError(String, String),
     RemoveNotification(usize),
@@ -181,6 +183,10 @@ impl MeshChat {
             RemoveNotification(id) => self.notifications.remove(id),
             ShowLocation(lat, long) => {
                 let _ = webbrowser::open(&Self::location_url(lat, long));
+                Task::none()
+            }
+            OpenUrl(url) => {
+                let _ = webbrowser::open(&url);
                 Task::none()
             }
             ToggleNodeFavourite(node_id) => {

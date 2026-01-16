@@ -1,5 +1,5 @@
 use crate::Message;
-use crate::Message::{CopyToClipBoard, DeviceViewEvent, ShowLocation};
+use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage;
 use crate::channel_view::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
@@ -15,8 +15,11 @@ use crate::styles::{
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
+use iced::advanced::text::Span;
 use iced::font::Weight;
-use iced::widget::{Column, Container, Row, Space, Text, Tooltip, button, sensor, text, tooltip};
+use iced::widget::{
+    Column, Container, Row, Space, Text, Tooltip, button, rich_text, sensor, span, text, tooltip,
+};
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use iced_aw::menu::Menu;
 use iced_aw::{MenuBar, menu_bar, menu_items};
@@ -210,6 +213,36 @@ impl ChannelViewEntry {
         col.into()
     }
 
+    fn tokenize<'a>(message: String) -> Vec<Span<'a, String>> {
+        let mut spans = vec![];
+        let mut pending_text = String::default();
+
+        for word in message.split_inclusive(' ') {
+            if !word.is_empty() {
+                // if we find a link
+                if word.starts_with("http:") || word.starts_with("https:") {
+                    // If we have accumulated text so far, push it first in a single span
+                    if !pending_text.is_empty() {
+                        spans.push(span(pending_text.clone()));
+                        pending_text.clear();
+                    }
+                    // Push a span for the link
+                    spans.push(span(word.to_string()).link(word.to_string()));
+                } else {
+                    // Accumulate the word, with the space before the next word
+                    pending_text.push_str(word);
+                }
+            }
+        }
+
+        // If we have accumulated any final text, push it all in a single span
+        if !pending_text.is_empty() {
+            spans.push(span(pending_text));
+        }
+
+        spans
+    }
+
     /// Create an Element that contains a message received or sent
     pub fn view<'a>(
         &'a self,
@@ -242,19 +275,24 @@ impl ChannelViewEntry {
         }
 
         let content: Element<'static, Message> = match self.payload() {
-            AlertMessage(_) => text(message_text)
+            AlertMessage(_) => rich_text(Self::tokenize(message_text))
                 .style(alert_message_style)
                 .size(18)
                 .into(),
-            NewTextMessage(_) | UserMessage(_) => {
-                text(message_text).style(message_text_style).size(18).into()
-            }
+            NewTextMessage(_) | UserMessage(_) => rich_text(Self::tokenize(message_text))
+                .on_link_click(OpenUrl)
+                .style(message_text_style)
+                .size(18)
+                .into(),
             TextMessageReply(reply_to_id, _) => {
                 if let Some(reply_quote) = Self::reply_quote(entries, reply_to_id) {
                     let quote_row = Row::new().push(text(reply_quote).color(COLOR_GREEN));
                     message_content_column = message_content_column.push(quote_row);
                 };
-                text(message_text).style(message_text_style).size(18).into()
+                rich_text(Self::tokenize(message_text))
+                    .style(message_text_style)
+                    .size(18)
+                    .into()
             }
             PositionMessage(lat, long) => button(text(message_text))
                 .padding([1, 5])
@@ -338,6 +376,8 @@ impl ChannelViewEntry {
         )
     }
 
+    /// Takes lat and long as found in [Position], normalize into real lat/long and format into a
+    /// string with a location icon and the lat/long values with two decimal places
     fn location_text(lat: &i32, long: &i32) -> String {
         let latitude = 0.0000001 * *lat as f64;
         let longitude = 0.0000001 * *long as f64;
@@ -473,5 +513,33 @@ fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer>
 impl PartialEq<Self> for ChannelViewEntry {
     fn eq(&self, other: &Self) -> bool {
         self.rx_daytime == other.rx_daytime
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::channel_view_entry::ChannelViewEntry;
+
+    #[test]
+    fn test_empty_spans() {
+        assert!(ChannelViewEntry::tokenize("".into()).is_empty())
+    }
+
+    #[test]
+    fn test_text_link_spans() {
+        let spans = ChannelViewEntry::tokenize("open this link https://example.com".into());
+        assert_eq!(spans.len(), 2);
+        assert!(spans[0].link.is_none());
+        assert!(spans[1].link.is_some());
+    }
+
+    #[test]
+    fn test_text_link_text_spans() {
+        let spans =
+            ChannelViewEntry::tokenize("open this link https://example.com if you dare".into());
+        assert_eq!(spans.len(), 3);
+        assert!(spans[0].link.is_none());
+        assert!(spans[1].link.is_some());
+        assert!(spans[2].link.is_none());
     }
 }
