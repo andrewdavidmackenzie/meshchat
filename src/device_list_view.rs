@@ -11,18 +11,15 @@ use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
 use crate::{Message, View};
 use btleplug::api::BDAddr;
-use futures_channel::mpsc::Sender;
-use iced::futures::{SinkExt, Stream};
+use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
-use iced::{Bottom, stream};
 use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
 use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
-use meshtastic::utils::stream::{BleDevice, available_ble_devices};
+use meshtastic::utils::stream::BleDevice;
 use std::collections::HashMap;
-use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub enum DeviceListEvent {
@@ -299,52 +296,4 @@ fn empty_view() -> Element<'static, Message> {
         .height(Fill)
         .align_x(Center)
         .into()
-}
-
-/// A stream of [DeviceListEvent] announcing the discovery or loss of devices via BLE
-pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
-    stream::channel(
-        100,
-        move |mut gui_sender: Sender<DeviceListEvent>| async move {
-            let mut mesh_radio_ids: Vec<BleDevice> = vec![];
-
-            // loop scanning for devices
-            loop {
-                match available_ble_devices(Duration::from_secs(4)).await {
-                    Ok(radios_now_ids) => {
-                        // detect lost radios
-                        for id in &mesh_radio_ids {
-                            if !radios_now_ids.iter().any(|other_id| id == other_id) {
-                                // inform GUI of a device lost
-                                gui_sender
-                                    .send(BLERadioLost(id.clone()))
-                                    .await
-                                    .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
-                            }
-                        }
-
-                        // detect new radios found
-                        for id in &radios_now_ids {
-                            if !mesh_radio_ids.iter().any(|other_id| id == other_id) {
-                                // track it for the future
-                                mesh_radio_ids.push(id.clone());
-
-                                // inform GUI of a new device found
-                                gui_sender
-                                    .send(BLERadioFound(id.clone()))
-                                    .await
-                                    .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        gui_sender
-                            .send(Error(e.to_string()))
-                            .await
-                            .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
-                    }
-                }
-            }
-        },
-    )
 }
