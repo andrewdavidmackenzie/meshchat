@@ -11,15 +11,15 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
     stream::channel(
         100,
         move |mut gui_sender: Sender<DeviceListEvent>| async move {
-            let mut mesh_radio_ids: Vec<BleDevice> = vec![];
+            let mut mesh_radio_devices: Vec<BleDevice> = vec![];
 
             // loop scanning for devices
             loop {
                 match available_ble_devices(Duration::from_secs(4)).await {
-                    Ok(radios_now_ids) => {
+                    Ok(devices_now) => {
                         // detect lost radios
-                        for id in &mesh_radio_ids {
-                            if !radios_now_ids.iter().any(|other_id| id == other_id) {
+                        for id in &mesh_radio_devices {
+                            if !devices_now.iter().any(|other_id| id == other_id) {
                                 // inform GUI of a device lost
                                 gui_sender
                                     .send(BLERadioLost(id.clone()))
@@ -29,14 +29,17 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                         }
 
                         // detect new radios found
-                        for id in &radios_now_ids {
-                            if !mesh_radio_ids.iter().any(|other_id| id == other_id) {
+                        for device in &devices_now {
+                            if !mesh_radio_devices
+                                .iter()
+                                .any(|other_device| device == other_device)
+                            {
                                 // track it for the future
-                                mesh_radio_ids.push(id.clone());
+                                mesh_radio_devices.push(device.clone());
 
                                 // inform GUI of a new device found
                                 gui_sender
-                                    .send(BLERadioFound(id.clone()))
+                                    .send(BLERadioFound(device.clone()))
                                     .await
                                     .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
                             }
