@@ -3,11 +3,12 @@
 
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, ConfigLoaded,
-    CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, RemoveDeviceAlias,
-    RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite, WindowEvent,
+    CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, OpenUrl,
+    RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
+use crate::channel_view_entry::ChannelViewEntry;
 use crate::config::{Config, load_config, save_config};
 use crate::content::Content;
 use crate::device_list_view::{DeviceListEvent, DeviceListView, ble_discovery};
@@ -80,12 +81,12 @@ pub enum Message {
     Exit,
     ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
-    ShowLocation(i32, i32), // lat and long / 1_000_000
+    OpenUrl(String),
     AppNotification(String, Content),
     AppError(String, Content),
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
-    CopyToClipBoard(String),
+    CopyToClipBoard(ChannelViewEntry),
     AddNodeAlias(u32, String),
     RemoveNodeAlias(u32),
     AddDeviceAlias(BDAddr, String),
@@ -181,8 +182,8 @@ impl MeshChat {
                 save_config(&self.config)
             }
             RemoveNotification(id) => self.notifications.remove(id),
-            ShowLocation(lat, long) => {
-                let _ = webbrowser::open(&Self::location_url(lat, long));
+            OpenUrl(url) => {
+                let _ = webbrowser::open(&url);
                 Task::none()
             }
             ToggleNodeFavourite(node_id) => {
@@ -193,7 +194,7 @@ impl MeshChat {
                 // and save the config asynchronously, so that we don't block the GUI thread
                 save_config(&self.config)
             }
-            CopyToClipBoard(string) => clipboard::write(string),
+            CopyToClipBoard(entry) => clipboard::write(format!("{}", entry.payload())),
             AddNodeAlias(node_id, alias) => {
                 self.device_view.stop_editing_alias();
                 if !alias.is_empty() {
@@ -280,16 +281,6 @@ impl MeshChat {
         stack.push(self.notifications.view()).push(inner).into()
     }
 
-    /// Convert a location tuple to a URL that can be opened in a browser.
-    fn location_url(lat: i32, long: i32) -> String {
-        let latitude = 0.0000001 * (lat as f64);
-        let longitude = 0.0000001 * (long as f64);
-        format!(
-            "https://maps.google.com/?q={:.7},{:.7}",
-            latitude, longitude
-        )
-    }
-
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![
@@ -332,14 +323,6 @@ impl MeshChat {
 mod tests {
     use super::*;
     use crate::channel_view_entry::Payload::NewTextMessage;
-
-    #[test]
-    fn test_location_url() {
-        assert_eq!(
-            MeshChat::location_url(50, 1),
-            "https://maps.google.com/?q=0.0000050,0.0000001"
-        );
-    }
 
     #[test]
     fn test_default_view() {

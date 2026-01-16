@@ -1,18 +1,16 @@
 use crate::Message;
-use crate::Message::{CopyToClipBoard, DeviceViewEvent, ShowLocation};
+use crate::Message::{CopyToClipBoard, DeviceViewEvent};
 use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage;
-use crate::channel_view::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
+use crate::channel_view::ChannelViewMessage::{MessageSeen, PrepareReply, ReplyWithEmoji};
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
+use crate::content::{Content, ContentChunk};
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
-use crate::device_view::{long_name, short_name};
-use crate::styles::{
-    COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
-    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
-    menu_button_style, message_text_style, tooltip_style,
-};
+use crate::device_view::short_name;
+use crate::emoji_picker::EmojiPicker;
+use crate::styles::{COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_text_style, button_chip_style, menu_button_style, message_text_style, tooltip_style};
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::font::Weight;
@@ -32,10 +30,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
 pub enum Payload {
-    AlertMessage(String),
-    NewTextMessage(String),
-    TextMessageReply(u32, String),
-    EmojiReply(u32, String),
+    AlertMessage(Content),
+    NewTextMessage(Content),
+    TextMessageReply(u32, Content),
+    EmojiReply(u32, String), // Should be a String with one emoji in it
     PositionMessage(i32, i32),
     UserMessage(User),
 }
@@ -43,19 +41,24 @@ pub enum Payload {
 impl fmt::Display for Payload {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            AlertMessage(text_message) => f.write_str(text_message),
-            NewTextMessage(text_message) => f.write_str(text_message),
-            TextMessageReply(_, reply_text) => f.write_str(reply_text),
-            EmojiReply(_, _) => f.write_str(""), // Not possible
-            PositionMessage(lat, long) => f.write_str(&ChannelViewEntry::location_text(lat, long)),
-            UserMessage(user) => f.write_str(&ChannelViewEntry::user_text(user)),
+            AlertMessage(text_message) => f.write_fmt(format_args!("{}", text_message)),
+            NewTextMessage(text_message) => f.write_fmt(format_args!("{}", text_message)),
+            TextMessageReply(_, reply_text) => f.write_fmt(format_args!("{}", reply_text)),
+            EmojiReply(_, emoji) => f.write_str(emoji),
+            PositionMessage(lat, long) => f.write_fmt(format_args!(
+                "{}",
+                &ChannelViewEntry::location_content(lat, long)
+            )),
+            UserMessage(user) => {
+                f.write_fmt(format_args!("{}", &ChannelViewEntry::user_content(user)))
+            }
         }
     }
 }
 
 impl Default for Payload {
     fn default() -> Self {
-        NewTextMessage(String::default())
+        NewTextMessage(Content::default())
     }
 }
 
@@ -189,7 +192,7 @@ impl ChannelViewEntry {
 
     /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
     /// it occurs in. These will be separated by Day specifiers, so day is not needed.
-    fn time_to_text(datetime_local: DateTime<Local>) -> Text<'static, Theme, Renderer> {
+    fn time_to_text<'a>(datetime_local: DateTime<Local>) -> Text<'a, Theme, Renderer> {
         let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
         text(time_str)
             .color(TIME_TEXT_COLOR)
@@ -217,66 +220,45 @@ impl ChannelViewEntry {
         nodes: &'a HashMap<u32, NodeInfo>,
         channel_id: &'a ChannelId,
         mine: bool,
-        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        emoji_picker: &'a EmojiPicker,
     ) -> Element<'a, Message> {
-        let message_text = match self.payload() {
-            AlertMessage(text_msg) => text_msg.clone(),
-            NewTextMessage(text_msg) => text_msg.clone(),
-            TextMessageReply(_, text_msg) => text_msg.clone(),
-            PositionMessage(lat, long) => Self::location_text(lat, long),
-            UserMessage(user) => Self::user_text(user),
-            EmojiReply(_, _) => String::default(), // Should never happen
-        };
-
         let mut message_content_column = Column::new();
 
-        if !mine {
-            message_content_column = self.top_row(
-                message_content_column,
-                short_name(nodes, self.from),
-                long_name(nodes, self.from),
-                message_text.clone(),
-                emoji_picker,
-                channel_id,
-            );
-        }
-
-        let content: Element<'static, Message> = match self.payload() {
-            AlertMessage(_) => text(message_text)
-                .style(alert_message_style)
-                .size(18)
-                .into(),
-            NewTextMessage(_) | UserMessage(_) => {
-                text(message_text).style(message_text_style).size(18).into()
-            }
-            TextMessageReply(reply_to_id, _) => {
+        let content_view: Row<Message> = match self.payload() {
+            AlertMessage(alert_message) => alert_message.view(&alert_text_style),
+            NewTextMessage(text_msg) => text_msg.view(&message_text_style),
+            UserMessage(user) => Content::from(user).view(&message_text_style),
+            TextMessageReply(reply_to_id, text_msg) => {
                 if let Some(reply_quote) = Self::reply_quote(entries, reply_to_id) {
                     let quote_row = Row::new().push(text(reply_quote).color(COLOR_GREEN));
                     message_content_column = message_content_column.push(quote_row);
                 };
-                text(message_text).style(message_text_style).size(18).into()
+                text_msg.view(&message_text_style)
             }
-            PositionMessage(lat, long) => button(text(message_text))
-                .padding([1, 5])
-                .style(button_chip_style)
-                .on_press(ShowLocation(*lat, *long))
-                .into(),
-            EmojiReply(_, _) => text(message_text).into(),
+            PositionMessage(lat, long) => Self::location_content(lat, long)
+                .view(&message_text_style)
+                .padding([1, 5]),
+            EmojiReply(_, _) => Row::new().push(text(Content::default().to_string())),
         };
 
+        if !mine {
+            message_content_column =
+                self.top_row(message_content_column, short_name(nodes, self.from), long_name(nodes, self.from), emoji_picker, channel_id);
+        }
+
         // Create the row with message text and time and maybe an ACK tick mark
-        let mut text_and_time_row = Row::new()
-            .push(content)
+        let mut content_and_time_row = Row::new()
+            .push(content_view)
             .push(Space::new().width(10.0))
             .push(Self::time_to_text(self.time()))
             .align_y(Bottom);
 
         if self.acked() {
-            text_and_time_row = text_and_time_row.push(text("✓").size(14).color(COLOR_GREEN))
+            content_and_time_row = content_and_time_row.push(text("✓").size(14).color(COLOR_GREEN))
         };
 
         // Add the message text and time row
-        message_content_column = message_content_column.push(text_and_time_row);
+        message_content_column = message_content_column.push(content_and_time_row);
 
         let style = if mine {
             MY_MESSAGE_BUBBLE_STYLE
@@ -328,20 +310,18 @@ impl ChannelViewEntry {
             .into()
     }
 
-    fn user_text(user: &User) -> String {
-        format!(
-            "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
-            user.long_name,
-            user.short_name,
-            user.id,
-            user.hw_model().as_str_name()
-        )
+    pub fn lat_long_to_url(lat: f64, long: f64) -> String {
+        format!("https://maps.google.com/?q={:.7},{:.7}", lat, long)
     }
 
-    fn location_text(lat: &i32, long: &i32) -> String {
+    /// Convert a location tuple to a URL (String) that can be opened in a browser.
+    fn location_content(lat: &i32, long: &i32) -> Content {
         let latitude = 0.0000001 * *lat as f64;
         let longitude = 0.0000001 * *long as f64;
-        format!("📌 {:.2}, {:.2}", latitude, longitude)
+        Content::new().push(ContentChunk::Link(
+            format!("📌 {:.2}, {:.2}", latitude, longitude),
+            Self::lat_long_to_url(latitude, longitude),
+        ))
     }
 
     /// Add a row to the content column with the name of the source node
@@ -412,8 +392,7 @@ impl ChannelViewEntry {
     fn menu_bar<'a>(
         &'a self,
         name: &'a str,
-        message: String,
-        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        emoji_picker: &'a EmojiPicker,
         channel_id: &'a ChannelId,
     ) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_2 = |items| Menu::new(items).max_width(180.0).offset(15.0).spacing(5.0);
@@ -434,9 +413,9 @@ impl ChannelViewEntry {
             (button(Row::new().push(text("react")).push(Space::new().width(Fill)).push(text("▶"))).style(button_chip_style).width(Fill),
             menu_tpl_2(menu_items!(
             (picker_element)))),
-            (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
+            (menu_button("copy".into(), CopyToClipBoard(self.clone()))),
             (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
-            (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id))))),
+            (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(PrepareReply(self.message_id))))),
             (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
         );
 
@@ -451,10 +430,10 @@ impl ChannelViewEntry {
     }
 }
 
-fn menu_button(
+fn menu_button<'a>(
     label: String,
     message: Message,
-) -> button::Button<'static, Message, Theme, Renderer> {
+) -> button::Button<'a, Message, Theme, Renderer> {
     button(text(label))
         .padding([4, 8])
         .style(button_chip_style)
@@ -473,5 +452,19 @@ fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer>
 impl PartialEq<Self> for ChannelViewEntry {
     fn eq(&self, other: &Self) -> bool {
         self.rx_daytime == other.rx_daytime
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::channel_view_entry::ChannelViewEntry;
+
+    #[test]
+    fn test_location_url() {
+        let location = ChannelViewEntry::location_content(&50, &1);
+        assert_eq!(
+            location.to_string(),
+            "https://maps.google.com/?q=0.0000050,0.0000001"
+        );
     }
 }

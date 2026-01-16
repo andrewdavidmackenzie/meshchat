@@ -1,7 +1,9 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
 use crate::content::Content;
-use crate::styles::{button_chip_style, error_notification_style, info_notification_style};
+use crate::styles::{
+    button_chip_style, error_notification_style, info_notification_style, notification_text_style,
+};
 use iced::widget::container::Style;
 use iced::widget::{Column, Container, Row, button, text};
 use iced::{Element, Fill, Right, Task, Theme};
@@ -54,11 +56,15 @@ impl Notifications {
             ),
         );
 
-        Container::new(Column::new().push(summary_row).push(detail.view()))
-            .padding([6, 12])
-            .style(style)
-            .width(Fill)
-            .into()
+        Container::new(
+            Column::new()
+                .push(summary_row)
+                .push(detail.view(&notification_text_style)),
+        )
+        .padding([6, 12])
+        .style(style)
+        .width(Fill)
+        .into()
     }
 
     /// Add a notification to the list of notifications to display at the top of the screen.

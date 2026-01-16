@@ -23,7 +23,7 @@ use crate::device_view::DeviceViewMessage::{
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{
-    AddNodeAlias, AppError, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation,
+    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenUrl, RemoveNodeAlias,
     ToggleNodeFavourite,
 };
 use crate::View::DeviceList;
@@ -423,7 +423,11 @@ impl DeviceView {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let new_message = ChannelViewEntry::new(
-                            AlertMessage(String::from_utf8(data.payload.clone()).unwrap()),
+                            AlertMessage(
+                                String::from_utf8_lossy(&data.payload.clone())
+                                    .to_string()
+                                    .into(),
+                            ),
                             mesh_packet.from,
                             mesh_packet.id,
                         );
@@ -437,19 +441,25 @@ impl DeviceView {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                         let message = if data.reply_id == 0 {
-                            NewTextMessage(String::from_utf8(data.payload.clone()).unwrap())
+                            NewTextMessage(
+                                String::from_utf8_lossy(&data.payload.clone())
+                                    .to_string()
+                                    .into(),
+                            )
                         } else {
                             // Emoji reply to an earlier message
                             if data.emoji == 0 {
                                 // Text reply to an earlier message
                                 TextMessageReply(
                                     data.reply_id,
-                                    String::from_utf8(data.payload.clone()).unwrap(),
+                                    String::from_utf8_lossy(&data.payload.clone())
+                                        .to_string()
+                                        .into(),
                                 )
                             } else {
                                 EmojiReply(
                                     data.reply_id,
-                                    String::from_utf8(data.payload.clone()).unwrap(),
+                                    String::from_utf8_lossy(&data.payload.clone()).to_string(),
                                 )
                             }
                         };
@@ -999,9 +1009,12 @@ impl DeviceView {
         {
             node_row.push(
                 tooltip(
-                    button(text("📌"))
-                        .style(fav_button_style)
-                        .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
+                    button(text("📌")).style(fav_button_style).on_press(OpenUrl(
+                        ChannelViewEntry::lat_long_to_url(
+                            position.latitude_i().into(),
+                            position.longitude_i().into(),
+                        ),
+                    )),
                     "Show node position in maps",
                     tooltip::Position::Left,
                 )

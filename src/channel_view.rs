@@ -531,13 +531,13 @@ mod test {
 
         // create a set of messages with more than a second between them
         // message ids are not in order
-        let oldest_message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let oldest_message = ChannelViewEntry::new(NewTextMessage("Hello 1".into()), 1, 1);
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let middle_message = ChannelViewEntry::new(NewTextMessage("Hello 2".to_string()), 2, 1000);
+        let middle_message = ChannelViewEntry::new(NewTextMessage("Hello 2".into()), 2, 1000);
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let newest_message = ChannelViewEntry::new(NewTextMessage("Hello 3".to_string()), 1, 500);
+        let newest_message = ChannelViewEntry::new(NewTextMessage("Hello 3".into()), 1, 500);
 
         // Add them in order
         channel_view.new_message(oldest_message.clone(), &None);
@@ -562,7 +562,7 @@ mod test {
     #[test]
     fn test_unread_count() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".into()), 1, 1);
         channel_view.new_message(message.clone(), &None);
         assert_eq!(channel_view.unread_count(), 1);
     }
@@ -570,7 +570,7 @@ mod test {
     #[test]
     fn test_replying_valid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".into()), 1, 1);
         channel_view.new_message(message, &None);
 
         let _ = channel_view.update(PrepareReply(0));
@@ -581,7 +581,7 @@ mod test {
     #[test]
     fn test_replying_invalid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".into()), 1, 1);
         channel_view.new_message(message, &None);
 
         let _ = channel_view.update(PrepareReply(1));

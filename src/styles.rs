@@ -6,10 +6,10 @@ use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
-use iced::widget::{button, container, scrollable, text, text_input};
+use iced::widget::{button, scrollable, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 use iced_aw::menu;
-use iced_aw::style::colors::RED;
+use iced_aw::style::colors::{RED, WHITE};
 
 // Basic Colors
 pub const COLOR_RED: Color = Color::from_rgb(0.9, 0.2, 0.2);
@@ -342,7 +342,7 @@ const CONTAINER_BORDER_ACTIVE: Border = Border {
     color: CYAN,
 };
 
-pub fn container_style(_theme: &Theme) -> container::Style {
+pub fn container_style(_theme: &Theme) -> Style {
     Style {
         text_color: Some(Color::WHITE),
         background: Some(Color::TRANSPARENT.into()),
@@ -415,13 +415,15 @@ const DAY_SEPARATOR_BORDER: Border = Border {
 };
 
 pub fn message_text_style(_theme: &Theme) -> text::Style {
-    text::Style {
-        color: Some(Color::WHITE),
-    }
+    text::Style { color: Some(WHITE) }
 }
 
-pub fn alert_message_style(_theme: &Theme) -> text::Style {
+pub fn alert_text_style(_theme: &Theme) -> text::Style {
     text::Style { color: Some(RED) }
+}
+
+pub fn notification_text_style(_theme: &Theme) -> text::Style {
+    text::Style { color: Some(WHITE) }
 }
 
 pub const TIME_TEXT_COLOR: Color = Color::from_rgba(0.6, 0.6, 0.6, 1.0);
