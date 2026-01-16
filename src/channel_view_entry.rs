@@ -365,8 +365,7 @@ impl ChannelViewEntry {
             .color(text_color);
 
         let short_name_tooltip: Tooltip<Message> =
-            tooltip(short_name_text, text(long_name), tooltip::Position::Right)
-                .style(tooltip_style);
+            tooltip(short_name_text, text(long_name), tooltip::Position::Top).style(tooltip_style);
 
         top_row = top_row
             .push(self.menu_bar(short_name, message, emoji_picker, channel_id))
