@@ -5,7 +5,7 @@ use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, ConfigChange,
     ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation,
     OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification,
-    ShowLocation, ToggleNodeFavourite, ToggleShowPositionUpdates, WindowEvent,
+    ShowLocation, ToggleAutoReconnect, ToggleNodeFavourite, ToggleShowPositionUpdates, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -102,6 +102,7 @@ pub enum Message {
     OpenSettingsDialog,
     CloseSettingsDialog,
     ToggleShowPositionUpdates,
+    ToggleAutoReconnect,
     None,
 }
 
@@ -173,7 +174,9 @@ impl MeshChat {
 
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
-                if let Some(mac_address) = &self.config.device_mac_address {
+                if let Some(mac_address) = &self.config.device_mac_address
+                    && !self.config.disable_auto_reconnect
+                {
                     self.device_view.update(DeviceViewMessage::ConnectRequest(
                         *mac_address,
                         self.config.channel_id.clone(),
@@ -275,6 +278,10 @@ impl MeshChat {
                     .set_show_position_updates(self.config.show_position_updates);
                 save_config(&self.config)
             }
+            ToggleAutoReconnect => {
+                self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
+                save_config(&self.config)
+            }
         }
     }
 
@@ -324,7 +331,8 @@ impl MeshChat {
     fn settings<'a>(&self) -> Element<'a, Message> {
         let settings_column = Column::new()
             .padding(8)
-            .push(self.show_position_in_chat_setting());
+            .push(self.show_position_in_chat_setting())
+            .push(self.disable_auto_reconnect());
 
         let inner = Column::new()
             .spacing(8)
@@ -357,6 +365,17 @@ impl MeshChat {
 
     fn toggle_show_position_updates(_current_setting: bool) -> Message {
         ToggleShowPositionUpdates
+    }
+
+    fn disable_auto_reconnect<'a>(&self) -> Element<'a, Message> {
+        toggler(self.config.disable_auto_reconnect)
+            .label("Disable auto-reconnect at startup")
+            .on_toggle(Self::toggle_auto_reconnects)
+            .into()
+    }
+
+    fn toggle_auto_reconnects(_current_setting: bool) -> Message {
+        ToggleAutoReconnect
     }
 
     /// Generate a Settings button
