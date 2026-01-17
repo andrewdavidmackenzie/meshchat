@@ -5,7 +5,7 @@ use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, ConfigChange,
     ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation,
     OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification,
-    ShowLocation, ToggleNodeFavourite, WindowEvent,
+    ShowLocation, ToggleNodeFavourite, ToggleShowPositionUpdates, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -23,7 +23,8 @@ use btleplug::api::BDAddr;
 use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{
-    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, tooltip,
+    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, toggler,
+    tooltip,
 };
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
@@ -100,6 +101,7 @@ pub enum Message {
     Event(Event),
     OpenSettingsDialog,
     CloseSettingsDialog,
+    ToggleShowPositionUpdates,
     None,
 }
 
@@ -165,6 +167,8 @@ impl MeshChat {
             ConfigLoaded(config) => {
                 self.device_view
                     .set_history_length(config.history_length.clone());
+                self.device_view
+                    .set_show_position_updates(config.show_position_updates);
                 self.config = config;
 
                 // If the config requests to re-connect to a device, ask the device view to do so
@@ -265,6 +269,12 @@ impl MeshChat {
                 self.showing_settings = false;
                 Task::none()
             }
+            ToggleShowPositionUpdates => {
+                self.config.show_position_updates = !self.config.show_position_updates;
+                self.device_view
+                    .set_show_position_updates(self.config.show_position_updates);
+                save_config(&self.config)
+            }
         }
     }
 
@@ -304,30 +314,49 @@ impl MeshChat {
 
         // add the notification area and the inner view
         if self.showing_settings {
-            Self::modal(main_content_column, Self::settings(), CloseSettingsDialog)
+            Self::modal(main_content_column, self.settings(), CloseSettingsDialog)
         } else {
             main_content_column.into()
         }
     }
 
     /// Create the view for the settings
-    fn settings<'a>() -> Element<'a, Message> {
+    fn settings<'a>(&self) -> Element<'a, Message> {
+        let settings_column = Column::new()
+            .padding(8)
+            .push(self.show_position_in_chat_setting());
+
         let inner = Column::new()
+            .spacing(8)
+            .width(400)
             .push(
                 container(
                     text("Settings")
                         .size(18)
+                        .width(Fill)
                         .font(Font {
                             weight: Weight::Bold,
                             ..Default::default()
                         })
                         .align_x(Center),
                 )
+                .padding(12)
                 .style(picker_header_style)
                 .padding(4),
             )
-            .push(text("Settings"));
+            .push(settings_column);
         container(inner).style(tooltip_style).into()
+    }
+
+    fn show_position_in_chat_setting<'a>(&self) -> Element<'a, Message> {
+        toggler(self.config.show_position_updates)
+            .label("Show node position updates in chat")
+            .on_toggle(Self::toggle_show_position_updates)
+            .into()
+    }
+
+    fn toggle_show_position_updates(_current_setting: bool) -> Message {
+        ToggleShowPositionUpdates
     }
 
     /// Generate a Settings button
@@ -453,23 +482,23 @@ mod tests {
     fn show_settings() {
         let mut meshchat = test_helper::test_app();
         let _ = meshchat.update(OpenSettingsDialog);
-        assert_eq!(meshchat.showing_settings, true);
+        assert!(meshchat.showing_settings);
     }
 
     #[test]
     fn hide_settings() {
         let mut meshchat = test_helper::test_app();
         let _ = meshchat.update(OpenSettingsDialog);
-        assert_eq!(meshchat.showing_settings, true);
+        assert!(meshchat.showing_settings);
         let _ = meshchat.update(CloseSettingsDialog);
-        assert_eq!(meshchat.showing_settings, false);
+        assert!(!meshchat.showing_settings);
     }
 
     #[test]
     fn escape_hide_settings() {
         let mut meshchat = test_helper::test_app();
         let _ = meshchat.update(OpenSettingsDialog);
-        assert_eq!(meshchat.showing_settings, true);
+        assert!(meshchat.showing_settings);
 
         let key_event = Event::Keyboard(keyboard::Event::KeyPressed {
             key: Key::Named(key::Named::Escape),
@@ -481,7 +510,7 @@ mod tests {
             repeat: false,
         });
         let _ = meshchat.update(Message::Event(key_event));
-        assert_eq!(meshchat.showing_settings, false);
+        assert!(!meshchat.showing_settings);
     }
 
     #[test]
