@@ -22,21 +22,26 @@ pub enum HistoryLength {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub device_mac_address: Option<BDAddr>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_id: Option<ChannelId>,
-    #[serde(default)]
+    #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]
     pub fav_nodes: HashSet<u32>,
-    #[serde(default = "HashMap::new")]
+    #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
     pub aliases: HashMap<u32, String>, // node name aliases
-    #[serde(default = "HashMap::new")]
+    #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
     pub device_aliases: HashMap<BDAddr, String>, // node name aliases
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_length: Option<HistoryLength>,
     /// Whether node position updates sent are shown in the chat view or just update node position
     #[serde(default = "default_show_position")]
     pub show_position_updates: bool,
+    #[serde(default)]
+    pub disable_auto_reconnect: bool,
 }
 
-/// If the show_position_updates setting is missing in the config gile, then default to true so
+/// If the show_position_updates setting is missing in the config file, then default to true so
 /// they are shown.
 fn default_show_position() -> bool {
     true
@@ -253,5 +258,35 @@ mod tests {
             returned.history_length,
             Some(HistoryLength::Duration(Duration::from_secs(86_400)))
         );
+    }
+
+    #[tokio::test]
+    async fn auto_reconnect_default() {
+        let config = Config {
+            ..Default::default()
+        };
+
+        assert!(!config.disable_auto_reconnect);
+    }
+
+    #[tokio::test]
+    async fn auto_reconnect_deser() {
+        let config = Config {
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert!(!returned.disable_auto_reconnect);
     }
 }
