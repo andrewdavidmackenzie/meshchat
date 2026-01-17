@@ -259,4 +259,34 @@ mod tests {
             Some(HistoryLength::Duration(Duration::from_secs(86_400)))
         );
     }
+
+    #[tokio::test]
+    async fn auto_reconnect_default() {
+        let config = Config {
+            ..Default::default()
+        };
+
+        assert!(!config.disable_auto_reconnect);
+    }
+
+    #[tokio::test]
+    async fn auto_reconnect_deser() {
+        let config = Config {
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert!(!returned.disable_auto_reconnect);
+    }
 }

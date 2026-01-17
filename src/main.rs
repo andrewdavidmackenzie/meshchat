@@ -272,6 +272,7 @@ impl MeshChat {
                 self.showing_settings = false;
                 Task::none()
             }
+            // TODO unify these with ConfigChange event above
             ToggleShowPositionUpdates => {
                 self.config.show_position_updates = !self.config.show_position_updates;
                 self.device_view
