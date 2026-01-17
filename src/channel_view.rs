@@ -17,7 +17,7 @@ use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
     text_input_style, tooltip_style,
 };
-use crate::{Message, channel_view_entry::ChannelViewEntry, icons};
+use crate::{MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local};
 use iced::font::Style::Italic;
@@ -26,11 +26,10 @@ use iced::padding::right;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
-    Button, Column, Container, Row, Space, button, center, container, mouse_area, opaque, row,
-    scrollable, stack, text, text_input,
+    Button, Column, Container, Row, Space, button, container, row, scrollable, text, text_input,
 };
 use iced::widget::{Id, operation};
-use iced::{Center, Color, Element, Fill, Font, Padding, Pixels, Task};
+use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
 use meshtastic::protobufs::NodeInfo;
 use ringmap::RingMap;
 use std::collections::HashMap;
@@ -374,37 +373,7 @@ impl ChannelView {
             .style(tooltip_style)
             .width(400)
             .height(600);
-        Self::modal(content, picker, DeviceViewEvent(StopForwardingMessage))
-    }
-
-    /// Function to create a modal dialog in the middle of the screen
-    fn modal<'a, Message>(
-        base: impl Into<Element<'a, Message>>,
-        content: impl Into<Element<'a, Message>>,
-        on_blur: Message,
-    ) -> Element<'a, Message>
-    where
-        Message: Clone + 'a,
-    {
-        stack![
-            base.into(),
-            opaque(
-                mouse_area(center(opaque(content)).style(|_theme| {
-                    container::Style {
-                        background: Some(
-                            Color {
-                                a: 0.8,
-                                ..Color::BLACK
-                            }
-                            .into(),
-                        ),
-                        ..container::Style::default()
-                    }
-                }))
-                .on_press(on_blur)
-            )
-        ]
-        .into()
+        MeshChat::modal(content, picker, DeviceViewEvent(StopForwardingMessage))
     }
 
     /// Add a row that explains we are replying to a prior message

@@ -9,7 +9,7 @@ use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
-use crate::{Message, View};
+use crate::{MeshChat, Message, View};
 use btleplug::api::BDAddr;
 use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
@@ -143,7 +143,7 @@ impl DeviceListView {
             )
         }
 
-        header.into()
+        header.push(MeshChat::settings_button()).into()
     }
 
     pub fn view<'a>(
