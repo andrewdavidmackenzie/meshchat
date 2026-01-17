@@ -57,6 +57,6 @@ impl MeshChat {
             .channel_views
             .get_mut(&ChannelId::Channel(0))
             .unwrap();
-        channel_view.new_message(channel_view_entry, &None);
+        let _ = channel_view.new_message(channel_view_entry, &None);
     }
 }
