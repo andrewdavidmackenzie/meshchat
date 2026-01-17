@@ -31,6 +31,9 @@ pub struct Config {
     #[serde(default = "HashMap::new")]
     pub device_aliases: HashMap<BDAddr, String>, // node name aliases
     pub history_length: Option<HistoryLength>,
+    /// Whether node position updates sent are shown in the chat view or just update node position
+    #[serde(default = "bool::default", skip_serializing_if = "std::ops::Not::not")]
+    pub show_position_updates: bool,
 }
 
 // Private methods for async reading and writing of config files

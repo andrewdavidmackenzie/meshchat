@@ -105,6 +105,7 @@ pub struct DeviceView {
     alias: String,
     pub forwarding_message: Option<ChannelViewEntry>,
     history_length: Option<HistoryLength>,
+    show_position_updates: bool,
 }
 async fn empty() {}
 
@@ -128,6 +129,11 @@ impl DeviceView {
     /// Set how many/how long we will store messages for
     pub fn set_history_length(&mut self, history_length: Option<HistoryLength>) {
         self.history_length = history_length;
+    }
+
+    /// Set the devices setting whether it should show position updates in the chat view or not
+    pub fn set_show_position_updates(&mut self, show_position_updates: bool) {
+        self.show_position_updates = show_position_updates;
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
@@ -197,7 +203,8 @@ impl DeviceView {
         Task::none()
     }
 
-    /// Send a disconnect request to the device_subscription and handle errors
+    /// Send a SubscriberMessage to the device_subscription, if successful, then send `success_message`
+    /// and report any errors
     fn subscriber_send(
         &mut self,
         subscriber_message: SubscriberMessage,
@@ -464,21 +471,23 @@ impl DeviceView {
                     let position = Position::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     self.update_node_position(mesh_packet.from, &position);
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        if let Some(lat) = position.latitude_i
-                            && let Some(lon) = position.longitude_i
-                        {
-                            let new_message = ChannelViewEntry::new(
-                                PositionMessage(lat, lon),
-                                mesh_packet.from,
-                                mesh_packet.id,
-                            );
-                            channel_view.new_message(new_message, &self.history_length);
+                    if self.show_position_updates {
+                        if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                            if let Some(lat) = position.latitude_i
+                                && let Some(lon) = position.longitude_i
+                            {
+                                let new_message = ChannelViewEntry::new(
+                                    PositionMessage(lat, lon),
+                                    mesh_packet.from,
+                                    mesh_packet.id,
+                                );
+                                channel_view.new_message(new_message, &self.history_length);
+                            } else {
+                                eprintln!("No lat/lon for Position: {:?}", position);
+                            }
                         } else {
-                            eprintln!("No lat/lon for Position: {:?}", position);
+                            eprintln!("No channel for: {}", channel_id);
                         }
-                    } else {
-                        eprintln!("No channel for: {}", channel_id);
                     }
                 }
                 Ok(PortNum::TelemetryApp) => {
