@@ -1,10 +1,14 @@
 // Generated automatically by iced_fontello at build time.
 // Do not edit manually. Source: ../assets/fonts/icons.toml
-// d0a59281658de0a6a8792be5cae0c4116ea839df0870d4fac7a335040354dbe2
+// d2cb544f64bb87bdce4c06cd7f6d60b65c250358694d0597a944012c01431e91
 use iced::Font;
 use iced::widget::{Text, text};
 
 pub const FONT: &[u8] = include_bytes!("../assets/fonts/icons.ttf");
+
+pub fn cog<'a>() -> Text<'a> {
+    icon("\u{2699}")
+}
 
 pub fn send<'a>() -> Text<'a> {
     icon("\u{2709}")

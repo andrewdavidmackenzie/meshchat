@@ -2,10 +2,10 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, ConfigChange, ConfigLoaded,
-    CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation, OpenUrl,
-    RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification, ShowLocation, ToggleNodeFavourite,
-    WindowEvent,
+    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, ConfigChange,
+    ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation,
+    OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification,
+    ShowLocation, ToggleNodeFavourite, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -18,12 +18,15 @@ use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessa
 use crate::discovery::ble_discovery;
 use crate::linear::Linear;
 use crate::notification::{Notification, Notifications};
+use crate::styles::{button_chip_style, tooltip_style};
 use btleplug::api::BDAddr;
 use iced::keyboard::key;
-use iced::widget::{Column, Space, operation};
+use iced::widget::{
+    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, tooltip,
+};
 use iced::window::icon;
+use iced::{Color, Event, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
-use iced::{Event, Subscription, Task, clipboard, keyboard, window};
 use std::cmp::PartialEq;
 use std::time::Duration;
 
@@ -64,6 +67,7 @@ struct MeshChat {
     device_list_view: DeviceListView,
     device_view: DeviceView,
     notifications: Notifications,
+    showing_settings: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -93,6 +97,8 @@ pub enum Message {
     AddDeviceAlias(BDAddr, String),
     RemoveDeviceAlias(BDAddr),
     Event(Event),
+    OpenSettingsDialog,
+    CloseSettingsDialog,
     None,
 }
 
@@ -243,12 +249,21 @@ impl MeshChat {
                     ..
                 }) => {
                     // Exit any interactive modes underway
+                    self.showing_settings = false;
                     self.device_view.cancel_interactive();
                     self.device_list_view.stop_editing_alias();
                     Task::none()
                 }
                 _ => Task::none(),
             },
+            OpenSettingsDialog => {
+                self.showing_settings = true;
+                Task::none()
+            }
+            CloseSettingsDialog => {
+                self.showing_settings = false;
+                Task::none()
+            }
         }
     }
 
@@ -270,11 +285,11 @@ impl MeshChat {
         };
 
         // Create the stack of elements, starting with the header
-        let mut stack = Column::new().push(header);
+        let mut main_content_column = Column::new().push(header);
 
         // If busy of connecting or disconnecting, add a busy bar to the header
         if scanning || matches!(state, Connecting(_) | Disconnecting(_)) {
-            stack = stack.push(Space::new().width(Fill)).push(
+            main_content_column = main_content_column.push(Space::new().width(Fill)).push(
                 Linear::new()
                     .easing(easing::emphasized_accelerate())
                     .cycle_duration(Duration::from_secs_f32(2.0))
@@ -282,8 +297,60 @@ impl MeshChat {
             );
         }
 
+        main_content_column = main_content_column
+            .push(self.notifications.view())
+            .push(inner);
+
         // add the notification area and the inner view
-        stack.push(self.notifications.view()).push(inner).into()
+        if self.showing_settings {
+            let settings = container(text("Settings")).style(tooltip_style);
+            Self::modal(main_content_column, settings, CloseSettingsDialog)
+        } else {
+            main_content_column.into()
+        }
+    }
+
+    /// Generate a Settings button
+    pub fn settings_button<'a>() -> Element<'a, Message> {
+        tooltip(
+            button(icons::cog())
+                .style(button_chip_style)
+                .on_press(OpenSettingsDialog),
+            "Open Settings Dialog",
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .into()
+    }
+
+    /// Function to create a modal dialog in the middle of the screen
+    pub fn modal<'a, Message>(
+        base: impl Into<Element<'a, Message>>,
+        content: impl Into<Element<'a, Message>>,
+        on_blur: Message,
+    ) -> Element<'a, Message>
+    where
+        Message: Clone + 'a,
+    {
+        stack![
+            base.into(),
+            opaque(
+                mouse_area(center(opaque(content)).style(|_theme| {
+                    container::Style {
+                        background: Some(
+                            Color {
+                                a: 0.8,
+                                ..Color::BLACK
+                            }
+                            .into(),
+                        ),
+                        ..container::Style::default()
+                    }
+                }))
+                .on_press(on_blur)
+            )
+        ]
+        .into()
     }
 
     /// Convert a location tuple to a URL that can be opened in a browser.

@@ -34,7 +34,7 @@ use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
     scrollbar_style, text_input_style, tooltip_style,
 };
-use crate::{Message, View, icons};
+use crate::{MeshChat, Message, View, icons};
 use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -611,7 +611,7 @@ impl DeviceView {
             )
         }
 
-        header.into()
+        header.push(MeshChat::settings_button()).into()
     }
 
     /// Return an element that displays the battery level of the connected device
