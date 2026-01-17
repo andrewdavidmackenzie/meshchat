@@ -425,6 +425,8 @@ impl MeshChat {
 mod tests {
     use super::*;
     use crate::channel_view_entry::Payload::NewTextMessage;
+    use iced::keyboard::key::NativeCode::MacOS;
+    use iced::keyboard::{Key, Location};
 
     #[test]
     fn test_location_url() {
@@ -460,6 +462,25 @@ mod tests {
         let _ = meshchat.update(OpenSettingsDialog);
         assert_eq!(meshchat.showing_settings, true);
         let _ = meshchat.update(CloseSettingsDialog);
+        assert_eq!(meshchat.showing_settings, false);
+    }
+
+    #[test]
+    fn escape_hide_settings() {
+        let mut meshchat = test_helper::test_app();
+        let _ = meshchat.update(OpenSettingsDialog);
+        assert_eq!(meshchat.showing_settings, true);
+
+        let key_event = Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Named(key::Named::Escape),
+            modified_key: Key::Unidentified,
+            physical_key: key::Physical::Unidentified(MacOS(0)),
+            location: Location::Standard,
+            modifiers: Default::default(),
+            text: None,
+            repeat: false,
+        });
+        let _ = meshchat.update(Message::Event(key_event));
         assert_eq!(meshchat.showing_settings, false);
     }
 
