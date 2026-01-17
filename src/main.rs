@@ -18,14 +18,15 @@ use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessa
 use crate::discovery::ble_discovery;
 use crate::linear::Linear;
 use crate::notification::{Notification, Notifications};
-use crate::styles::{button_chip_style, tooltip_style};
+use crate::styles::{button_chip_style, picker_header_style, tooltip_style};
 use btleplug::api::BDAddr;
+use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{
     Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, tooltip,
 };
 use iced::window::icon;
-use iced::{Color, Event, Subscription, Task, clipboard, keyboard, window};
+use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use std::cmp::PartialEq;
 use std::time::Duration;
@@ -303,11 +304,30 @@ impl MeshChat {
 
         // add the notification area and the inner view
         if self.showing_settings {
-            let settings = container(text("Settings")).style(tooltip_style);
-            Self::modal(main_content_column, settings, CloseSettingsDialog)
+            Self::modal(main_content_column, Self::settings(), CloseSettingsDialog)
         } else {
             main_content_column.into()
         }
+    }
+
+    /// Create the view for the settings
+    fn settings<'a>() -> Element<'a, Message> {
+        let inner = Column::new()
+            .push(
+                container(
+                    text("Settings")
+                        .size(18)
+                        .font(Font {
+                            weight: Weight::Bold,
+                            ..Default::default()
+                        })
+                        .align_x(Center),
+                )
+                .style(picker_header_style)
+                .padding(4),
+            )
+            .push(text("Settings"));
+        container(inner).style(tooltip_style).into()
     }
 
     /// Generate a Settings button
@@ -425,6 +445,22 @@ mod tests {
         let mut meshchat = test_helper::test_app();
         let _ = meshchat.update(Navigation(View::Device(None)));
         assert_eq!(meshchat.current_view, View::Device(None));
+    }
+
+    #[test]
+    fn show_settings() {
+        let mut meshchat = test_helper::test_app();
+        let _ = meshchat.update(OpenSettingsDialog);
+        assert_eq!(meshchat.showing_settings, true);
+    }
+
+    #[test]
+    fn hide_settings() {
+        let mut meshchat = test_helper::test_app();
+        let _ = meshchat.update(OpenSettingsDialog);
+        assert_eq!(meshchat.showing_settings, true);
+        let _ = meshchat.update(CloseSettingsDialog);
+        assert_eq!(meshchat.showing_settings, false);
     }
 
     #[test]
