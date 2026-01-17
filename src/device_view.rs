@@ -72,7 +72,7 @@ pub enum DeviceViewMessage {
     DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
-    ChannelMsg(ChannelViewMessage),
+    ChannelMsg(ChannelId, ChannelViewMessage),
     SendTextMessage(String, ChannelId, Option<u32>), // optional reply to message id
     SendEmojiReplyMessage(u32, String, ChannelId),   // optional reply to message id
     SendPositionMessage(ChannelId),
@@ -179,10 +179,8 @@ impl DeviceView {
             SubscriptionMessage(subscription_event) => {
                 return self.process_subscription_event(subscription_event);
             }
-            ChannelMsg(msg) => {
-                if let Some(channel_id) = &self.viewing_channel
-                    && let Some(channel_view) = self.channel_views.get_mut(channel_id)
-                {
+            ChannelMsg(channel_id, msg) => {
+                if let Some(channel_view) = self.channel_views.get_mut(&channel_id) {
                     return channel_view.update(msg);
                 }
             }

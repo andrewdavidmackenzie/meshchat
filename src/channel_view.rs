@@ -44,7 +44,7 @@ pub enum ChannelViewMessage {
     SendMessage(Option<u32>), // optional message id if we are replying to that message
     PrepareReply(u32),        // entry_id
     CancelPrepareReply,
-    MessageSeen(ChannelId, u32),
+    MessageSeen(u32),
     PickChannel(Option<ChannelId>),
     ReplyWithEmoji(u32, String, ChannelId), // Send an emoji reply
     EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
@@ -189,7 +189,7 @@ impl ChannelView {
                 self.cancel_interactive();
                 Task::none()
             }
-            MessageSeen(_, message_id) => {
+            MessageSeen(message_id) => {
                 if let Some(channel_view_entry) = self.entries.get_mut(&message_id) {
                     channel_view_entry.seen = true;
                 }
@@ -306,7 +306,10 @@ impl ChannelView {
         let share_meshchat_button =
             button(row([text("Share MeshChat ").into(), icons::share().into()]))
                 .style(button_chip_style)
-                .on_press(DeviceViewEvent(ChannelMsg(ShareMeshChat)));
+                .on_press(DeviceViewEvent(ChannelMsg(
+                    self.channel_id.clone(),
+                    ShareMeshChat,
+                )));
 
         let channel_buttons = Row::new()
             .padding([2, 0])
@@ -412,7 +415,10 @@ impl ChannelView {
     ) -> Column<'a, Message> {
         if let Some(original_text) = ChannelViewEntry::reply_quote(&self.entries, entry_id) {
             let cancel_reply_button: Button<Message> = button(text("⨂").size(16))
-                .on_press(DeviceViewEvent(ChannelMsg(CancelPrepareReply)))
+                .on_press(DeviceViewEvent(ChannelMsg(
+                    self.channel_id.clone(),
+                    CancelPrepareReply,
+                )))
                 .style(button_chip_style)
                 .padding(0);
 
@@ -478,7 +484,7 @@ impl ChannelView {
             .into()
     }
 
-    fn input_box(&self) -> Element<'static, Message> {
+    fn input_box(&'_ self) -> Element<'_, Message> {
         let mut send_button = button(icons::send().size(18))
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
@@ -486,10 +492,14 @@ impl ChannelView {
             .style(button_chip_style)
             .padding(Padding::from([6, 6]));
         if !self.message.is_empty() {
-            send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(SendMessage(
-                self.preparing_reply,
-            ))));
-            clear_button = clear_button.on_press(DeviceViewEvent(ChannelMsg(ClearMessage)));
+            send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(
+                self.channel_id.clone(),
+                SendMessage(self.preparing_reply),
+            )));
+            clear_button = clear_button.on_press(DeviceViewEvent(ChannelMsg(
+                self.channel_id.clone(),
+                ClearMessage,
+            )));
         }
 
         Row::new()
@@ -498,10 +508,13 @@ impl ChannelView {
                 text_input("Type your message here", &self.message)
                     .style(text_input_style)
                     .id(Id::new(MESSAGE_INPUT_ID))
-                    .on_input(|s| DeviceViewEvent(ChannelMsg(MessageInput(s))))
-                    .on_submit(DeviceViewEvent(ChannelMsg(SendMessage(
-                        self.preparing_reply,
-                    ))))
+                    .on_input(|s| {
+                        DeviceViewEvent(ChannelMsg(self.channel_id.clone(), MessageInput(s)))
+                    })
+                    .on_submit(DeviceViewEvent(ChannelMsg(
+                        self.channel_id.clone(),
+                        SendMessage(self.preparing_reply),
+                    )))
                     .padding([6, 6])
                     .icon(Icon {
                         font: Font::with_name("icons"),

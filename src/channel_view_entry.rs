@@ -361,7 +361,7 @@ impl ChannelViewEntry {
 
         sensor(message_column)
             .on_show(|_| {
-                DeviceViewEvent(ChannelMsg(MessageSeen(channel_id.clone(), self.message_id)))
+                DeviceViewEvent(ChannelMsg(channel_id.clone(), MessageSeen(self.message_id)))
             })
             .into()
     }
@@ -464,9 +464,10 @@ impl ChannelViewEntry {
         let picker_element = emoji_picker
             .view(move |emoji| ReplyWithEmoji(message_id, emoji, channel_id.clone()))
             .map(move |picker_msg| {
-                DeviceViewEvent(ChannelMsg(ChannelViewMessage::EmojiPickerMsg(Box::new(
-                    picker_msg,
-                ))))
+                DeviceViewEvent(ChannelMsg(
+                    channel_id.clone(),
+                    ChannelViewMessage::EmojiPickerMsg(Box::new(picker_msg)),
+                ))
             });
 
         #[rustfmt::skip]
@@ -476,7 +477,7 @@ impl ChannelViewEntry {
             (picker_element)))),
             (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
             (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
-            (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(ChannelViewMessage::PrepareReply(self.message_id))))),
+            (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(channel_id.clone(), ChannelViewMessage::PrepareReply(self.message_id))))),
             (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
         );
 
