@@ -433,7 +433,7 @@ impl DeviceView {
                             mesh_packet.id,
                         );
 
-                        channel_view.new_message(new_message, &self.history_length);
+                        return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("No channel for packet");
                     }
@@ -462,7 +462,7 @@ impl DeviceView {
                         let new_message =
                             ChannelViewEntry::new(message, mesh_packet.from, mesh_packet.id);
 
-                        channel_view.new_message(new_message, &self.history_length);
+                        return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("No channel for packet");
                     }
@@ -481,7 +481,7 @@ impl DeviceView {
                                     mesh_packet.from,
                                     mesh_packet.id,
                                 );
-                                channel_view.new_message(new_message, &self.history_length);
+                                return channel_view.new_message(new_message, &self.history_length);
                             } else {
                                 eprintln!("No lat/lon for Position: {:?}", position);
                             }
@@ -509,7 +509,7 @@ impl DeviceView {
                             mesh_packet.from,
                             mesh_packet.id,
                         );
-                        channel_view.new_message(new_message, &self.history_length);
+                        return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("NodeInfoApp: No channel for: {}", user.long_name);
                     }
@@ -661,6 +661,7 @@ impl DeviceView {
                 self.my_info,
                 self,
                 config,
+                self.show_position_updates,
             );
         }
 

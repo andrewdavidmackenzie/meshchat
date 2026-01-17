@@ -23,6 +23,7 @@ use chrono::{Datelike, Local};
 use iced::font::Style::Italic;
 use iced::font::Weight;
 use iced::padding::right;
+use iced::widget::operation::RelativeOffset;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
@@ -35,6 +36,7 @@ use ringmap::RingMap;
 use std::collections::HashMap;
 
 const MESSAGE_INPUT_ID: &str = "message_input";
+const CHANNEL_VIEW_SCROLLABLE: &str = "channel_view_scrollable";
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -112,7 +114,9 @@ impl ChannelView {
         &mut self,
         new_message: ChannelViewEntry,
         history_length: &Option<HistoryLength>,
-    ) {
+    ) -> Task<Message> {
+        let mine = new_message.from() == self.my_node_num;
+
         match &new_message.payload() {
             AlertMessage(_)
             | NewTextMessage(_)
@@ -134,6 +138,13 @@ impl ChannelView {
                 }
             }
         };
+
+        if mine {
+            // scroll to the end of messages to see the message I just sent
+            operation::snap_to(Id::from(CHANNEL_VIEW_SCROLLABLE), RelativeOffset::END)
+        } else {
+            Task::none()
+        }
     }
 
     /// Return the number of unread messages in the channel
@@ -231,8 +242,14 @@ impl ChannelView {
         enable_my_info: bool,
         device_view: &'a DeviceView,
         config: &'a Config,
+        show_position_updates: bool,
     ) -> Element<'a, Message> {
-        let channel_view_content = self.channel_view(nodes, enable_position, enable_my_info);
+        let channel_view_content = self.channel_view(
+            nodes,
+            enable_position,
+            enable_my_info,
+            show_position_updates,
+        );
 
         if device_view.forwarding_message.is_some() {
             self.channel_picker(channel_view_content, device_view, config)
@@ -246,6 +263,7 @@ impl ChannelView {
         nodes: &'a HashMap<u32, NodeInfo>,
         enable_position: bool,
         enable_my_info: bool,
+        show_position_updates: bool,
     ) -> Element<'a, Message> {
         let mut channel_view_content = Column::new().padding(right(10));
 
@@ -256,6 +274,11 @@ impl ChannelView {
 
             // Add a view to the column for each of the entries in this Channel
             for entry in self.entries.values() {
+                // Hide any previously received position updates in the view if config is set to do so
+                if matches!(entry.payload(), PositionMessage(..)) && !show_position_updates {
+                    continue;
+                }
+
                 let message_day = entry.time().day();
 
                 // Add a day separator when the day of an entry changes
@@ -280,6 +303,7 @@ impl ChannelView {
                     let scrollbar = Scrollbar::new().width(10.0);
                     scrollable::Direction::Vertical(scrollbar)
                 })
+                .id(Id::new(CHANNEL_VIEW_SCROLLABLE))
                 .style(scrollbar_style)
                 .width(Fill)
                 .height(Fill)
@@ -528,9 +552,9 @@ mod test {
         let newest_message = ChannelViewEntry::new(NewTextMessage("Hello 3".to_string()), 1, 500);
 
         // Add them in order
-        channel_view.new_message(oldest_message.clone(), &None);
-        channel_view.new_message(middle_message.clone(), &None);
-        channel_view.new_message(newest_message.clone(), &None);
+        let _ = channel_view.new_message(oldest_message.clone(), &None);
+        let _ = channel_view.new_message(middle_message.clone(), &None);
+        let _ = channel_view.new_message(newest_message.clone(), &None);
 
         assert_eq!(channel_view.unread_count(), 3);
 
@@ -551,7 +575,7 @@ mod test {
     fn test_unread_count() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
-        channel_view.new_message(message.clone(), &None);
+        let _ = channel_view.new_message(message.clone(), &None);
         assert_eq!(channel_view.unread_count(), 1);
     }
 
@@ -559,7 +583,7 @@ mod test {
     fn test_replying_valid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
-        channel_view.new_message(message, &None);
+        let _ = channel_view.new_message(message, &None);
 
         let _ = channel_view.update(PrepareReply(0));
 
@@ -570,7 +594,7 @@ mod test {
     fn test_replying_invalid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
-        channel_view.new_message(message, &None);
+        let _ = channel_view.new_message(message, &None);
 
         let _ = channel_view.update(PrepareReply(1));
 

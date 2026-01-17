@@ -32,8 +32,14 @@ pub struct Config {
     pub device_aliases: HashMap<BDAddr, String>, // node name aliases
     pub history_length: Option<HistoryLength>,
     /// Whether node position updates sent are shown in the chat view or just update node position
-    #[serde(default = "bool::default", skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default = "default_show_position")]
     pub show_position_updates: bool,
+}
+
+/// If the show_position_updates setting is missing in the config gile, then default to true so
+/// they are shown.
+fn default_show_position() -> bool {
+    true
 }
 
 // Private methods for async reading and writing of config files
