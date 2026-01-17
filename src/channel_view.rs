@@ -29,10 +29,13 @@ use iced::widget::{
     Button, Column, Container, Row, Space, button, center, container, mouse_area, opaque, row,
     scrollable, stack, text, text_input,
 };
+use iced::widget::{Id, operation};
 use iced::{Center, Color, Element, Fill, Font, Padding, Pixels, Task};
 use meshtastic::protobufs::NodeInfo;
 use ringmap::RingMap;
 use std::collections::HashMap;
+
+const MESSAGE_INPUT_ID: &str = "message_input";
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -210,11 +213,13 @@ impl ChannelView {
                 }
             }
             ShareMeshChat => {
+                // Insert the pre-prepared sharing message text to the message text_input
                 self.message = String::from(
                     "I am using the MeshChat app. Its available for macOS/Windows/Linux from: \
-                https://github.com/andrewdavidmackenzie/meshchat/releases/latest",
+                https://github.com/andrewdavidmackenzie/meshchat/releases/latest ",
                 );
-                Task::none()
+                // and shift the focus to it in case the user wants to add to it or edit it
+                operation::focus(Id::new(MESSAGE_INPUT_ID))
             }
         }
     }
@@ -492,6 +497,7 @@ impl ChannelView {
             .push(
                 text_input("Type your message here", &self.message)
                     .style(text_input_style)
+                    .id(Id::new(MESSAGE_INPUT_ID))
                     .on_input(|s| DeviceViewEvent(ChannelMsg(MessageInput(s))))
                     .on_submit(DeviceViewEvent(ChannelMsg(SendMessage(
                         self.preparing_reply,
