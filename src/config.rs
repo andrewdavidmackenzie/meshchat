@@ -1,8 +1,14 @@
 use crate::Message;
+use crate::Message::{
+    HistoryLengthSelected, ToggleAutoReconnect, ToggleShowPositionUpdates, ToggleShowUserUpdates,
+};
 use crate::channel_id::ChannelId;
+use crate::styles::{picker_header_style, tooltip_style};
 use btleplug::api::BDAddr;
 use directories::ProjectDirs;
-use iced::Task;
+use iced::font::Weight;
+use iced::widget::{Column, container, pick_list, text, toggler};
+use iced::{Center, Element, Fill, Font, Task};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -83,6 +89,105 @@ pub struct Config {
     pub disable_auto_reconnect: bool,
 }
 
+impl Config {
+    /// Use `save_config` to save the config to disk from the UI
+    pub fn save_config(&self) -> Task<Message> {
+        if let Some(proj_dirs) = ProjectDirs::from("net", "Mackenzie Serres", "meshchat") {
+            let config_path = proj_dirs.config_dir().join("config.toml");
+
+            Task::perform(save(config_path.clone(), self.clone()), {
+                move |result| match result {
+                    Ok(_) => Message::None,
+                    Err(e) => Message::AppError(
+                        format!(
+                            "Error saving config file: '{}'",
+                            config_path.to_string_lossy()
+                        ),
+                        e.to_string(),
+                    ),
+                }
+            })
+        } else {
+            Task::none()
+        }
+    }
+
+    /// Create the view for the settings
+    pub fn view<'a>(&self) -> Element<'a, Message> {
+        let settings_column = Column::new()
+            .padding(8)
+            .spacing(8)
+            .push(self.show_position_in_chat_setting())
+            .push(self.disable_auto_reconnect())
+            .push(self.show_user_updates())
+            .push(self.history_length());
+
+        let inner = Column::new()
+            .spacing(8)
+            .width(400)
+            .push(
+                container(
+                    text("Settings")
+                        .size(18)
+                        .width(Fill)
+                        .font(Font {
+                            weight: Weight::Bold,
+                            ..Default::default()
+                        })
+                        .align_x(Center),
+                )
+                .padding(12)
+                .style(picker_header_style)
+                .padding(4),
+            )
+            .push(settings_column);
+        container(inner).style(tooltip_style).into()
+    }
+
+    fn show_position_in_chat_setting<'a>(&self) -> Element<'a, Message> {
+        toggler(self.show_position_updates)
+            .label("Show node position updates in chat")
+            .on_toggle(Self::toggle_show_position_updates)
+            .into()
+    }
+
+    fn toggle_show_position_updates(_current_setting: bool) -> Message {
+        ToggleShowPositionUpdates
+    }
+
+    fn show_user_updates<'a>(&self) -> Element<'a, Message> {
+        toggler(self.show_user_updates)
+            .label("Show node User info shares in chat")
+            .on_toggle(Self::toggle_show_user_updates)
+            .into()
+    }
+
+    fn toggle_show_user_updates(_current_setting: bool) -> Message {
+        ToggleShowUserUpdates
+    }
+
+    /// Settings view to modify the number of messages kept in memory for each channel.
+    fn history_length<'a>(&self) -> Element<'a, Message> {
+        pick_list(
+            HistoryLength::ALL,
+            Some(self.history_length.clone()),
+            HistoryLengthSelected,
+        )
+        .into()
+    }
+
+    fn disable_auto_reconnect<'a>(&self) -> Element<'a, Message> {
+        toggler(self.disable_auto_reconnect)
+            .label("Disable auto-reconnect at startup")
+            .on_toggle(Self::toggle_auto_reconnects)
+            .into()
+    }
+
+    fn toggle_auto_reconnects(_current_setting: bool) -> Message {
+        ToggleAutoReconnect
+    }
+}
+
 /// If the show_position_updates setting is missing in the config file, then default to true so
 /// they are shown.
 fn default_show_position() -> bool {
@@ -115,28 +220,6 @@ async fn create(config_path: PathBuf) -> io::Result<()> {
         .await?;
     let config_file = File::create(&config_path).await?;
     config_file.sync_all().await
-}
-
-/// Use `save_config` to save the config to disk from the UI
-pub fn save_config(config: &Config) -> Task<Message> {
-    if let Some(proj_dirs) = ProjectDirs::from("net", "Mackenzie Serres", "meshchat") {
-        let config_path = proj_dirs.config_dir().join("config.toml");
-
-        Task::perform(save(config_path.clone(), config.clone()), {
-            move |result| match result {
-                Ok(_) => Message::None,
-                Err(e) => Message::AppError(
-                    format!(
-                        "Error saving config file: '{}'",
-                        config_path.to_string_lossy()
-                    ),
-                    e.to_string(),
-                ),
-            }
-        })
-    } else {
-        Task::none()
-    }
 }
 
 /// Use `load_config` to load the config from disk from the UI
