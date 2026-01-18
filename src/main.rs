@@ -4,13 +4,13 @@
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
     ConfigChange, ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit,
-    Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias,
-    RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect, ToggleNodeFavourite,
-    ToggleShowPositionUpdates, ToggleShowUserUpdates, WindowEvent,
+    HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
+    RemoveNodeAlias, RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect,
+    ToggleNodeFavourite, ToggleShowPositionUpdates, ToggleShowUserUpdates, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
-use crate::config::{Config, load_config, save_config};
+use crate::config::{Config, HistoryLength, load_config};
 use crate::device_list_view::{DeviceListEvent, DeviceListView};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
 use crate::device_view::DeviceView;
@@ -24,8 +24,7 @@ use btleplug::api::BDAddr;
 use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{
-    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, toggler,
-    tooltip,
+    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, tooltip,
 };
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
@@ -109,6 +108,7 @@ pub enum Message {
     ToggleShowPositionUpdates,
     ToggleShowUserUpdates,
     ToggleAutoReconnect,
+    HistoryLengthSelected(HistoryLength),
     None,
 }
 
@@ -200,7 +200,7 @@ impl MeshChat {
                     }
                 }
                 // and save it asynchronously, so that we don't block the GUI thread
-                save_config(&self.config)
+                self.config.save_config()
             }
             RemoveNotification(id) => self.notifications.remove(id),
             ShowLocation(lat, long) => {
@@ -217,34 +217,34 @@ impl MeshChat {
                     let _ = self.config.fav_nodes.insert(node_id);
                 }
                 // and save the config asynchronously, so that we don't block the GUI thread
-                save_config(&self.config)
+                self.config.save_config()
             }
             CopyToClipBoard(string) => clipboard::write(string),
             AddNodeAlias(node_id, alias) => {
                 self.device_view.stop_editing_alias();
                 if !alias.is_empty() {
                     self.config.aliases.insert(node_id, alias);
-                    save_config(&self.config)
+                    self.config.save_config()
                 } else {
                     Task::none()
                 }
             }
             RemoveNodeAlias(node_id) => {
                 self.config.aliases.remove(&node_id);
-                save_config(&self.config)
+                self.config.save_config()
             }
             AddDeviceAlias(mac_address, alias) => {
                 self.device_list_view.stop_editing_alias();
                 if !alias.is_empty() {
                     self.config.device_aliases.insert(mac_address, alias);
-                    save_config(&self.config)
+                    self.config.save_config()
                 } else {
                     Task::none()
                 }
             }
             RemoveDeviceAlias(mac_address) => {
                 self.config.device_aliases.remove(&mac_address);
-                save_config(&self.config)
+                self.config.save_config()
             }
             Message::Event(event) => match event {
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -284,17 +284,21 @@ impl MeshChat {
                 self.config.show_position_updates = !self.config.show_position_updates;
                 self.device_view
                     .set_show_position_updates(self.config.show_position_updates);
-                save_config(&self.config)
+                self.config.save_config()
             }
             ToggleShowUserUpdates => {
                 self.config.show_user_updates = !self.config.show_user_updates;
                 self.device_view
                     .set_show_user_updates(self.config.show_user_updates);
-                save_config(&self.config)
+                self.config.save_config()
             }
             ToggleAutoReconnect => {
                 self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
-                save_config(&self.config)
+                self.config.save_config()
+            }
+            HistoryLengthSelected(length) => {
+                self.config.history_length = length.clone();
+                self.config.save_config()
             }
             ShowUserInfo(user) => {
                 self.show_user = Some(user);
@@ -343,7 +347,7 @@ impl MeshChat {
 
         // add the notification area and the inner view
         if self.showing_settings {
-            return Self::modal(main_content_column, self.settings(), CloseSettingsDialog);
+            return Self::modal(main_content_column, self.config.view(), CloseSettingsDialog);
         }
 
         if let Some(user) = &self.show_user {
@@ -351,36 +355,6 @@ impl MeshChat {
         }
 
         main_content_column.into()
-    }
-
-    /// Create the view for the settings
-    fn settings<'a>(&self) -> Element<'a, Message> {
-        let settings_column = Column::new()
-            .padding(8)
-            .push(self.show_position_in_chat_setting())
-            .push(self.disable_auto_reconnect())
-            .push(self.show_user_updates());
-
-        let inner = Column::new()
-            .spacing(8)
-            .width(400)
-            .push(
-                container(
-                    text("Settings")
-                        .size(18)
-                        .width(Fill)
-                        .font(Font {
-                            weight: Weight::Bold,
-                            ..Default::default()
-                        })
-                        .align_x(Center),
-                )
-                .padding(12)
-                .style(picker_header_style)
-                .padding(4),
-            )
-            .push(settings_column);
-        container(inner).style(tooltip_style).into()
     }
 
     /// Create a view for a User
@@ -401,7 +375,7 @@ impl MeshChat {
 
         let inner = Column::new()
             .spacing(8)
-            .width(400)
+            .width(420)
             .push(
                 container(
                     text("Node User Info")
@@ -419,39 +393,6 @@ impl MeshChat {
             )
             .push(settings_column);
         container(inner).style(tooltip_style).into()
-    }
-
-    fn show_position_in_chat_setting<'a>(&self) -> Element<'a, Message> {
-        toggler(self.config.show_position_updates)
-            .label("Show node position updates in chat")
-            .on_toggle(Self::toggle_show_position_updates)
-            .into()
-    }
-
-    fn toggle_show_position_updates(_current_setting: bool) -> Message {
-        ToggleShowPositionUpdates
-    }
-
-    fn show_user_updates<'a>(&self) -> Element<'a, Message> {
-        toggler(self.config.show_user_updates)
-            .label("Show node User info shares in chat")
-            .on_toggle(Self::toggle_show_user_updates)
-            .into()
-    }
-
-    fn toggle_show_user_updates(_current_setting: bool) -> Message {
-        ToggleShowUserUpdates
-    }
-
-    fn disable_auto_reconnect<'a>(&self) -> Element<'a, Message> {
-        toggler(self.config.disable_auto_reconnect)
-            .label("Disable auto-reconnect at startup")
-            .on_toggle(Self::toggle_auto_reconnects)
-            .into()
-    }
-
-    fn toggle_auto_reconnects(_current_setting: bool) -> Message {
-        ToggleAutoReconnect
     }
 
     /// Generate a Settings button
