@@ -24,7 +24,7 @@ use crate::device_view::DeviceViewMessage::{
 use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{
     AddNodeAlias, AppError, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation,
-    ToggleNodeFavourite,
+    ShowUserInfo, ToggleNodeFavourite,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -106,6 +106,7 @@ pub struct DeviceView {
     pub forwarding_message: Option<ChannelViewEntry>,
     history_length: Option<HistoryLength>,
     show_position_updates: bool,
+    show_user_updates: bool,
 }
 async fn empty() {}
 
@@ -134,6 +135,11 @@ impl DeviceView {
     /// Set the devices setting whether it should show position updates in the chat view or not
     pub fn set_show_position_updates(&mut self, show_position_updates: bool) {
         self.show_position_updates = show_position_updates;
+    }
+
+    /// Set the devices setting whether it should show user updates in the chat view or not
+    pub fn set_show_user_updates(&mut self, show_user_updates: bool) {
+        self.show_user_updates = show_user_updates;
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
@@ -503,15 +509,19 @@ impl DeviceView {
                 Ok(PortNum::NodeinfoApp) => {
                     let user = User::decode(&data.payload as &[u8]).unwrap();
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(
-                            UserMessage(user),
-                            mesh_packet.from,
-                            mesh_packet.id,
-                        );
-                        return channel_view.new_message(new_message, &self.history_length);
-                    } else {
-                        eprintln!("NodeInfoApp: No channel for: {}", user.long_name);
+                    self.update_node_user(mesh_packet.from, &user);
+
+                    if self.show_user_updates {
+                        if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                            let new_message = ChannelViewEntry::new(
+                                UserMessage(user),
+                                mesh_packet.from,
+                                mesh_packet.id,
+                            );
+                            return channel_view.new_message(new_message, &self.history_length);
+                        } else {
+                            eprintln!("NodeInfoApp: Node '{}' unknown", user.long_name);
+                        }
                     }
                 }
 
@@ -530,6 +540,13 @@ impl DeviceView {
     fn update_node_position(&mut self, from: u32, position: &Position) {
         if let Some(node) = self.nodes.get_mut(&from) {
             node.position = Some(*position);
+        }
+    }
+
+    /// If the Node is known already, then update its User with a NodeInfoApp User update
+    fn update_node_user(&mut self, from: u32, user: &User) {
+        if let Some(node) = self.nodes.get_mut(&from) {
+            node.user = Some(user.clone());
         }
     }
 
@@ -662,6 +679,7 @@ impl DeviceView {
                 self,
                 config,
                 self.show_position_updates,
+                self.show_user_updates,
             );
         }
 
@@ -1000,6 +1018,25 @@ impl DeviceView {
             .gap(6)
             .style(tooltip_style),
         );
+
+        // Add a button to show the User info of the node if present
+        node_row = if let Some(node) = self.nodes.get(&node_id)
+            && let Some(user) = &node.user
+        {
+            node_row.push(
+                tooltip(
+                    button(text("ⓘ"))
+                        .style(fav_button_style)
+                        .on_press(ShowUserInfo(user.clone())),
+                    "Show node's User info",
+                    tooltip::Position::Left,
+                )
+                .gap(6)
+                .style(tooltip_style),
+            )
+        } else {
+            node_row.push(Space::new().width(36))
+        };
 
         // Add a button to show the location of the node if it has one
         node_row = if let Some(node) = self.nodes.get(&node_id)

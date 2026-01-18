@@ -2,10 +2,11 @@
 //! meshtastic compatible radios connected to the host running it
 
 use crate::Message::{
-    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, ConfigChange,
-    ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit, Navigation,
-    OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification,
-    ShowLocation, ToggleAutoReconnect, ToggleNodeFavourite, ToggleShowPositionUpdates, WindowEvent,
+    AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
+    ConfigChange, ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit,
+    Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias,
+    RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect, ToggleNodeFavourite,
+    ToggleShowPositionUpdates, ToggleShowUserUpdates, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -29,6 +30,7 @@ use iced::widget::{
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
+use meshtastic::protobufs::User;
 use std::cmp::PartialEq;
 use std::time::Duration;
 
@@ -70,6 +72,7 @@ struct MeshChat {
     device_view: DeviceView,
     notifications: Notifications,
     showing_settings: bool,
+    show_user: Option<User>,
 }
 
 #[derive(Debug, Clone)]
@@ -88,6 +91,8 @@ pub enum Message {
     ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
     ShowLocation(i32, i32), // lat and long / 1_000_000
+    ShowUserInfo(User),
+    CloseShowUser,
     OpenUrl(String),
     AppNotification(String, String),
     AppError(String, String),
@@ -102,6 +107,7 @@ pub enum Message {
     OpenSettingsDialog,
     CloseSettingsDialog,
     ToggleShowPositionUpdates,
+    ToggleShowUserUpdates,
     ToggleAutoReconnect,
     None,
 }
@@ -258,6 +264,7 @@ impl MeshChat {
                 }) => {
                     // Exit any interactive modes underway
                     self.showing_settings = false;
+                    self.show_user = None;
                     self.device_view.cancel_interactive();
                     self.device_list_view.stop_editing_alias();
                     Task::none()
@@ -279,9 +286,23 @@ impl MeshChat {
                     .set_show_position_updates(self.config.show_position_updates);
                 save_config(&self.config)
             }
+            ToggleShowUserUpdates => {
+                self.config.show_user_updates = !self.config.show_user_updates;
+                self.device_view
+                    .set_show_user_updates(self.config.show_user_updates);
+                save_config(&self.config)
+            }
             ToggleAutoReconnect => {
                 self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
                 save_config(&self.config)
+            }
+            ShowUserInfo(user) => {
+                self.show_user = Some(user);
+                Task::none()
+            }
+            CloseShowUser => {
+                self.show_user = None;
+                Task::none()
             }
         }
     }
@@ -322,10 +343,14 @@ impl MeshChat {
 
         // add the notification area and the inner view
         if self.showing_settings {
-            Self::modal(main_content_column, self.settings(), CloseSettingsDialog)
-        } else {
-            main_content_column.into()
+            return Self::modal(main_content_column, self.settings(), CloseSettingsDialog);
         }
+
+        if let Some(user) = &self.show_user {
+            return Self::modal(main_content_column, self.user(user), CloseShowUser);
+        }
+
+        main_content_column.into()
     }
 
     /// Create the view for the settings
@@ -333,7 +358,8 @@ impl MeshChat {
         let settings_column = Column::new()
             .padding(8)
             .push(self.show_position_in_chat_setting())
-            .push(self.disable_auto_reconnect());
+            .push(self.disable_auto_reconnect())
+            .push(self.show_user_updates());
 
         let inner = Column::new()
             .spacing(8)
@@ -341,6 +367,44 @@ impl MeshChat {
             .push(
                 container(
                     text("Settings")
+                        .size(18)
+                        .width(Fill)
+                        .font(Font {
+                            weight: Weight::Bold,
+                            ..Default::default()
+                        })
+                        .align_x(Center),
+                )
+                .padding(12)
+                .style(picker_header_style)
+                .padding(4),
+            )
+            .push(settings_column);
+        container(inner).style(tooltip_style).into()
+    }
+
+    /// Create a view for a User
+    fn user<'a>(&self, user: &User) -> Element<'a, Message> {
+        let settings_column = Column::new()
+            .padding(8)
+            .push(text(format!("ID: {}", user.id)))
+            .push(text(format!("Long Name: {}", user.long_name)))
+            .push(text(format!("Short Name: {}", user.short_name)))
+            .push(text(format!(
+                "Hardware Model: {}",
+                user.hw_model().as_str_name()
+            )))
+            .push(text(format!("Licensed: {}", user.is_licensed)))
+            .push(text(format!("Role: {}", user.role().as_str_name())))
+            .push(text(format!("Public Key: {:X?}", user.public_key)))
+            .push(text(format!("Unmessageable: {}", user.is_unmessagable())));
+
+        let inner = Column::new()
+            .spacing(8)
+            .width(400)
+            .push(
+                container(
+                    text("Node User Info")
                         .size(18)
                         .width(Fill)
                         .font(Font {
@@ -366,6 +430,17 @@ impl MeshChat {
 
     fn toggle_show_position_updates(_current_setting: bool) -> Message {
         ToggleShowPositionUpdates
+    }
+
+    fn show_user_updates<'a>(&self) -> Element<'a, Message> {
+        toggler(self.config.show_user_updates)
+            .label("Show node User info shares in chat")
+            .on_toggle(Self::toggle_show_user_updates)
+            .into()
+    }
+
+    fn toggle_show_user_updates(_current_setting: bool) -> Message {
+        ToggleShowUserUpdates
     }
 
     fn disable_auto_reconnect<'a>(&self) -> Element<'a, Message> {
