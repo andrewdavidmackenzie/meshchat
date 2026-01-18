@@ -104,7 +104,7 @@ pub struct DeviceView {
     editing_alias: Option<u32>,
     alias: String,
     pub forwarding_message: Option<ChannelViewEntry>,
-    history_length: Option<HistoryLength>,
+    history_length: HistoryLength,
     show_position_updates: bool,
     show_user_updates: bool,
 }
@@ -128,7 +128,7 @@ impl DeviceView {
     }
 
     /// Set how many/how long we will store messages for
-    pub fn set_history_length(&mut self, history_length: Option<HistoryLength>) {
+    pub fn set_history_length(&mut self, history_length: HistoryLength) {
         self.history_length = history_length;
     }
 

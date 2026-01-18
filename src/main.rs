@@ -4,13 +4,13 @@
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
     ConfigChange, ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit,
-    Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias,
-    RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect, ToggleNodeFavourite,
-    ToggleShowPositionUpdates, ToggleShowUserUpdates, WindowEvent,
+    HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
+    RemoveNodeAlias, RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect,
+    ToggleNodeFavourite, ToggleShowPositionUpdates, ToggleShowUserUpdates, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
-use crate::config::{Config, load_config, save_config};
+use crate::config::{Config, HistoryLength, load_config, save_config};
 use crate::device_list_view::{DeviceListEvent, DeviceListView};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
 use crate::device_view::DeviceView;
@@ -24,8 +24,8 @@ use btleplug::api::BDAddr;
 use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{
-    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, toggler,
-    tooltip,
+    Column, Space, button, center, container, mouse_area, opaque, operation, pick_list, stack,
+    text, toggler, tooltip,
 };
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
@@ -109,6 +109,7 @@ pub enum Message {
     ToggleShowPositionUpdates,
     ToggleShowUserUpdates,
     ToggleAutoReconnect,
+    HistoryLengthSelected(HistoryLength),
     None,
 }
 
@@ -296,6 +297,10 @@ impl MeshChat {
                 self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
                 save_config(&self.config)
             }
+            HistoryLengthSelected(length) => {
+                self.config.history_length = length.clone();
+                save_config(&self.config)
+            }
             ShowUserInfo(user) => {
                 self.show_user = Some(user);
                 Task::none()
@@ -357,9 +362,11 @@ impl MeshChat {
     fn settings<'a>(&self) -> Element<'a, Message> {
         let settings_column = Column::new()
             .padding(8)
+            .spacing(8)
             .push(self.show_position_in_chat_setting())
             .push(self.disable_auto_reconnect())
-            .push(self.show_user_updates());
+            .push(self.show_user_updates())
+            .push(self.history_length());
 
         let inner = Column::new()
             .spacing(8)
@@ -401,7 +408,7 @@ impl MeshChat {
 
         let inner = Column::new()
             .spacing(8)
-            .width(400)
+            .width(420)
             .push(
                 container(
                     text("Node User Info")
@@ -441,6 +448,16 @@ impl MeshChat {
 
     fn toggle_show_user_updates(_current_setting: bool) -> Message {
         ToggleShowUserUpdates
+    }
+
+    /// Settings view to modify the number of messages kept in memory for each channel.
+    fn history_length<'a>(&self) -> Element<'a, Message> {
+        pick_list(
+            HistoryLength::ALL,
+            Some(self.config.history_length.clone()),
+            HistoryLengthSelected,
+        )
+        .into()
     }
 
     fn disable_auto_reconnect<'a>(&self) -> Element<'a, Message> {

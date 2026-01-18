@@ -1,5 +1,6 @@
 use crate::channel_id::ChannelId;
 use crate::channel_view_entry::Payload;
+use crate::config::HistoryLength;
 use crate::device_subscription::SubscriptionEvent::DevicePacket;
 use crate::device_view::DeviceView;
 use crate::device_view::DeviceViewMessage::SubscriptionMessage;
@@ -57,6 +58,6 @@ impl MeshChat {
             .channel_views
             .get_mut(&ChannelId::Channel(0))
             .unwrap();
-        let _ = channel_view.new_message(channel_view_entry, &None);
+        let _ = channel_view.new_message(channel_view_entry, &HistoryLength::All);
     }
 }
