@@ -37,6 +37,9 @@ pub struct Config {
     /// Whether node position updates sent are shown in the chat view or just update node position
     #[serde(default = "default_show_position")]
     pub show_position_updates: bool,
+    /// Whether node User updates sent are shown in the chat view or just update node User
+    #[serde(default = "default_show_user")]
+    pub show_user_updates: bool,
     #[serde(default)]
     pub disable_auto_reconnect: bool,
 }
@@ -44,6 +47,12 @@ pub struct Config {
 /// If the show_position_updates setting is missing in the config file, then default to true so
 /// they are shown.
 fn default_show_position() -> bool {
+    true
+}
+
+/// If the show_user_updates setting is missing in the config file, then default to true so
+/// they are shown.
+fn default_show_user() -> bool {
     true
 }
 

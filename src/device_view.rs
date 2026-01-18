@@ -106,6 +106,7 @@ pub struct DeviceView {
     pub forwarding_message: Option<ChannelViewEntry>,
     history_length: Option<HistoryLength>,
     show_position_updates: bool,
+    show_user_updates: bool,
 }
 async fn empty() {}
 
@@ -134,6 +135,11 @@ impl DeviceView {
     /// Set the devices setting whether it should show position updates in the chat view or not
     pub fn set_show_position_updates(&mut self, show_position_updates: bool) {
         self.show_position_updates = show_position_updates;
+    }
+
+    /// Set the devices setting whether it should show user updates in the chat view or not
+    pub fn set_show_user_updates(&mut self, show_user_updates: bool) {
+        self.show_user_updates = show_user_updates;
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
@@ -505,15 +511,17 @@ impl DeviceView {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     self.update_node_user(mesh_packet.from, &user);
 
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(
-                            UserMessage(user),
-                            mesh_packet.from,
-                            mesh_packet.id,
-                        );
-                        return channel_view.new_message(new_message, &self.history_length);
-                    } else {
-                        eprintln!("NodeInfoApp: Node '{}' unknown", user.long_name);
+                    if self.show_user_updates {
+                        if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                            let new_message = ChannelViewEntry::new(
+                                UserMessage(user),
+                                mesh_packet.from,
+                                mesh_packet.id,
+                            );
+                            return channel_view.new_message(new_message, &self.history_length);
+                        } else {
+                            eprintln!("NodeInfoApp: Node '{}' unknown", user.long_name);
+                        }
                     }
                 }
 
@@ -671,6 +679,7 @@ impl DeviceView {
                 self,
                 config,
                 self.show_position_updates,
+                self.show_user_updates,
             );
         }
 

@@ -6,7 +6,7 @@ use crate::Message::{
     ConfigChange, ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit,
     Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias,
     RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect, ToggleNodeFavourite,
-    ToggleShowPositionUpdates, WindowEvent,
+    ToggleShowPositionUpdates, ToggleShowUserUpdates, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -107,6 +107,7 @@ pub enum Message {
     OpenSettingsDialog,
     CloseSettingsDialog,
     ToggleShowPositionUpdates,
+    ToggleShowUserUpdates,
     ToggleAutoReconnect,
     None,
 }
@@ -285,6 +286,12 @@ impl MeshChat {
                     .set_show_position_updates(self.config.show_position_updates);
                 save_config(&self.config)
             }
+            ToggleShowUserUpdates => {
+                self.config.show_user_updates = !self.config.show_user_updates;
+                self.device_view
+                    .set_show_user_updates(self.config.show_user_updates);
+                save_config(&self.config)
+            }
             ToggleAutoReconnect => {
                 self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
                 save_config(&self.config)
@@ -351,7 +358,8 @@ impl MeshChat {
         let settings_column = Column::new()
             .padding(8)
             .push(self.show_position_in_chat_setting())
-            .push(self.disable_auto_reconnect());
+            .push(self.disable_auto_reconnect())
+            .push(self.show_user_updates());
 
         let inner = Column::new()
             .spacing(8)
@@ -422,6 +430,17 @@ impl MeshChat {
 
     fn toggle_show_position_updates(_current_setting: bool) -> Message {
         ToggleShowPositionUpdates
+    }
+
+    fn show_user_updates<'a>(&self) -> Element<'a, Message> {
+        toggler(self.config.show_user_updates)
+            .label("Show node User info shares in chat")
+            .on_toggle(Self::toggle_show_user_updates)
+            .into()
+    }
+
+    fn toggle_show_user_updates(_current_setting: bool) -> Message {
+        ToggleShowUserUpdates
     }
 
     fn disable_auto_reconnect<'a>(&self) -> Element<'a, Message> {

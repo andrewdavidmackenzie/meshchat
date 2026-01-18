@@ -235,6 +235,7 @@ impl ChannelView {
     }
 
     /// Construct an Element that displays the channel view
+    #[allow(clippy::too_many_arguments)]
     pub fn view<'a>(
         &'a self,
         nodes: &'a HashMap<u32, NodeInfo>,
@@ -243,12 +244,14 @@ impl ChannelView {
         device_view: &'a DeviceView,
         config: &'a Config,
         show_position_updates: bool,
+        show_user_updates: bool,
     ) -> Element<'a, Message> {
         let channel_view_content = self.channel_view(
             nodes,
             enable_position,
             enable_my_info,
             show_position_updates,
+            show_user_updates,
         );
 
         if device_view.forwarding_message.is_some() {
@@ -264,6 +267,7 @@ impl ChannelView {
         enable_position: bool,
         enable_my_info: bool,
         show_position_updates: bool,
+        show_user_updates: bool,
     ) -> Element<'a, Message> {
         let mut channel_view_content = Column::new().padding(right(10));
 
@@ -276,6 +280,11 @@ impl ChannelView {
             for entry in self.entries.values() {
                 // Hide any previously received position updates in the view if config is set to do so
                 if matches!(entry.payload(), PositionMessage(..)) && !show_position_updates {
+                    continue;
+                }
+
+                // Hide any previously received user updates in the view if config is set to do so
+                if matches!(entry.payload(), UserMessage(..)) && !show_user_updates {
                     continue;
                 }
 
