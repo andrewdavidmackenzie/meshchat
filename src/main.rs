@@ -29,6 +29,7 @@ use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use meshtastic::protobufs::User;
+use self_update::Status;
 use std::cmp::PartialEq;
 use std::time::Duration;
 
@@ -111,7 +112,29 @@ pub enum Message {
     None,
 }
 
+fn update() -> self_update::errors::Result<Status> {
+    let mut update_builder = self_update::backends::github::Update::configure();
+
+    let release_update = update_builder
+        .repo_owner("andrewdavidmackenzie")
+        .repo_name("meshchat")
+        .bin_name("meshchat")
+        .show_download_progress(true)
+        .show_output(false)
+        //.current_version(env!("CARGO_PKG_VERSION"))
+        .current_version("0.2.0")
+        .build()?;
+
+    release_update.update()
+}
+
 fn main() -> iced::Result {
+    match update() {
+        Ok(Status::UpToDate(version)) => println!("Already up to date: `{}`", version),
+        Ok(Status::Updated(version)) => println!("Updated to version: `{}`", version),
+        Err(e) => eprintln!("Error updating: {:?}", e),
+    }
+
     let mut window_settings = window::Settings::default();
 
     // Try and add an icon to the window::Settings
