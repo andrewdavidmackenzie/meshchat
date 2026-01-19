@@ -1,6 +1,7 @@
 use crate::Message;
 use crate::Message::{
-    HistoryLengthSelected, ToggleAutoReconnect, ToggleShowPositionUpdates, ToggleShowUserUpdates,
+    HistoryLengthSelected, ToggleAutoReconnect, ToggleAutoUpdate, ToggleShowPositionUpdates,
+    ToggleShowUserUpdates,
 };
 use crate::channel_id::ChannelId;
 use crate::styles::{picker_header_style, tooltip_style};
@@ -87,6 +88,9 @@ pub struct Config {
     pub show_user_updates: bool,
     #[serde(default)]
     pub disable_auto_reconnect: bool,
+    /// Whether we should attempt an auto-update on start-up
+    #[serde(default = "default_auto_update_startup")]
+    pub auto_update_startup: bool,
 }
 
 impl Config {
@@ -120,7 +124,8 @@ impl Config {
             .push(self.show_position_in_chat_setting())
             .push(self.disable_auto_reconnect())
             .push(self.show_user_updates())
-            .push(self.history_length());
+            .push(self.history_length())
+            .push(self.auto_update());
 
         let inner = Column::new()
             .spacing(8)
@@ -186,6 +191,17 @@ impl Config {
     fn toggle_auto_reconnects(_current_setting: bool) -> Message {
         ToggleAutoReconnect
     }
+
+    fn auto_update<'a>(&self) -> Element<'a, Message> {
+        toggler(self.auto_update_startup)
+            .label("Check for App updates on startup")
+            .on_toggle(Self::toggle_auto_update)
+            .into()
+    }
+
+    fn toggle_auto_update(_current_setting: bool) -> Message {
+        ToggleAutoUpdate
+    }
 }
 
 /// If the show_position_updates setting is missing in the config file, then default to true so
@@ -197,6 +213,12 @@ fn default_show_position() -> bool {
 /// If the show_user_updates setting is missing in the config file, then default to true so
 /// they are shown.
 fn default_show_user() -> bool {
+    true
+}
+
+/// If the auto_update_startup setting is missing in the config file, then default to true, so
+/// they are shown.
+fn default_auto_update_startup() -> bool {
     true
 }
 
