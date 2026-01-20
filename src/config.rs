@@ -9,7 +9,6 @@ use directories::ProjectDirs;
 use iced::font::Weight;
 use iced::widget::{Column, container, pick_list, text, toggler};
 use iced::{Center, Element, Fill, Font, Task};
-use meshtastic::utils::stream::BleDevice;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -66,7 +65,7 @@ impl std::fmt::Display for HistoryLength {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
-    pub ble_device: Option<BleDevice>,
+    pub ble_device: Option<String>,
     #[serde(default, rename = "channel", skip_serializing_if = "Option::is_none")]
     pub channel_id: Option<ChannelId>,
     #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]
@@ -285,7 +284,6 @@ pub fn load_config() -> Task<Message> {
 mod tests {
     use crate::config::{Config, HistoryLength, ONE_DAY_IN_SECONDS, load, save};
     use btleplug::api::BDAddr;
-    use meshtastic::utils::stream::BleDevice;
     use std::io;
     use std::time::Duration;
 
@@ -333,10 +331,7 @@ mod tests {
     #[tokio::test]
     async fn mac_address_saved() {
         let config = Config {
-            ble_device: Some(BleDevice {
-                name: None,
-                mac_address: BDAddr::from([0, 1, 2, 3, 4, 6]),
-            }),
+            ble_device: Some(BDAddr::from([0, 1, 2, 3, 4, 6]).to_string()),
             ..Default::default()
         };
 
@@ -352,8 +347,8 @@ mod tests {
             .await
             .expect("Could not load config file");
         assert_eq!(
-            returned.ble_device.unwrap().mac_address,
-            BDAddr::from([0, 1, 2, 3, 4, 6])
+            returned.ble_device.unwrap(),
+            BDAddr::from([0, 1, 2, 3, 4, 6]).to_string()
         );
     }
 
