@@ -818,7 +818,7 @@ impl DeviceView {
             .nodes
             .keys()
             .filter(|node_id| {
-                !config.fav_nodes.contains(node_id) && Some(**node_id) != self.my_node_num
+                !config.fav_nodes.contains(*node_id) && Some(**node_id) != self.my_node_num
             })
             .filter(|node_id| {
                 if let Some(node_name) = self.aliased_long_name(config, **node_id) {
