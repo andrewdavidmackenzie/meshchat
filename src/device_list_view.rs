@@ -13,7 +13,8 @@ use crate::{MeshChat, Message, View};
 use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
+    Column, Container, Id, Row, Space, button, container, operation, scrollable, text, text_input,
+    tooltip,
 };
 use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
 use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
@@ -38,6 +39,8 @@ pub struct DeviceListView {
 
 async fn empty() {}
 
+const ALIAS_INPUT_TEXT_ID: &str = "alias_input_text";
+
 impl DeviceListView {
     pub fn update(&mut self, device_list_event: DeviceListEvent) -> Task<Message> {
         match device_list_event {
@@ -61,7 +64,7 @@ impl DeviceListView {
                     Message::AppError("Discovery Error".to_string(), e.to_string())
                 });
             }
-            StartEditingAlias(device) => self.start_editing_alias(device),
+            StartEditingAlias(device) => return self.start_editing_alias(device),
             AliasInput(alias) => self.alias = alias,
         };
 
@@ -69,9 +72,10 @@ impl DeviceListView {
     }
 
     /// Called when the user selects to alias a device name
-    fn start_editing_alias(&mut self, ble_device: BleDevice) {
+    fn start_editing_alias(&mut self, ble_device: BleDevice) -> Task<Message> {
         self.editing_alias = Some(ble_device);
         self.alias = String::new();
+        operation::focus(Id::from(ALIAS_INPUT_TEXT_ID))
     }
 
     /// Called from above when we have finished editing the alias
@@ -182,6 +186,7 @@ impl DeviceListView {
                 {
                     text_input("Enter alias for this device", &self.alias)
                         .width(250)
+                        .id(Id::from(ALIAS_INPUT_TEXT_ID))
                         .on_input(|s| DeviceListViewEvent(AliasInput(s)))
                         .on_submit(AddDeviceAlias(editing_device.clone(), self.alias.clone()))
                         .style(text_input_style)
