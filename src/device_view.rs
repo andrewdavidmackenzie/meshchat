@@ -35,7 +35,6 @@ use crate::styles::{
     scrollbar_style, text_input_style, tooltip_style,
 };
 use crate::{MeshChat, Message, View, icons};
-use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
@@ -49,15 +48,16 @@ use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position, User};
+use meshtastic::utils::stream::BleDevice;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConnectionState {
-    Disconnected(Option<BDAddr>, Option<String>),
-    Connecting(BDAddr),
-    Connected(BDAddr),
-    Disconnecting(BDAddr),
+    Disconnected(Option<BleDevice>, Option<String>),
+    Connecting(BleDevice),
+    Connected(BleDevice),
+    Disconnecting(BleDevice),
 }
 
 impl Default for ConnectionState {
@@ -68,7 +68,7 @@ impl Default for ConnectionState {
 
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
-    ConnectRequest(BDAddr, Option<ChannelId>),
+    ConnectRequest(BleDevice, Option<ChannelId>),
     DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
@@ -145,9 +145,9 @@ impl DeviceView {
     /// Return a true value to show we can show the device view, false for main to decide
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
-            ConnectRequest(mac_address, channel_id) => {
+            ConnectRequest(ble_device, channel_id) => {
                 return self
-                    .subscriber_send(Connect(mac_address), Navigation(View::Device(channel_id)));
+                    .subscriber_send(Connect(ble_device), Navigation(View::Device(channel_id)));
             }
             DisconnectRequest(exit) => {
                 self.exit_pending = exit;
@@ -234,13 +234,13 @@ impl DeviceView {
             self.viewing_channel = channel_id.clone();
 
             if let Some(channel) = &channel_id
-                && let Connected(mac_address) = &self.connection_state
+                && let Connected(ble_device) = &self.connection_state
                 && self.channel_views.contains_key(channel)
             {
                 let channel_id = channel_id.clone();
-                let mac_address = *mac_address;
+                let device = ble_device.clone();
                 return Task::perform(empty(), move |_| {
-                    Message::ConfigChange(DeviceAndChannel(Some(mac_address), channel_id))
+                    Message::ConfigChange(DeviceAndChannel(Some(device), channel_id))
                 });
             }
         }
@@ -269,14 +269,15 @@ impl DeviceView {
                 self.connection_state = Connecting(mac_address);
                 Task::none()
             },
-            ConnectedEvent(mac_address) => {
-                self.connection_state = Connected(mac_address);
+            ConnectedEvent(ble_device) => {
+                self.connection_state = Connected(ble_device.clone());
                 match &self.viewing_channel {
                     None => {
                         let channel_id = self.viewing_channel.clone();
+                        let device = ble_device.clone();
                         Task::perform(empty(), move |_| {
                             Message::ConfigChange(DeviceAndChannel(
-                                Some(mac_address),
+                                Some(device),
                                 channel_id.clone(),
                             ))
                         })
@@ -568,10 +569,10 @@ impl DeviceView {
             Disconnected(_, _) => header
                 .push(Space::new().width(Fill))
                 .push(button("Disconnected").style(button_chip_style)),
-            Connecting(mac_address) => {
+            Connecting(ble_device) => {
                 let name_button = button(text(format!(
                     "📱 {}",
-                    device_list_view.device_name_or_alias(mac_address, config)
+                    device_list_view.device_name_or_alias(ble_device, config)
                 )))
                 .style(button_chip_style);
                 header = header.push(name_button);
@@ -1130,13 +1131,17 @@ mod tests {
     use crate::device_view::ConnectionState::Disconnected;
     use crate::test_helper;
     use btleplug::api::BDAddr;
+    use meshtastic::utils::stream::BleDevice;
 
     #[tokio::test]
     async fn test_connect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
         let _task = meshchat.device_view.subscriber_send(
-            Connect(BDAddr::from([0, 0, 0, 0, 0, 0])),
+            Connect(BleDevice {
+                name: None,
+                mac_address: BDAddr::from([0, 0, 0, 0, 0, 0]),
+            }),
             Navigation(DeviceList),
         );
 

@@ -3,14 +3,13 @@ use crate::Message::{
 };
 use crate::config::Config;
 use crate::device_list_view::DeviceListEvent::{
-    BLERadioFound, BLERadioLost, Error, StartEditingAlias,
+    AliasInput, BLERadioFound, BLERadioLost, Error, StartEditingAlias,
 };
 use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
 use crate::{MeshChat, Message, View};
-use btleplug::api::BDAddr;
 use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -26,15 +25,15 @@ pub enum DeviceListEvent {
     BLERadioFound(BleDevice),
     BLERadioLost(BleDevice),
     Error(String),
-    StartEditingAlias(BDAddr),
+    StartEditingAlias(BleDevice),
     AliasInput(String), // From text_input
 }
 
 #[derive(Default)]
 pub struct DeviceListView {
-    device_list: HashMap<BDAddr, String>,
+    device_list: HashMap<BleDevice, String>,
     alias: String,
-    editing_alias: Option<BDAddr>,
+    editing_alias: Option<BleDevice>,
 }
 
 async fn empty() {}
@@ -43,10 +42,10 @@ impl DeviceListView {
     pub fn update(&mut self, device_list_event: DeviceListEvent) -> Task<Message> {
         match device_list_event {
             BLERadioFound(device) => {
-                if let std::collections::hash_map::Entry::Vacant(e) =
-                    self.device_list.entry(device.mac_address)
+                if let std::collections::hash_map::Entry::Vacant(vacant_entry) =
+                    self.device_list.entry(device.clone())
                 {
-                    e.insert(
+                    vacant_entry.insert(
                         device
                             .name
                             .unwrap_or(device.mac_address.to_string())
@@ -55,7 +54,7 @@ impl DeviceListView {
                 }
             }
             BLERadioLost(device) => {
-                let _ = self.device_list.remove(&device.mac_address);
+                let _ = self.device_list.remove(&device);
             }
             Error(e) => {
                 return Task::perform(empty(), move |_| {
@@ -63,15 +62,15 @@ impl DeviceListView {
                 });
             }
             StartEditingAlias(device) => self.start_editing_alias(device),
-            DeviceListEvent::AliasInput(alias) => self.alias = alias,
+            AliasInput(alias) => self.alias = alias,
         };
 
         Task::none()
     }
 
     /// Called when the user selects to alias a device name
-    fn start_editing_alias(&mut self, mac_address: BDAddr) {
-        self.editing_alias = Some(mac_address);
+    fn start_editing_alias(&mut self, ble_device: BleDevice) {
+        self.editing_alias = Some(ble_device);
         self.alias = String::new();
     }
 
@@ -84,15 +83,20 @@ impl DeviceListView {
     /// Return the device name or any alias to it that might exist in the config
     pub fn device_name_or_alias<'a>(
         &'a self,
-        mac_address: &'a BDAddr,
+        ble_device: &'a BleDevice,
         config: &'a Config,
     ) -> String {
-        if let Some(alias) = config.device_aliases.get(mac_address) {
+        let device_string = ble_device
+            .clone()
+            .name
+            .unwrap_or(ble_device.mac_address.to_string());
+
+        if let Some(alias) = config.device_aliases.get(&device_string) {
             alias.to_string()
         } else {
             self.device_list
-                .get(mac_address)
-                .unwrap_or(&mac_address.to_string())
+                .get(ble_device)
+                .unwrap_or(&ble_device.mac_address.to_string())
                 .to_string()
         }
     }
@@ -157,11 +161,15 @@ impl DeviceListView {
 
         let mut main_col = Column::new();
 
-        for (mac_address, device_name) in &self.device_list {
+        for (ble_device, device_name) in &self.device_list {
             let mut device_row = Row::new().align_y(Center).padding(2);
+            let device_string = ble_device
+                .clone()
+                .name
+                .unwrap_or(ble_device.mac_address.to_string());
 
             let name_element: Element<'a, Message> =
-                if let Some(alias) = config.device_aliases.get(mac_address) {
+                if let Some(alias) = config.device_aliases.get(&device_string) {
                     tooltip(
                         text(alias).width(250),
                         text(format!("Original device name: {}", device_name)),
@@ -169,13 +177,13 @@ impl DeviceListView {
                     )
                     .style(tooltip_style)
                     .into()
-                } else if let Some(editing_mac) = &self.editing_alias
-                    && editing_mac == mac_address
+                } else if let Some(editing_device) = &self.editing_alias
+                    && editing_device == ble_device
                 {
                     text_input("Enter alias for this device", &self.alias)
                         .width(250)
-                        .on_input(|s| DeviceListViewEvent(DeviceListEvent::AliasInput(s)))
-                        .on_submit(AddDeviceAlias(*editing_mac, self.alias.clone()))
+                        .on_input(|s| DeviceListViewEvent(AliasInput(s)))
+                        .on_submit(AddDeviceAlias(editing_device.clone(), self.alias.clone()))
                         .style(text_input_style)
                         .into()
                 } else {
@@ -186,8 +194,8 @@ impl DeviceListView {
             device_row = device_row.push(Space::new().width(6));
 
             device_row = device_row.push(Self::menu_bar(
-                mac_address,
-                config.device_aliases.contains_key(mac_address),
+                ble_device,
+                config.device_aliases.contains_key(device_name),
             ));
 
             device_row = device_row.push(Space::new().width(6));
@@ -202,17 +210,17 @@ impl DeviceListView {
                 Disconnected(_id, _error) => {
                     device_row = device_row.push(
                         button("Connect")
-                            .on_press(DeviceViewEvent(ConnectRequest(*mac_address, None)))
+                            .on_press(DeviceViewEvent(ConnectRequest(ble_device.clone(), None)))
                             .style(button_chip_style),
                     );
                 }
                 Connecting(connecting_mac_address) => {
-                    if connecting_mac_address == mac_address {
+                    if connecting_mac_address == ble_device {
                         device_row = device_row.push(button("Connecting").style(button_chip_style));
                     }
                 }
                 Disconnecting(disconnecting_mac_address) => {
-                    if disconnecting_mac_address == mac_address {
+                    if disconnecting_mac_address == ble_device {
                         device_row =
                             device_row.push(button("Disconnecting").style(button_chip_style));
                     }
@@ -238,7 +246,7 @@ impl DeviceListView {
     }
 
     fn menu_bar<'a>(
-        mac_address: &BDAddr,
+        ble_device: &BleDevice,
         alias_exists: bool,
     ) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);
@@ -247,14 +255,14 @@ impl DeviceListView {
             menu_items!(
                 (menu_button(
                     "Unalias this device".into(),
-                    RemoveDeviceAlias(*mac_address)
+                    RemoveDeviceAlias(ble_device.clone())
                 ))
             )
         } else {
             menu_items!(
                 (menu_button(
                     "Alias this device".into(),
-                    DeviceListViewEvent(StartEditingAlias(*mac_address))
+                    DeviceListViewEvent(StartEditingAlias(ble_device.clone()))
                 ))
             )
         };
