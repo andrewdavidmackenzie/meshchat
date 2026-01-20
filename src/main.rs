@@ -21,7 +21,6 @@ use crate::discovery::ble_discovery;
 use crate::linear::Linear;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{button_chip_style, picker_header_style, tooltip_style};
-use btleplug::api::BDAddr;
 use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{
@@ -31,6 +30,7 @@ use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use meshtastic::protobufs::User;
+use meshtastic::utils::stream::BleDevice;
 use self_update::Status;
 use std::cmp::PartialEq;
 use std::time::Duration;
@@ -78,7 +78,7 @@ struct MeshChat {
 
 #[derive(Debug, Clone)]
 pub enum ConfigChangeMessage {
-    DeviceAndChannel(Option<BDAddr>, Option<ChannelId>),
+    DeviceAndChannel(Option<BleDevice>, Option<ChannelId>),
 }
 
 /// These are the messages that MeshChat responds to
@@ -102,8 +102,8 @@ pub enum Message {
     CopyToClipBoard(String),
     AddNodeAlias(u32, String),
     RemoveNodeAlias(u32),
-    AddDeviceAlias(BDAddr, String),
-    RemoveDeviceAlias(BDAddr),
+    AddDeviceAlias(BleDevice, String),
+    RemoveDeviceAlias(BleDevice),
     Event(Event),
     OpenSettingsDialog,
     CloseSettingsDialog,
@@ -212,11 +212,11 @@ impl MeshChat {
 
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
-                if let Some(mac_address) = &self.config.device_mac_address
+                if let Some(ble_device) = &self.config.ble_device
                     && !self.config.disable_auto_reconnect
                 {
                     self.device_view.update(DeviceViewMessage::ConnectRequest(
-                        *mac_address,
+                        ble_device.clone(),
                         self.config.channel_id.clone(),
                     ))
                 } else {
@@ -226,8 +226,8 @@ impl MeshChat {
             ConfigChange(config_change) => {
                 // Merge in what has changed
                 match config_change {
-                    ConfigChangeMessage::DeviceAndChannel(mac_address, channel) => {
-                        self.config.device_mac_address = mac_address;
+                    ConfigChangeMessage::DeviceAndChannel(ble_device, channel) => {
+                        self.config.ble_device = ble_device;
                         self.config.channel_id = channel;
                     }
                 }
@@ -265,17 +265,23 @@ impl MeshChat {
                 self.config.aliases.remove(&node_id);
                 self.config.save_config()
             }
-            AddDeviceAlias(mac_address, alias) => {
+            AddDeviceAlias(ble_device, alias) => {
                 self.device_list_view.stop_editing_alias();
                 if !alias.is_empty() {
-                    self.config.device_aliases.insert(mac_address, alias);
+                    let device_string = ble_device
+                        .name
+                        .unwrap_or(ble_device.mac_address.to_string());
+                    self.config.device_aliases.insert(device_string, alias);
                     self.config.save_config()
                 } else {
                     Task::none()
                 }
             }
-            RemoveDeviceAlias(mac_address) => {
-                self.config.device_aliases.remove(&mac_address);
+            RemoveDeviceAlias(ble_device) => {
+                let device_string = ble_device
+                    .name
+                    .unwrap_or(ble_device.mac_address.to_string());
+                self.config.device_aliases.remove(&device_string);
                 self.config.save_config()
             }
             Message::Event(event) => match event {
