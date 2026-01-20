@@ -76,7 +76,7 @@ pub struct ChannelViewEntry {
     /// The message contents of differing types
     payload: Payload,
     /// Has the user of the app seen this message?
-    pub seen: bool,
+    seen: bool,
     /// Has the entry been acknowledged as received by a receiver?
     acked: bool,
     /// Map of emojis and for each emoji there is the string for it and a number of node ids
@@ -139,6 +139,16 @@ impl ChannelViewEntry {
     /// Return true if the radio has acknowledged this message
     pub fn acked(&self) -> bool {
         self.acked
+    }
+
+    /// Return true if this message has been seen by the user already
+    pub fn seen(&self) -> bool {
+        self.seen
+    }
+
+    /// Mark this message as having been seen by the user already
+    pub fn mark_seen(&mut self) {
+        self.seen = true;
     }
 
     /// Return the emoji reply to this message, if any.
