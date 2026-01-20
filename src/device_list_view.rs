@@ -18,23 +18,22 @@ use iced::widget::{
 };
 use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
 use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
-use meshtastic::utils::stream::BleDevice;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum DeviceListEvent {
-    BLERadioFound(BleDevice),
-    BLERadioLost(BleDevice),
+    BLERadioFound(String),
+    BLERadioLost(String),
     Error(String),
-    StartEditingAlias(BleDevice),
+    StartEditingAlias(String),
     AliasInput(String), // From text_input
 }
 
 #[derive(Default)]
 pub struct DeviceListView {
-    device_list: HashMap<BleDevice, String>,
+    device_list: HashMap<String, String>,
     alias: String,
-    editing_alias: Option<BleDevice>,
+    editing_alias: Option<String>,
 }
 
 async fn empty() {}
@@ -48,12 +47,7 @@ impl DeviceListView {
                 if let std::collections::hash_map::Entry::Vacant(vacant_entry) =
                     self.device_list.entry(device.clone())
                 {
-                    vacant_entry.insert(
-                        device
-                            .name
-                            .unwrap_or(device.mac_address.to_string())
-                            .clone(),
-                    );
+                    vacant_entry.insert(device);
                 }
             }
             BLERadioLost(device) => {
@@ -72,7 +66,7 @@ impl DeviceListView {
     }
 
     /// Called when the user selects to alias a device name
-    fn start_editing_alias(&mut self, ble_device: BleDevice) -> Task<Message> {
+    fn start_editing_alias(&mut self, ble_device: String) -> Task<Message> {
         self.editing_alias = Some(ble_device);
         self.alias = String::new();
         operation::focus(Id::from(ALIAS_INPUT_TEXT_ID))
@@ -85,23 +79,11 @@ impl DeviceListView {
     }
 
     /// Return the device name or any alias to it that might exist in the config
-    pub fn device_name_or_alias<'a>(
-        &'a self,
-        ble_device: &'a BleDevice,
-        config: &'a Config,
-    ) -> String {
-        let device_string = ble_device
-            .clone()
-            .name
-            .unwrap_or(ble_device.mac_address.to_string());
-
-        if let Some(alias) = config.device_aliases.get(&device_string) {
+    pub fn device_name_or_alias<'a>(&'a self, ble_device: &'a str, config: &'a Config) -> String {
+        if let Some(alias) = config.device_aliases.get(ble_device) {
             alias.to_string()
         } else {
-            self.device_list
-                .get(ble_device)
-                .unwrap_or(&ble_device.mac_address.to_string())
-                .to_string()
+            ble_device.to_string()
         }
     }
 
@@ -167,13 +149,8 @@ impl DeviceListView {
 
         for (ble_device, device_name) in &self.device_list {
             let mut device_row = Row::new().align_y(Center).padding(2);
-            let device_string = ble_device
-                .clone()
-                .name
-                .unwrap_or(ble_device.mac_address.to_string());
-
             let name_element: Element<'a, Message> =
-                if let Some(alias) = config.device_aliases.get(&device_string) {
+                if let Some(alias) = config.device_aliases.get(ble_device) {
                     tooltip(
                         text(alias).width(250),
                         text(format!("Original device name: {}", device_name)),
@@ -250,24 +227,21 @@ impl DeviceListView {
             .into()
     }
 
-    fn menu_bar<'a>(
-        ble_device: &BleDevice,
-        alias_exists: bool,
-    ) -> MenuBar<'a, Message, Theme, Renderer> {
+    fn menu_bar<'a>(ble_device: &str, alias_exists: bool) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);
 
         let menu_items = if alias_exists {
             menu_items!(
                 (menu_button(
                     "Unalias this device".into(),
-                    RemoveDeviceAlias(ble_device.clone())
+                    RemoveDeviceAlias(ble_device.to_string())
                 ))
             )
         } else {
             menu_items!(
                 (menu_button(
                     "Alias this device".into(),
-                    DeviceListViewEvent(StartEditingAlias(ble_device.clone()))
+                    DeviceListViewEvent(StartEditingAlias(ble_device.to_string()))
                 ))
             )
         };

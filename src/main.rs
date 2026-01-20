@@ -29,7 +29,6 @@ use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use meshtastic::protobufs::User;
-use meshtastic::utils::stream::BleDevice;
 use std::cmp::PartialEq;
 use std::time::Duration;
 
@@ -76,7 +75,7 @@ struct MeshChat {
 
 #[derive(Debug, Clone)]
 pub enum ConfigChangeMessage {
-    DeviceAndChannel(Option<BleDevice>, Option<ChannelId>),
+    DeviceAndChannel(Option<String>, Option<ChannelId>),
 }
 
 /// These are the messages that MeshChat responds to
@@ -100,8 +99,8 @@ pub enum Message {
     CopyToClipBoard(String),
     AddNodeAlias(u32, String),
     RemoveNodeAlias(u32),
-    AddDeviceAlias(BleDevice, String),
-    RemoveDeviceAlias(BleDevice),
+    AddDeviceAlias(String, String),
+    RemoveDeviceAlias(String),
     Event(Event),
     OpenSettingsDialog,
     CloseSettingsDialog,
@@ -236,20 +235,14 @@ impl MeshChat {
             AddDeviceAlias(ble_device, alias) => {
                 self.device_list_view.stop_editing_alias();
                 if !alias.is_empty() {
-                    let device_string = ble_device
-                        .name
-                        .unwrap_or(ble_device.mac_address.to_string());
-                    self.config.device_aliases.insert(device_string, alias);
+                    self.config.device_aliases.insert(ble_device, alias);
                     self.config.save_config()
                 } else {
                     Task::none()
                 }
             }
             RemoveDeviceAlias(ble_device) => {
-                let device_string = ble_device
-                    .name
-                    .unwrap_or(ble_device.mac_address.to_string());
-                self.config.device_aliases.remove(&device_string);
+                self.config.device_aliases.remove(&ble_device);
                 self.config.save_config()
             }
             Message::Event(event) => match event {
