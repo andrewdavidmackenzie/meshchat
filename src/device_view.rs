@@ -48,16 +48,15 @@ use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position, User};
-use meshtastic::utils::stream::BleDevice;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConnectionState {
-    Disconnected(Option<BleDevice>, Option<String>),
-    Connecting(BleDevice),
-    Connected(BleDevice),
-    Disconnecting(BleDevice),
+    Disconnected(Option<String>, Option<String>),
+    Connecting(String),
+    Connected(String),
+    Disconnecting(String),
 }
 
 impl Default for ConnectionState {
@@ -68,7 +67,7 @@ impl Default for ConnectionState {
 
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
-    ConnectRequest(BleDevice, Option<ChannelId>),
+    ConnectRequest(String, Option<ChannelId>),
     DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
@@ -1131,17 +1130,13 @@ mod tests {
     use crate::device_view::ConnectionState::Disconnected;
     use crate::test_helper;
     use btleplug::api::BDAddr;
-    use meshtastic::utils::stream::BleDevice;
 
     #[tokio::test]
     async fn test_connect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
         let _task = meshchat.device_view.subscriber_send(
-            Connect(BleDevice {
-                name: None,
-                mac_address: BDAddr::from([0, 0, 0, 0, 0, 0]),
-            }),
+            Connect(BDAddr::from([0, 0, 0, 0, 0, 0]).to_string()),
             Navigation(DeviceList),
         );
 
