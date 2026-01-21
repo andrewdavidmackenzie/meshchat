@@ -30,9 +30,11 @@ use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use meshtastic::protobufs::User;
-use meshtastic::utils::stream::BleDevice;
+#[cfg(feature = "auto-update")]
 use self_update::Status;
 use std::cmp::PartialEq;
+#[cfg(feature = "auto-update")]
+use std::error::Error;
 use std::time::Duration;
 
 mod battery;
@@ -115,7 +117,9 @@ pub enum Message {
     None,
 }
 
-fn update() -> self_update::errors::Result<Status> {
+/// Check for a new release of MeshChat and update if available
+#[cfg(feature = "auto-update")]
+fn update() -> Result<Status, Box<dyn Error>> {
     let mut update_builder = self_update::backends::github::Update::configure();
 
     let release_update = update_builder
@@ -128,7 +132,7 @@ fn update() -> self_update::errors::Result<Status> {
         .current_version("0.2.0")
         .build()?;
 
-    release_update.update()
+    release_update.update().map_err(|e| e.into())
 }
 
 fn main() -> iced::Result {
@@ -198,6 +202,7 @@ impl MeshChat {
                 self.config = config;
 
                 // TODO put into a task
+                #[cfg(feature = "auto-update")]
                 if self.config.auto_update_startup {
                     match update() {
                         Ok(Status::UpToDate(version)) => {
