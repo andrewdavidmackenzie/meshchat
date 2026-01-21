@@ -6,7 +6,8 @@ use crate::Message::{
     ConfigChange, ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit,
     HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
     RemoveNodeAlias, RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect,
-    ToggleNodeFavourite, ToggleShowPositionUpdates, ToggleShowUserUpdates, WindowEvent,
+    ToggleAutoUpdate, ToggleNodeFavourite, ToggleShowPositionUpdates, ToggleShowUserUpdates,
+    WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -29,7 +30,11 @@ use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use meshtastic::protobufs::User;
+#[cfg(feature = "auto-update")]
+use self_update::Status;
 use std::cmp::PartialEq;
+#[cfg(feature = "auto-update")]
+use std::error::Error;
 use std::time::Duration;
 
 mod battery;
@@ -107,8 +112,27 @@ pub enum Message {
     ToggleShowPositionUpdates,
     ToggleShowUserUpdates,
     ToggleAutoReconnect,
+    ToggleAutoUpdate,
     HistoryLengthSelected(HistoryLength),
     None,
+}
+
+/// Check for a new release of MeshChat and update if available
+#[cfg(feature = "auto-update")]
+fn update() -> Result<Status, Box<dyn Error>> {
+    let mut update_builder = self_update::backends::github::Update::configure();
+
+    let release_update = update_builder
+        .repo_owner("andrewdavidmackenzie")
+        .repo_name("meshchat")
+        .bin_name("meshchat")
+        .show_download_progress(true)
+        .show_output(false)
+        //.current_version(env!("CARGO_PKG_VERSION"))
+        .current_version("0.2.0")
+        .build()?;
+
+    release_update.update().map_err(|e| e.into())
 }
 
 fn main() -> iced::Result {
@@ -176,6 +200,20 @@ impl MeshChat {
                 self.device_view
                     .set_show_position_updates(config.show_position_updates);
                 self.config = config;
+
+                // TODO put into a task
+                #[cfg(feature = "auto-update")]
+                if self.config.auto_update_startup {
+                    match update() {
+                        Ok(Status::UpToDate(version)) => {
+                            println!("Already up to date: `{}`", version)
+                        }
+                        Ok(Status::Updated(version)) => {
+                            println!("Updated to version: `{}`", version)
+                        }
+                        Err(e) => eprintln!("Error updating: {:?}", e),
+                    }
+                }
 
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
@@ -293,6 +331,10 @@ impl MeshChat {
             }
             ToggleAutoReconnect => {
                 self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
+                self.config.save_config()
+            }
+            ToggleAutoUpdate => {
+                self.config.auto_update_startup = !self.config.auto_update_startup;
                 self.config.save_config()
             }
             HistoryLengthSelected(length) => {

@@ -193,6 +193,8 @@ impl DeviceView {
             ChannelMsg(channel_id, msg) => {
                 if let Some(channel_view) = self.channel_views.get_mut(&channel_id) {
                     return channel_view.update(msg);
+                } else {
+                    eprintln!("Error: No channel for ChannelMsg");
                 }
             }
             SearchInput(filter) => self.filter = filter,

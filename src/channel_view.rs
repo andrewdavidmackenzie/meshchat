@@ -151,7 +151,7 @@ impl ChannelView {
     pub fn unread_count(&self) -> usize {
         self.entries
             .values()
-            .fold(0, |acc, e| if !e.seen { acc + 1 } else { acc })
+            .fold(0, |acc, e| if !e.seen() { acc + 1 } else { acc })
     }
 
     /// Cancel any interactive modes underway
@@ -201,7 +201,9 @@ impl ChannelView {
             }
             MessageSeen(message_id) => {
                 if let Some(channel_view_entry) = self.entries.get_mut(&message_id) {
-                    channel_view_entry.seen = true;
+                    channel_view_entry.mark_seen();
+                } else {
+                    println!("Error Message {} not found in ChannelView", message_id);
                 }
                 Task::none()
             }
