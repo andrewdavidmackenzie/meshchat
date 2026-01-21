@@ -10,7 +10,7 @@ license = "GPL-3.0"
 include = ["src", "assets", "build.rs", "README.md", "LICENSE"]
 
 [features]
-default = ["auto-update"]
+default = []
 debug = ["iced/debug"] # use "... --features "debug" to enable this for Iced
 hot = ["iced/hot"]
 # Allow the feature to check for app updates to be disabled by people building for distribution channels that take care of updates themselves
