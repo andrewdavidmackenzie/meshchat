@@ -20,14 +20,6 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                         // detect lost radios
                         for ble_device in &mesh_radio_devices {
                             if !devices_now.iter().any(|other_id| ble_device == other_id) {
-                                println!(
-                                    "Lost {}",
-                                    ble_device
-                                        .name
-                                        .clone()
-                                        .unwrap_or(ble_device.mac_address.to_string())
-                                );
-
                                 // inform GUI of a device lost
                                 gui_sender
                                     .send(BLERadioLost(
@@ -49,15 +41,6 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                             {
                                 // track it for the future
                                 mesh_radio_devices.push(device.clone());
-
-                                println!(
-                                    "Found: {}",
-                                    device
-                                        .name
-                                        .clone()
-                                        .unwrap_or(device.mac_address.to_string()),
-                                );
-
                                 // inform GUI of a new device found
                                 gui_sender
                                     .send(BLERadioFound(
