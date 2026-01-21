@@ -182,12 +182,14 @@ impl DeviceListView {
 
             device_row = device_row.push(Space::new().width(6));
             match &connection_state {
-                Connected(_) => {
-                    device_row = device_row.push(
-                        button("Disconnect")
-                            .on_press(DeviceViewEvent(DisconnectRequest(false)))
-                            .style(button_chip_style),
-                    );
+                Connected(connected_device) => {
+                    if connected_device == ble_device {
+                        device_row = device_row.push(
+                            button("Disconnect")
+                                .on_press(DeviceViewEvent(DisconnectRequest(false)))
+                                .style(button_chip_style),
+                        );
+                    }
                 }
                 Disconnected(_id, _error) => {
                     device_row = device_row.push(
