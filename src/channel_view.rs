@@ -1,8 +1,8 @@
 use crate::Message::DeviceViewEvent;
 use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage::{
-    CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, PickChannel,
-    PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
+    CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, MessageUnseen,
+    PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -46,6 +46,7 @@ pub enum ChannelViewMessage {
     PrepareReply(u32),        // entry_id
     CancelPrepareReply,
     MessageSeen(u32),
+    MessageUnseen(u32),
     PickChannel(Option<ChannelId>),
     ReplyWithEmoji(u32, String, ChannelId), // Send an emoji reply
     EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
@@ -207,6 +208,7 @@ impl ChannelView {
                 }
                 Task::none()
             }
+            MessageUnseen(_) => Task::none(),
             PickChannel(channel_id) => {
                 Task::perform(empty(), move |_| DeviceViewEvent(ShowChannel(channel_id)))
             }
