@@ -2,7 +2,7 @@ use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage;
-use crate::channel_view::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
+use crate::channel_view::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyWithEmoji};
 use crate::channel_view_entry::Payload::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
@@ -373,6 +373,10 @@ impl ChannelViewEntry {
             .on_show(|_| {
                 DeviceViewEvent(ChannelMsg(channel_id.clone(), MessageSeen(self.message_id)))
             })
+            .on_hide(DeviceViewEvent(ChannelMsg(
+                channel_id.clone(),
+                MessageUnseen(self.message_id),
+            )))
             .into()
     }
 
