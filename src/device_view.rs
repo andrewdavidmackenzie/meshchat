@@ -43,7 +43,6 @@ use iced::{Bottom, Center, Element, Fill, Padding, Task};
 use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
 use meshtastic::protobufs::channel::Role::*;
-use meshtastic::protobufs::config::device_config;
 use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
@@ -368,9 +367,7 @@ impl DeviceView {
             self.my_info = true;
         }
 
-        if !node_info.is_ignored
-            && node_info.user.as_ref().map(|u| u.role()) == Some(device_config::Role::Client)
-        {
+        if !node_info.is_ignored {
             let channel_id = Node(node_info.num);
             self.nodes.insert(node_info.num, node_info);
             self.channel_views.insert(
