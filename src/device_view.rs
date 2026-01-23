@@ -361,7 +361,7 @@ impl DeviceView {
         Task::none()
     }
 
-    // Add a new node to the list if it has the User info we want and is not marked to be ignored
+    ///  Add a new node to the list if it has the User info we want and is not marked to be ignored
     fn add_node(&mut self, node_info: NodeInfo) {
         if Some(node_info.num) == self.my_node_num {
             self.my_position = node_info.position;
@@ -380,7 +380,7 @@ impl DeviceView {
         }
     }
 
-    // Add a channel from the radio to the list if it is not disabled and has some Settings
+    /// Add a channel from the radio to the list if it is not disabled and has some Settings
     pub fn add_channel(&mut self, mut channel: Channel) {
         if Role::try_from(channel.role) != Ok(Disabled)
             && let Some(settings) = channel.settings.as_mut()
