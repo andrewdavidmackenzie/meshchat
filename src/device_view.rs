@@ -367,7 +367,9 @@ impl DeviceView {
             self.my_info = true;
         }
 
-        if !node_info.is_ignored {
+        if node_info.is_ignored {
+            println!("Node is ignored!: {:?}", node_info);
+        } else {
             let channel_id = Node(node_info.num);
             self.nodes.insert(node_info.num, node_info);
             self.channel_views.insert(
