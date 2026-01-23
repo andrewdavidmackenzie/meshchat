@@ -31,7 +31,7 @@ pub enum DeviceListEvent {
 
 #[derive(Default)]
 pub struct DeviceListView {
-    device_list: HashMap<String, String>,
+    device_list: HashMap<String, String>, // Alias/Name, Original Name
     alias: String,
     editing_alias: Option<String>,
 }

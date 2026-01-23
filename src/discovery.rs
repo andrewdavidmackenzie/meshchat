@@ -1,11 +1,16 @@
 use crate::device_list_view::DeviceListEvent;
 use crate::device_list_view::DeviceListEvent::{BLERadioFound, BLERadioLost, Error};
+use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
+use btleplug::platform::Manager;
+use futures::SinkExt;
 use futures_channel::mpsc::Sender;
-use iced::futures::{SinkExt, Stream};
+use iced::futures::Stream;
 use iced::stream;
-use meshtastic::utils::stream::available_ble_devices;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
+use uuid::Uuid;
+
+const MSH_SERVICE: Uuid = Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd);
 
 /// A stream of [DeviceListEvent] announcing the discovery or loss of devices via BLE
 pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
@@ -15,19 +20,39 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
             // Device name and the unseen count
             let mut mesh_radio_devices: HashMap<String, i32> = HashMap::new();
 
+            let manager = Manager::new().await.unwrap(); // TODO handle error
+            // get the first bluetooth adapter
+            let adapters = manager.adapters().await.unwrap(); // TODO handle error
+            let central = adapters.into_iter().next().unwrap();
+
             // loop scanning for devices
             loop {
-                match available_ble_devices(Duration::from_secs(4)).await {
-                    Ok(devices_now) => {
-                        let ble_devices_now: HashSet<String> = devices_now
-                            .iter()
-                            .map(|ble_device| {
-                                ble_device
-                                    .name
-                                    .clone()
-                                    .unwrap_or(ble_device.mac_address.to_string())
-                            })
-                            .collect();
+                // start scanning for MeshTastic radios
+                // TODO report an error if cannot scan
+                let _ = central
+                    .start_scan(ScanFilter {
+                        services: vec![MSH_SERVICE],
+                    })
+                    .await;
+                tokio::time::sleep(Duration::from_secs(4)).await;
+
+                match central.peripherals().await {
+                    Ok(peripherals) => {
+                        let mut ble_devices_now: HashSet<String> = HashSet::new();
+
+                        for peripheral in peripherals {
+                            ble_devices_now.insert(
+                                peripheral
+                                    .properties()
+                                    .await
+                                    .unwrap()
+                                    .unwrap()
+                                    .local_name
+                                    .unwrap(),
+                            );
+                        }
+
+                        println!("Found: {:?}", ble_devices_now);
 
                         // detect lost radios
                         for (ble_device, unseen_count) in &mut mesh_radio_devices {
