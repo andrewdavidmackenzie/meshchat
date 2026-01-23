@@ -525,8 +525,8 @@ impl DeviceView {
                         }
                     }
                 }
-
-                _ => eprintln!("Unexpected payload type from radio: {}", data.portnum),
+                Ok(_) => {}
+                _ => eprintln!("Error decoding payload portnum: {}", data.portnum),
             }
         }
 
