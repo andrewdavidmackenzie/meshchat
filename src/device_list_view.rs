@@ -1,3 +1,6 @@
+use crate::Message::{
+    AddDeviceAlias, DeviceListViewEvent, DeviceViewEvent, Navigation, RemoveDeviceAlias,
+};
 use crate::config::Config;
 use crate::device_list_view::DeviceListEvent::{
     AliasInput, BLERadioFound, BLERadioLost, Error, StartEditingAlias,
@@ -6,18 +9,15 @@ use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
-use crate::Message::{
-    AddDeviceAlias, DeviceListViewEvent, DeviceViewEvent, Navigation, RemoveDeviceAlias,
-};
 use crate::{MeshChat, Message, View};
+use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    button, container, operation, scrollable, text, text_input, tooltip, Column, Container, Id, Row,
-    Space,
+    Column, Container, Id, Row, Space, button, container, operation, scrollable, text, text_input,
+    tooltip,
 };
-use iced::Bottom;
-use iced::{alignment, Center, Element, Fill, Renderer, Task, Theme};
-use iced_aw::{menu_bar, menu_items, Menu, MenuBar};
+use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
+use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
