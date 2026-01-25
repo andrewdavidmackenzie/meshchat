@@ -34,7 +34,7 @@ use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
     scrollbar_style, text_input_style, tooltip_style,
 };
-use crate::{MeshChat, Message, View, icons};
+use crate::{MCChannel, MCNodeInfo, MCUser, MeshChat, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
@@ -42,11 +42,10 @@ use iced::widget::{
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
 use meshtastic::Message as _;
 use meshtastic::protobufs::channel::Role;
-use meshtastic::protobufs::channel::Role::*;
 use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
-use meshtastic::protobufs::{Channel, FromRadio, MeshPacket, NodeInfo, PortNum, Position, User};
+use meshtastic::protobufs::{FromRadio, MeshPacket, NodeInfo, PortNum, Position, Telemetry, User};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -94,8 +93,8 @@ pub struct DeviceView {
     viewing_channel: Option<ChannelId>,
     /// Map of ChannelViews, indexed by ChannelId
     pub channel_views: HashMap<ChannelId, ChannelView>,
-    channels: Vec<Channel>,
-    nodes: HashMap<u32, NodeInfo>, // all nodes known to the connected radio
+    channels: Vec<MCChannel>,
+    nodes: HashMap<u32, MCNodeInfo>, // all nodes known to the connected radio
     filter: String,
     exit_pending: bool,
     battery_level: Option<u32>,
@@ -341,7 +340,11 @@ impl DeviceView {
             // Information about a Node that exists on the radio - which could be myself
             Some(PayloadVariant::NodeInfo(node_info)) => self.add_node(node_info),
             // This Packet conveys information about a Channel that exists on the radio
-            Some(PayloadVariant::Channel(channel)) => self.add_channel(channel),
+            Some(PayloadVariant::Channel(channel)) => {
+                if Role::try_from(channel.role) != Ok(Role::Disabled) {
+                    self.add_channel((&channel).into());
+                }
+            }
             Some(PayloadVariant::ClientNotification(notification)) => {
                 // A notification message from the device to the client To be used for important
                 // messages that should to be displayed to the user in the form of push
@@ -371,7 +374,7 @@ impl DeviceView {
             println!("Node is ignored!: {:?}", node_info);
         } else {
             let channel_id = Node(node_info.num);
-            self.nodes.insert(node_info.num, node_info);
+            self.nodes.insert(node_info.num, (&node_info).into());
             self.channel_views.insert(
                 channel_id.clone(),
                 ChannelView::new(channel_id, self.my_node_num.unwrap()),
@@ -380,13 +383,8 @@ impl DeviceView {
     }
 
     /// Add a channel from the radio to the list if it is not disabled and has some Settings
-    pub fn add_channel(&mut self, mut channel: Channel) {
-        if Role::try_from(channel.role) != Ok(Disabled)
-            && let Some(settings) = channel.settings.as_mut()
+    pub fn add_channel(&mut self, channel: MCChannel) {
         {
-            if settings.name.is_empty() {
-                settings.name = "Default".to_string();
-            };
             self.channels.push(channel);
             let channel_id = ChannelId::Channel((self.channels.len() - 1) as i32);
             self.channel_views.insert(
@@ -498,8 +496,7 @@ impl DeviceView {
                     }
                 }
                 Ok(PortNum::TelemetryApp) => {
-                    let telemetry =
-                        meshtastic::protobufs::Telemetry::decode(&data.payload as &[u8]).unwrap();
+                    let telemetry = Telemetry::decode(&data.payload as &[u8]).unwrap();
                     if mesh_packet.from == self.my_node_num.unwrap()
                         && let Some(DeviceMetrics(metrics)) = telemetry.variant
                     {
@@ -508,7 +505,7 @@ impl DeviceView {
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
-                    let user = User::decode(&data.payload as &[u8]).unwrap();
+                    let user: MCUser = (&User::decode(&data.payload as &[u8]).unwrap()).into();
                     let channel_id = self.channel_id_from_packet(mesh_packet);
                     self.update_node_user(mesh_packet.from, &user);
 
@@ -540,12 +537,12 @@ impl DeviceView {
     /// accuracy depending on the age of the previous position?
     fn update_node_position(&mut self, from: u32, position: &Position) {
         if let Some(node) = self.nodes.get_mut(&from) {
-            node.position = Some(*position);
+            node.position = Some(position.into());
         }
     }
 
     /// If the Node is known already, then update its User with a NodeInfoApp User update
-    fn update_node_user(&mut self, from: u32, user: &User) {
+    fn update_node_user(&mut self, from: u32, user: &MCUser) {
         if let Some(node) = self.nodes.get_mut(&from) {
             node.user = Some(user.clone());
         }
@@ -617,7 +614,7 @@ impl DeviceView {
             Some(ChannelId::Channel(channel_index)) => {
                 let index = *channel_index as usize;
                 if let Some(channel) = self.channels.get(index) {
-                    let channel_name = Self::channel_name(channel);
+                    let channel_name = format!("🛜  {}", channel.name);
                     header = header.push(button(text(channel_name)).style(button_chip_style))
                 }
             }
@@ -730,7 +727,7 @@ impl DeviceView {
 
         let mut filtered_channels: Vec<(usize, String)> = vec![];
         for (index, channel) in self.channels.iter().enumerate() {
-            let channel_name = Self::channel_name(channel);
+            let channel_name = format!("🛜  {}", channel.name);
 
             // If there is a filter and the channel name does not contain it, don't show this row
             if channel_name.contains(&self.filter) {
@@ -862,16 +859,6 @@ impl DeviceView {
             .width(Fill)
             .align_x(Center)
             .into()
-    }
-
-    /// Return a name for the channel - prefixed with a node/device emoji
-    fn channel_name(channel: &Channel) -> String {
-        let name = channel
-            .settings
-            .as_ref()
-            .map(|s| s.name.as_str())
-            .unwrap_or("");
-        format!("🛜  {}", name)
     }
 
     /// Return the long name for the node with id node_id - prefixed with a node/device emoji -
@@ -1047,7 +1034,7 @@ impl DeviceView {
                 tooltip(
                     button(text("📌"))
                         .style(fav_button_style)
-                        .on_press(ShowLocation(position.latitude_i(), position.longitude_i())),
+                        .on_press(ShowLocation(position.latitude_i, position.longitude_i)),
                     "Show node position in maps",
                     tooltip::Position::Left,
                 )
@@ -1106,20 +1093,20 @@ impl DeviceView {
 
 /// Return a short name to display in the message box as the source of a message.
 /// If the message is from myself, then return None.
-pub fn short_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
+pub fn short_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
     nodes
         .get(&from)
-        .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
-        .map(|user: &User| user.short_name.as_ref())
+        .and_then(|node_info: &MCNodeInfo| node_info.user.as_ref())
+        .map(|user: &MCUser| user.short_name.as_ref())
         .unwrap_or("????")
 }
 
 /// Return a long name for the source node
-pub fn long_name(nodes: &HashMap<u32, NodeInfo>, from: u32) -> &str {
+pub fn long_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
     nodes
         .get(&from)
-        .and_then(|node_info: &NodeInfo| node_info.user.as_ref())
-        .map(|user: &User| user.long_name.as_ref())
+        .and_then(|node_info: &MCNodeInfo| node_info.user.as_ref())
+        .map(|user: &MCUser| user.long_name.as_ref())
         .unwrap_or("Node information not available")
 }
 

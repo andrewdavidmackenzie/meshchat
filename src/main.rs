@@ -19,6 +19,7 @@ use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::discovery::ble_discovery;
 use crate::linear::Linear;
+use crate::meshtastic::device_subscription;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{button_chip_style, picker_header_style, tooltip_style};
 use iced::font::Weight;
@@ -29,7 +30,6 @@ use iced::widget::{
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
-use meshtastic::protobufs::User;
 #[cfg(feature = "auto-update")]
 use self_update::Status;
 use std::cmp::PartialEq;
@@ -42,7 +42,6 @@ mod channel_view;
 mod channel_view_entry;
 mod config;
 mod device_list_view;
-mod device_subscription;
 mod device_view;
 mod discovery;
 mod easing;
@@ -54,11 +53,42 @@ mod styles;
 mod icons;
 mod channel_id;
 mod emoji_picker;
+mod meshtastic;
 mod notification;
 #[cfg(test)]
 mod test_helper;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// A User as represented in the App, maybe a superset of User attributes from different meshes
+#[derive(Debug, Clone)]
+pub struct MCUser {
+    pub id: String,
+    pub long_name: String,
+    pub short_name: String,
+    pub hw_model: String,
+    pub is_licensed: bool,
+    pub role: String,
+    pub public_key: Vec<u8>,
+    pub is_unmessagable: bool,
+}
+
+/// A Node's Info as represented in the App, maybe a superset of User attributes from different meshes
+#[derive(Clone)]
+pub struct MCNodeInfo {
+    pub num: u32,
+    pub user: Option<MCUser>,
+    pub position: Option<MCPosition>,
+    pub channel: u32,
+    pub is_ignored: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MCPosition {
+    pub latitude_i: i32,
+    pub longitude_i: i32,
+    pub timestamp: u32,
+}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
@@ -75,7 +105,13 @@ struct MeshChat {
     device_view: DeviceView,
     notifications: Notifications,
     showing_settings: bool,
-    show_user: Option<User>,
+    show_user: Option<MCUser>,
+}
+
+#[derive(Clone)]
+pub struct MCChannel {
+    pub index: i32,
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -94,7 +130,7 @@ pub enum Message {
     ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
     ShowLocation(i32, i32), // lat and long / 1_000_000
-    ShowUserInfo(User),
+    ShowUserInfo(MCUser),
     CloseShowUser,
     OpenUrl(String),
     AppNotification(String, String),
@@ -399,20 +435,17 @@ impl MeshChat {
     }
 
     /// Create a view for a User
-    fn user<'a>(&self, user: &User) -> Element<'a, Message> {
+    fn user<'a>(&self, user: &MCUser) -> Element<'a, Message> {
         let settings_column = Column::new()
             .padding(8)
             .push(text(format!("ID: {}", user.id)))
             .push(text(format!("Long Name: {}", user.long_name)))
             .push(text(format!("Short Name: {}", user.short_name)))
-            .push(text(format!(
-                "Hardware Model: {}",
-                user.hw_model().as_str_name()
-            )))
+            .push(text(format!("Hardware Model: {}", user.hw_model)))
             .push(text(format!("Licensed: {}", user.is_licensed)))
-            .push(text(format!("Role: {}", user.role().as_str_name())))
+            .push(text(format!("Role: {}", user.role)))
             .push(text(format!("Public Key: {:X?}", user.public_key)))
-            .push(text(format!("Unmessageable: {}", user.is_unmessagable())));
+            .push(text(format!("Unmessageable: {}", user.is_unmessagable)));
 
         let inner = Column::new()
             .spacing(8)

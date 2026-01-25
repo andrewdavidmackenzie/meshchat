@@ -17,7 +17,7 @@ use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
     text_input_style, tooltip_style,
 };
-use crate::{MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
+use crate::{MCNodeInfo, MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local};
 use iced::font::Style::Italic;
@@ -31,7 +31,6 @@ use iced::widget::{
 };
 use iced::widget::{Id, operation};
 use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
-use meshtastic::protobufs::NodeInfo;
 use ringmap::RingMap;
 use std::collections::HashMap;
 
@@ -67,8 +66,7 @@ pub struct ChannelView {
 
 async fn empty() {}
 
-// A view of a single channel and it's message, which maybe a real radio "Channel" or a chat channel
-// with a specific [meshtastic:User]
+// A view of a single channel and its messages, which maybe a Channel or a Node
 impl ChannelView {
     pub fn new(channel_id: ChannelId, source: u32) -> Self {
         Self {
@@ -242,7 +240,7 @@ impl ChannelView {
     #[allow(clippy::too_many_arguments)]
     pub fn view<'a>(
         &'a self,
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         enable_position: bool,
         enable_my_info: bool,
         device_view: &'a DeviceView,
@@ -267,7 +265,7 @@ impl ChannelView {
 
     fn channel_view<'a>(
         &'a self,
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         enable_position: bool,
         enable_my_info: bool,
         show_position_updates: bool,

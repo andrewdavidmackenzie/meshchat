@@ -1,9 +1,9 @@
 use crate::channel_id::ChannelId;
-use crate::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::device_subscription::SubscriberMessage::{
+use crate::meshtastic::device_subscription::DeviceState::{Connected, Disconnected};
+use crate::meshtastic::device_subscription::SubscriberMessage::{
     Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
-use crate::device_subscription::SubscriptionEvent::{
+use crate::meshtastic::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceMeshPacket, DevicePacket,
     DisconnectedEvent, DisconnectingEvent,
 };

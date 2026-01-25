@@ -1,4 +1,3 @@
-use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage;
@@ -13,6 +12,7 @@ use crate::styles::{
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
     menu_button_style, message_text_style, tooltip_style,
 };
+use crate::{MCNodeInfo, MCUser, Message};
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::advanced::text::Span;
@@ -23,7 +23,6 @@ use iced::widget::{
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use iced_aw::menu::Menu;
 use iced_aw::{MenuBar, menu_bar, menu_items};
-use meshtastic::protobufs::{NodeInfo, User};
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -40,7 +39,7 @@ pub enum Payload {
     TextMessageReply(u32, String),
     EmojiReply(u32, String),
     PositionMessage(i32, i32),
-    UserMessage(User),
+    UserMessage(MCUser),
 }
 
 impl fmt::Display for Payload {
@@ -141,7 +140,7 @@ impl ChannelViewEntry {
         self.acked
     }
 
-    /// Return true if this message has been seen by the user already
+    /// Return true if the user has seen this message already
     pub fn seen(&self) -> bool {
         self.seen
     }
@@ -213,7 +212,7 @@ impl ChannelViewEntry {
     /// Return an element (currently a Column) with a list of the names of the nodes that sent the
     /// given emoji.
     fn list_of_nodes<'a>(
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         sources: &'a Vec<u32>,
     ) -> Element<'a, Message> {
         let mut col = Column::new();
@@ -257,7 +256,7 @@ impl ChannelViewEntry {
     pub fn view<'a>(
         &'a self,
         entries: &'a RingMap<u32, ChannelViewEntry>,
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         channel_id: &'a ChannelId,
         mine: bool,
         emoji_picker: &'a crate::emoji_picker::EmojiPicker,
@@ -380,13 +379,10 @@ impl ChannelViewEntry {
             .into()
     }
 
-    fn user_text(user: &User) -> String {
+    fn user_text(user: &MCUser) -> String {
         format!(
             "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
-            user.long_name,
-            user.short_name,
-            user.id,
-            user.hw_model().as_str_name()
+            user.long_name, user.short_name, user.id, user.hw_model
         )
     }
 
@@ -433,7 +429,7 @@ impl ChannelViewEntry {
     /// Append an element to the column that contains the emoji replies for this message, if any.
     fn emoji_row<'a>(
         &'a self,
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         mut message_column: Column<'a, Message>,
     ) -> Column<'a, Message> {
         if !self.emojis().is_empty() {
