@@ -313,6 +313,9 @@ impl MeshChat {
                     .set_history_length(config.history_length.clone());
                 self.device_view
                     .set_show_position_updates(config.show_position_updates);
+                self.device_view
+                    .set_show_user_updates(config.show_user_updates);
+
                 self.config = config;
 
                 // TODO put into a task
