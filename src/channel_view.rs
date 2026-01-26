@@ -4,7 +4,7 @@ use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, MessageUnseen,
     PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
-use crate::channel_view_entry::Payload::{
+use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::config::{Config, HistoryLength};
@@ -108,7 +108,9 @@ impl ChannelView {
         }
     }
 
-    /// Add a new [ChannelViewEntry] message to the [ChannelView]
+    /// Add a new [ChannelViewEntry] message to the [ChannelView], unless it's an emoji reply,
+    /// in which case the emoji will be added to the Vec of emoji replies of the original
+    /// message [ChannelViewEntry], and no new entry created
     pub fn new_message(
         &mut self,
         new_message: ChannelViewEntry,
@@ -116,10 +118,10 @@ impl ChannelView {
     ) -> Task<Message> {
         let mine = new_message.from() == self.my_node_num;
 
-        match &new_message.payload() {
+        match &new_message.message() {
             AlertMessage(_)
             | NewTextMessage(_)
-            | PositionMessage(_, _)
+            | PositionMessage(_)
             | UserMessage(_)
             | TextMessageReply(_, _) => {
                 // Insert a new message, ordered by receive date/time
@@ -281,12 +283,12 @@ impl ChannelView {
             // Add a view to the column for each of the entries in this Channel
             for entry in self.entries.values() {
                 // Hide any previously received position updates in the view if config is set to do so
-                if matches!(entry.payload(), PositionMessage(..)) && !show_position_updates {
+                if matches!(entry.message(), PositionMessage(..)) && !show_position_updates {
                     continue;
                 }
 
                 // Hide any previously received user updates in the view if config is set to do so
-                if matches!(entry.payload(), UserMessage(..)) && !show_user_updates {
+                if matches!(entry.message(), UserMessage(..)) && !show_user_updates {
                     continue;
                 }
 
@@ -541,7 +543,7 @@ mod test {
     use crate::channel_view::ChannelViewMessage::PrepareReply;
     use crate::channel_view::{ChannelId, ChannelView};
     use crate::channel_view_entry::ChannelViewEntry;
-    use crate::channel_view_entry::Payload::NewTextMessage;
+    use crate::channel_view_entry::MCMessage::NewTextMessage;
     use crate::config::HistoryLength;
     use std::time::Duration;
 
@@ -555,26 +557,46 @@ mod test {
 
         // create a set of messages with more than a second between them
         // message ids are not in order
-        let oldest_message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let oldest_message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let middle_message = ChannelViewEntry::new(NewTextMessage("Hello 2".to_string()), 2, 1000);
+        let middle_message = ChannelViewEntry::new(2, 1000, NewTextMessage("Hello 2".to_string()));
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let newest_message = ChannelViewEntry::new(NewTextMessage("Hello 3".to_string()), 1, 500);
+        let newest_message = ChannelViewEntry::new(3, 500, NewTextMessage("Hello 3".to_string()));
 
-        // Add them in order
-        let _ = channel_view.new_message(oldest_message.clone(), &HistoryLength::All);
-        let _ = channel_view.new_message(middle_message.clone(), &HistoryLength::All);
+        // Add them out of order - they should be ordered by the time of creation, not entry
         let _ = channel_view.new_message(newest_message.clone(), &HistoryLength::All);
-
-        assert_eq!(channel_view.unread_count(), 3);
+        let _ = channel_view.new_message(middle_message.clone(), &HistoryLength::All);
+        let _ = channel_view.new_message(oldest_message.clone(), &HistoryLength::All);
+        assert_eq!(
+            channel_view.entries.values().len(),
+            3,
+            "There should be 3 messages in the list"
+        );
+        assert_eq!(
+            channel_view.unread_count(),
+            3,
+            "The unread count should be 3"
+        );
 
         // Check the order is correct
         let mut iter = channel_view.entries.values();
-        assert_eq!(iter.next().unwrap(), &oldest_message);
-        assert_eq!(iter.next().unwrap(), &middle_message);
-        assert_eq!(iter.next().unwrap(), &newest_message);
+        assert_eq!(
+            iter.next().unwrap(),
+            &oldest_message,
+            "The oldest message should be first"
+        );
+        assert_eq!(
+            iter.next().unwrap(),
+            &middle_message,
+            "The middle message should be second"
+        );
+        assert_eq!(
+            iter.next().unwrap(),
+            &newest_message,
+            "The newest message should be third"
+        );
     }
 
     #[test]
@@ -586,7 +608,7 @@ mod test {
     #[test]
     fn test_unread_count() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
         let _ = channel_view.new_message(message.clone(), &HistoryLength::All);
         assert_eq!(channel_view.unread_count(), 1);
     }
@@ -594,7 +616,7 @@ mod test {
     #[test]
     fn test_replying_valid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
         let _ = channel_view.update(PrepareReply(0));
@@ -605,7 +627,7 @@ mod test {
     #[test]
     fn test_replying_invalid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(NewTextMessage("Hello 1".to_string()), 1, 1);
+        let message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
         let _ = channel_view.update(PrepareReply(1));

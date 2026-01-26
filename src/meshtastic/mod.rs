@@ -39,10 +39,68 @@ impl From<&NodeInfo> for MCNodeInfo {
 /// Conversions between [Position] and MeshChat [MCPosition]
 impl From<&Position> for MCPosition {
     fn from(position: &Position) -> Self {
+        let lat = position.latitude_i.unwrap_or(0);
+        let latitude = 0.0000001 * lat as f64;
+        let long = position.longitude_i.unwrap_or(0);
+        let longitude = 0.0000001 * long as f64;
+
         MCPosition {
-            latitude_i: position.latitude_i.unwrap_or(0),
-            longitude_i: position.longitude_i.unwrap_or(0),
+            latitude,
+            longitude,
             timestamp: position.timestamp,
+            altitude: position.altitude,
+            time: position.time,
+            location_source: position.location_source,
+            altitude_source: position.altitude_source,
+            timestamp_millis_adjust: position.timestamp_millis_adjust,
+            altitude_hae: position.altitude_hae,
+            altitude_geoidal_separation: position.altitude_geoidal_separation,
+            pdop: position.pdop,
+            hdop: position.hdop,
+            vdop: position.vdop,
+            gps_accuracy: position.gps_accuracy,
+            ground_speed: position.ground_speed,
+            ground_track: position.ground_track,
+            fix_quality: position.fix_quality,
+            fix_type: position.fix_type,
+            sats_in_view: position.sats_in_view,
+            sensor_id: position.sensor_id,
+            next_update: position.next_update,
+            seq_number: position.seq_number,
+            precision_bits: position.precision_bits,
+        }
+    }
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<Position> for MCPosition {
+    fn into(self) -> Position {
+        let lat = self.latitude as i32 * 1000000;
+        let long = self.longitude as i32 * 1000000;
+        Position {
+            latitude_i: Some(lat),
+            longitude_i: Some(long),
+            timestamp: self.timestamp,
+            altitude: self.altitude,
+            time: self.time,
+            location_source: self.location_source,
+            altitude_source: self.altitude_source,
+            timestamp_millis_adjust: self.timestamp_millis_adjust,
+            altitude_hae: self.altitude_hae,
+            altitude_geoidal_separation: self.altitude_geoidal_separation,
+            pdop: self.pdop,
+            hdop: self.hdop,
+            vdop: self.vdop,
+            gps_accuracy: self.gps_accuracy,
+            ground_speed: self.ground_speed,
+            ground_track: self.ground_track,
+            fix_quality: self.fix_quality,
+            fix_type: self.fix_type,
+            sats_in_view: self.sats_in_view,
+            sensor_id: self.sensor_id,
+            next_update: self.next_update,
+            seq_number: self.seq_number,
+            precision_bits: self.precision_bits,
         }
     }
 }

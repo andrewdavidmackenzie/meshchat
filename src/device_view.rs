@@ -1,16 +1,13 @@
 use crate::battery::{Battery, BatteryState};
 use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
-use crate::channel_view_entry::Payload::{
-    AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
-};
 use crate::config::{Config, HistoryLength};
 use crate::device_subscription::SubscriberMessage::{
     Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceMeshPacket, DevicePacket,
-    DisconnectedEvent, DisconnectingEvent, NotReady, Ready,
+    ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent, DisconnectingEvent,
+    NotReady, Ready,
 };
 use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
@@ -29,23 +26,22 @@ use crate::Message::{
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
+use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device_list_view::DeviceListView;
+use crate::meshtastic::device_subscription::SubscriptionEvent::{
+    DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
+    NewNodePosition, RadioNotification,
+};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
     scrollbar_style, text_input_style, tooltip_style,
 };
-use crate::{MCChannel, MCNodeInfo, MCUser, MeshChat, Message, View, icons};
+use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
-use meshtastic::Message as _;
-use meshtastic::protobufs::channel::Role;
-use meshtastic::protobufs::from_radio::PayloadVariant;
-use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
-use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
-use meshtastic::protobufs::{FromRadio, MeshPacket, NodeInfo, PortNum, Position, Telemetry, User};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -88,7 +84,7 @@ pub struct DeviceView {
     connection_state: ConnectionState,
     subscription_sender: Option<Sender<SubscriberMessage>>,
     my_node_num: Option<u32>,
-    my_position: Option<Position>,
+    my_position: Option<MCPosition>,
     my_info: bool,
     viewing_channel: Option<ChannelId>,
     /// Map of ChannelViews, indexed by ChannelId
@@ -155,7 +151,7 @@ impl DeviceView {
                     let message_text = format!(
                         "FWD from '{}': {}\n",
                         short_name(&self.nodes, entry.from()),
-                        entry.payload()
+                        entry.message()
                     );
 
                     return self.subscriber_send(
@@ -175,8 +171,11 @@ impl DeviceView {
                     .subscriber_send(SendText(message, channel_id, reply_to_id), Message::None);
             }
             SendPositionMessage(channel_id) => {
-                if let Some(position) = self.my_position {
-                    return self.subscriber_send(SendPosition(channel_id, position), Message::None);
+                if let Some(position) = &self.my_position {
+                    return self.subscriber_send(
+                        SendPosition(channel_id, position.clone()),
+                        Message::None,
+                    );
                 }
             }
             SendInfoMessage(channel_id) => {
@@ -309,8 +308,6 @@ impl DeviceView {
                 self.subscription_sender = Some(sender);
                 Task::none()
             }
-            DevicePacket(packet) => self.handle_from_radio(packet),
-            DeviceMeshPacket(packet) => self.handle_mesh_packet(&packet),
             ConnectionError(id, summary, detail) => {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                 Task::perform(empty(), |_| Navigation(DeviceList))
@@ -325,56 +322,91 @@ impl DeviceView {
                                  "An attempt was made to communicate to radio prior to the subscription being Ready".to_string())
                     }))
             }
-        }
-    }
-
-    /// Handle [FromRadio] packets coming from the radio, forwarded from the device_subscription
-    fn handle_from_radio(&mut self, packet: Box<FromRadio>) -> Task<Message> {
-        match packet.payload_variant {
-            Some(PayloadVariant::Packet(mesh_packet)) => {
-                return self.handle_mesh_packet(&mesh_packet);
+            MyNodeNum(my_node_num) => {
+                self.my_node_num = Some(my_node_num);
+                Task::none()
+            },
+            NewChannel(channel) => {
+                self.add_channel(channel);
+                Task::none()
             }
-            Some(PayloadVariant::MyInfo(my_node_info)) => {
-                self.my_node_num = Some(my_node_info.my_node_num);
+            NewNode(node_info) => {
+                self.add_node(node_info);
+                Task::none()
             }
-            // Information about a Node that exists on the radio - which could be myself
-            Some(PayloadVariant::NodeInfo(node_info)) => self.add_node(node_info),
-            // This Packet conveys information about a Channel that exists on the radio
-            Some(PayloadVariant::Channel(channel)) => {
-                if Role::try_from(channel.role) != Ok(Role::Disabled) {
-                    self.add_channel((&channel).into());
-                }
-            }
-            Some(PayloadVariant::ClientNotification(notification)) => {
-                // A notification message from the device to the client To be used for important
-                // messages that should to be displayed to the user in the form of push
-                // notifications or validation messages when saving invalid configuration.
-                return Task::perform(empty(), move |_| {
+            RadioNotification(message) => {
+                Task::perform(empty(), move |_| {
                     Message::AppNotification(
                         "Radio Notification".to_string(),
-                        notification.message.clone(),
+                        message,
                     )
-                });
+                })
             }
-            Some(_) => {}
-            _ => println!("Unexpected packet: {:?}", packet.payload_variant),
-        }
+            MessageACK(channel_id, message_id) => {
+                if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                    channel_view.ack(message_id)
+                } else {
+                    eprintln!("No channel for MessageACK");
+                }
+                Task::none()
+            }
+            MCMessageReceived(channel_id, id, from, mc_message) => {
+                if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                    let new_message = ChannelViewEntry::new(id, from, mc_message);
+                    channel_view.new_message(new_message, &self.history_length)
+                } else {
+                    eprintln!("No channel for MCMessage");
+                    Task::none()
+                }
+            }
+            DeviceBatteryLevel(level) => {
+                self.battery_level = level;
+                Task::none()
+            }
+            NewNodeInfo(channel_id, id,  from, mc_user) => {
+                self.update_node_user(from, &mc_user);
 
-        Task::none()
+                if self.show_user_updates {
+                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                        let new_message = ChannelViewEntry::new(id, from, UserMessage(mc_user));
+                        return channel_view.new_message(new_message, &self.history_length);
+                    } else {
+                        eprintln!("NewNodeInfo: Node '{}' unknown", mc_user.long_name);
+                    }
+                }
+                Task::none()
+            }
+            NewNodePosition(channel_id, id, from, position) => {
+                self.update_node_position(from, &position);
+                if self.show_position_updates {
+                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                            let new_message = ChannelViewEntry::new(
+                                id,
+                                from,
+                                PositionMessage(position),
+                            );
+                            return channel_view.new_message(new_message, &self.history_length);
+                    } else {
+                        eprintln!("No channel for: {}", channel_id);
+                    }
+                }
+                Task::none()
+            }
+        }
     }
 
     ///  Add a new node to the list if it has the User info we want and is not marked to be ignored
-    fn add_node(&mut self, node_info: NodeInfo) {
-        if Some(node_info.num) == self.my_node_num {
-            self.my_position = node_info.position;
-            self.my_info = true;
-        }
-
+    fn add_node(&mut self, node_info: MCNodeInfo) {
         if node_info.is_ignored {
             println!("Node is ignored!: {:?}", node_info);
         } else {
+            if Some(node_info.num) == self.my_node_num {
+                self.my_position = node_info.position.clone();
+                self.my_info = true;
+            }
+
             let channel_id = Node(node_info.num);
-            self.nodes.insert(node_info.num, (&node_info).into());
+            self.nodes.insert(node_info.num, node_info);
             self.channel_views.insert(
                 channel_id.clone(),
                 ChannelView::new(channel_id, self.my_node_num.unwrap()),
@@ -394,150 +426,14 @@ impl DeviceView {
         }
     }
 
-    /// Figure out which channel we should show a message in a [MeshPacket]
-    /// i.e., is a broadcast message in a channel, or a DM to/from my node.
-    fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
-        if mesh_packet.to == u32::MAX {
-            // Destined for a channel
-            ChannelId::Channel(mesh_packet.channel as i32)
-        } else {
-            // Destined for a Node
-            if Some(mesh_packet.from) == self.my_node_num {
-                // from me to a node - put it in that node's channel
-                Node(mesh_packet.to)
-            } else {
-                // from the other node, put it in that node's channel
-                Node(mesh_packet.from)
-            }
-        }
-    }
-
-    /// Handle a packet we have received from the mesh, depending on the payload variant and portnum
-    fn handle_mesh_packet(&mut self, mesh_packet: &MeshPacket) -> Task<Message> {
-        if let Some(Decoded(data)) = &mesh_packet.payload_variant {
-            match PortNum::try_from(data.portnum) {
-                Ok(PortNum::RoutingApp) => {
-                    // An ACK
-                    let channel_id = if mesh_packet.from == mesh_packet.to {
-                        // To a channel broadcast message
-                        ChannelId::Channel(mesh_packet.channel as i32)
-                    } else {
-                        // To a DM to a Node
-                        Node(mesh_packet.from)
-                    };
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        channel_view.ack(data.request_id)
-                    }
-                }
-                Ok(PortNum::AlertApp) => {
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(
-                            AlertMessage(String::from_utf8(data.payload.clone()).unwrap()),
-                            mesh_packet.from,
-                            mesh_packet.id,
-                        );
-
-                        return channel_view.new_message(new_message, &self.history_length);
-                    } else {
-                        eprintln!("No channel for packet");
-                    }
-                }
-                Ok(PortNum::TextMessageApp) => {
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let message = if data.reply_id == 0 {
-                            NewTextMessage(String::from_utf8(data.payload.clone()).unwrap())
-                        } else {
-                            // Emoji reply to an earlier message
-                            if data.emoji == 0 {
-                                // Text reply to an earlier message
-                                TextMessageReply(
-                                    data.reply_id,
-                                    String::from_utf8(data.payload.clone()).unwrap(),
-                                )
-                            } else {
-                                EmojiReply(
-                                    data.reply_id,
-                                    String::from_utf8(data.payload.clone()).unwrap(),
-                                )
-                            }
-                        };
-
-                        let new_message =
-                            ChannelViewEntry::new(message, mesh_packet.from, mesh_packet.id);
-
-                        return channel_view.new_message(new_message, &self.history_length);
-                    } else {
-                        eprintln!("No channel for packet");
-                    }
-                }
-                Ok(PortNum::PositionApp) => {
-                    let position = Position::decode(&data.payload as &[u8]).unwrap();
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    self.update_node_position(mesh_packet.from, &position);
-                    if self.show_position_updates {
-                        if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                            if let Some(lat) = position.latitude_i
-                                && let Some(lon) = position.longitude_i
-                            {
-                                let new_message = ChannelViewEntry::new(
-                                    PositionMessage(lat, lon),
-                                    mesh_packet.from,
-                                    mesh_packet.id,
-                                );
-                                return channel_view.new_message(new_message, &self.history_length);
-                            } else {
-                                eprintln!("No lat/lon for Position: {:?}", position);
-                            }
-                        } else {
-                            eprintln!("No channel for: {}", channel_id);
-                        }
-                    }
-                }
-                Ok(PortNum::TelemetryApp) => {
-                    let telemetry = Telemetry::decode(&data.payload as &[u8]).unwrap();
-                    if mesh_packet.from == self.my_node_num.unwrap()
-                        && let Some(DeviceMetrics(metrics)) = telemetry.variant
-                    {
-                        self.battery_level = metrics.battery_level;
-                    }
-                }
-                Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
-                Ok(PortNum::NodeinfoApp) => {
-                    let user: MCUser = (&User::decode(&data.payload as &[u8]).unwrap()).into();
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    self.update_node_user(mesh_packet.from, &user);
-
-                    if self.show_user_updates {
-                        if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                            let new_message = ChannelViewEntry::new(
-                                UserMessage(user),
-                                mesh_packet.from,
-                                mesh_packet.id,
-                            );
-                            return channel_view.new_message(new_message, &self.history_length);
-                        } else {
-                            eprintln!("NodeInfoApp: Node '{}' unknown", user.long_name);
-                        }
-                    }
-                }
-                Ok(_) => {}
-                _ => eprintln!("Error decoding payload portnum: {}", data.portnum),
-            }
-        }
-
-        Task::none()
-    }
-
     /// If the Node is known already, then update its Position with a PositionApp update
     /// it has sent
     /// NOTE: This position maybe more recent, but it could have less accuracy, as position
     /// accuracy is set per channel. Consider deciding whether to update or not if it has lower
     /// accuracy depending on the age of the previous position?
-    fn update_node_position(&mut self, from: u32, position: &Position) {
+    fn update_node_position(&mut self, from: u32, position: &MCPosition) {
         if let Some(node) = self.nodes.get_mut(&from) {
-            node.position = Some(position.into());
+            node.position = Some(position.clone());
         }
     }
 
@@ -1034,7 +930,7 @@ impl DeviceView {
                 tooltip(
                     button(text("📌"))
                         .style(fav_button_style)
-                        .on_press(ShowLocation(position.latitude_i, position.longitude_i)),
+                        .on_press(ShowLocation(position.clone())),
                     "Show node position in maps",
                     tooltip::Position::Left,
                 )

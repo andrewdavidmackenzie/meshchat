@@ -1,20 +1,33 @@
 use crate::channel_id::ChannelId;
+use crate::channel_id::ChannelId::Node;
+use crate::channel_view_entry::MCMessage;
+use crate::channel_view_entry::MCMessage::{
+    AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
+};
 use crate::meshtastic::device_subscription::DeviceState::{Connected, Disconnected};
 use crate::meshtastic::device_subscription::SubscriberMessage::{
     Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
 use crate::meshtastic::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceMeshPacket, DevicePacket,
-    DisconnectedEvent, DisconnectingEvent,
+    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
+    DisconnectingEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
+    NewNodePosition, RadioNotification,
 };
+use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use futures::SinkExt;
+use futures::executor::block_on;
 use iced::stream;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
 use meshtastic::errors::Error;
 use meshtastic::packet::{PacketReceiver, PacketRouter};
 use meshtastic::protobufs::config::device_config::Role;
-use meshtastic::protobufs::from_radio::PayloadVariant::{MyInfo, NodeInfo};
-use meshtastic::protobufs::{FromRadio, MeshPacket, PortNum, Position, User};
+use meshtastic::protobufs::from_radio::PayloadVariant;
+use meshtastic::protobufs::from_radio::PayloadVariant::{
+    ClientNotification, MyInfo, NodeInfo, Packet,
+};
+use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
+use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
+use meshtastic::protobufs::{FromRadio, MeshPacket, PortNum, Position, Telemetry, User};
 use meshtastic::types::NodeId;
 use meshtastic::utils::stream::BleId;
 use meshtastic::{Message, utils};
@@ -24,6 +37,7 @@ use tokio::sync::mpsc::{Sender, channel};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::{Stream, StreamExt};
 
+/// Messages sent from the subscription to the GUI
 #[derive(Debug, Clone)]
 pub enum SubscriptionEvent {
     /// A message from the subscription to indicate it is ready to receive messages
@@ -32,10 +46,17 @@ pub enum SubscriptionEvent {
     ConnectingEvent(String),
     DisconnectingEvent(String),
     DisconnectedEvent(String),
-    DevicePacket(Box<FromRadio>),
-    DeviceMeshPacket(Box<MeshPacket>),
     ConnectionError(String, String, String),
     NotReady,
+    MyNodeNum(u32),
+    NewChannel(MCChannel),
+    NewNode(MCNodeInfo),
+    RadioNotification(String),
+    MessageACK(ChannelId, u32),
+    MCMessageReceived(ChannelId, u32, u32, MCMessage), // channel, id, from, MCMessage
+    NewNodeInfo(ChannelId, u32, u32, MCUser),          // channel_id, id, from, MCUser
+    NewNodePosition(ChannelId, u32, u32, MCPosition),  // channel_id, id, from, MCPosition
+    DeviceBatteryLevel(Option<u32>),
 }
 
 /// A message type sent from the UI to the subscriber
@@ -44,7 +65,7 @@ pub enum SubscriberMessage {
     Disconnect,
     SendText(String, ChannelId, Option<u32>), // Optional reply to message id
     SendEmojiReply(String, ChannelId, u32),
-    SendPosition(ChannelId, Position),
+    SendPosition(ChannelId, MCPosition),
     SendInfo(ChannelId),
     RadioPacket(Box<FromRadio>),
 }
@@ -83,30 +104,183 @@ impl MyRouter {
         }
     }
 
+    /// Figure out which channel we should show a message in a [MeshPacket]
+    /// i.e., is a broadcast message in a channel, or a DM to/from my node.
+    fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
+        if mesh_packet.to == u32::MAX {
+            // Destined for a channel
+            ChannelId::Channel(mesh_packet.channel as i32)
+        } else {
+            // Destined for a Node
+            if Some(mesh_packet.from) == self.my_node_num {
+                // from me to a node - put it in that node's channel
+                Node(mesh_packet.to)
+            } else {
+                // from the other node, put it in that node's channel
+                Node(mesh_packet.from)
+            }
+        }
+    }
+
     /// Handle [FromRadio] packets received from the radio, filter down to packets we know the App/Gui
     /// is interested in and forward those to the Gui using the provided `gui_sender`
-    fn handle_packet_from_radio(&mut self, packet: Box<FromRadio>) {
+    async fn handle_a_packet_from_radio(&mut self, packet: Box<FromRadio>) {
         match packet.payload_variant.as_ref() {
-            Some(payload_variant) => {
-                // Capture my own node number
-                if let MyInfo(my_info) = &payload_variant {
-                    self.my_node_num = Some(my_info.my_node_num);
-                }
+            Some(Packet(mesh_packet)) => {
+                self.handle_a_mesh_packet(mesh_packet).await;
+            }
+            Some(MyInfo(my_node_info)) => {
+                // Capture my own node number in the router for later use
+                self.my_node_num = Some(my_node_info.my_node_num);
 
+                self.gui_sender
+                    .send(MyNodeNum(my_node_info.my_node_num))
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+            }
+            // Information about a Node that exists on the radio - which could be myself
+            Some(NodeInfo(node_info)) => {
                 // Once I know my own node id number, then I can capture my own node's [User] info
-                if let NodeInfo(node_info) = &payload_variant
-                    && Some(node_info.num) == self.my_node_num
+                if Some(node_info.num) == self.my_node_num
                     && let Some(user) = &node_info.user
                 {
                     self.my_user = user.clone();
                 }
 
                 self.gui_sender
-                    .try_send(DevicePacket(packet))
+                    .send(NewNode(MCNodeInfo::from(node_info)))
+                    .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
-            None => {
-                eprintln!("Payload Variant not found");
+            // This Packet conveys information about a Channel that exists on the radio
+            Some(PayloadVariant::Channel(channel)) => {
+                if meshtastic::protobufs::channel::Role::try_from(channel.role)
+                    != Ok(meshtastic::protobufs::channel::Role::Disabled)
+                {
+                    self.gui_sender
+                        .send(NewChannel(MCChannel::from(channel)))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
+            }
+            Some(ClientNotification(notification)) => {
+                // A notification message from the device to the client To be used for important
+                // messages that should to be displayed to the user in the form of push
+                // notifications or validation messages when saving invalid configuration.
+                self.gui_sender
+                    .send(RadioNotification(notification.message.clone()))
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+            }
+            _ => {}
+        }
+    }
+
+    /// Handle a packet we have received from the mesh, depending on the payload variant and portnum
+    async fn handle_a_mesh_packet(&mut self, mesh_packet: &MeshPacket) {
+        if let Some(Decoded(data)) = &mesh_packet.payload_variant {
+            match PortNum::try_from(data.portnum) {
+                Ok(PortNum::RoutingApp) => {
+                    // An ACK
+                    let channel_id = if mesh_packet.from == mesh_packet.to {
+                        // To a channel broadcast message
+                        ChannelId::Channel(mesh_packet.channel as i32)
+                    } else {
+                        // To a DM to a Node
+                        Node(mesh_packet.from)
+                    };
+
+                    self.gui_sender
+                        .send(MessageACK(channel_id, data.request_id))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
+                Ok(PortNum::AlertApp) => {
+                    let channel_id = self.channel_id_from_packet(mesh_packet);
+                    let message = AlertMessage(String::from_utf8(data.payload.clone()).unwrap());
+
+                    self.gui_sender
+                        .send(MCMessageReceived(
+                            channel_id,
+                            mesh_packet.id,
+                            mesh_packet.from,
+                            message,
+                        ))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
+                Ok(PortNum::TextMessageApp) => {
+                    let channel_id = self.channel_id_from_packet(mesh_packet);
+
+                    let message = if data.reply_id == 0 {
+                        NewTextMessage(String::from_utf8(data.payload.clone()).unwrap())
+                    } else {
+                        // Emoji reply to an earlier message
+                        if data.emoji == 0 {
+                            // Text reply to an earlier message
+                            TextMessageReply(
+                                data.reply_id,
+                                String::from_utf8(data.payload.clone()).unwrap(),
+                            )
+                        } else {
+                            EmojiReply(
+                                data.reply_id,
+                                String::from_utf8(data.payload.clone()).unwrap(),
+                            )
+                        }
+                    };
+                    self.gui_sender
+                        .send(MCMessageReceived(
+                            channel_id,
+                            data.request_id,
+                            data.source,
+                            message,
+                        ))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
+                Ok(PortNum::PositionApp) => {
+                    let channel_id = self.channel_id_from_packet(mesh_packet);
+                    let position: MCPosition =
+                        (&Position::decode(&data.payload as &[u8]).unwrap()).into();
+
+                    self.gui_sender
+                        .send(NewNodePosition(
+                            channel_id,
+                            mesh_packet.id,
+                            mesh_packet.from,
+                            position,
+                        ))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
+                Ok(PortNum::TelemetryApp) => {
+                    if let Ok(telemetry) = Telemetry::decode(&data.payload as &[u8])
+                        && Some(mesh_packet.from) == self.my_node_num
+                        && let Some(DeviceMetrics(metrics)) = telemetry.variant
+                    {
+                        self.gui_sender
+                            .send(DeviceBatteryLevel(metrics.battery_level))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
+                }
+                Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
+                Ok(PortNum::NodeinfoApp) => {
+                    let user: MCUser = (&User::decode(&data.payload as &[u8]).unwrap()).into();
+                    let channel_id = self.channel_id_from_packet(mesh_packet);
+                    self.gui_sender
+                        .send(NewNodeInfo(
+                            channel_id,
+                            mesh_packet.id,
+                            mesh_packet.from,
+                            user,
+                        ))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
+                Ok(_) => {}
+                _ => eprintln!("Error decoding payload portnum: {}", data.portnum),
             }
         }
     }
@@ -114,14 +288,12 @@ impl MyRouter {
 
 impl PacketRouter<(), Error> for MyRouter {
     fn handle_packet_from_radio(&mut self, packet: FromRadio) -> Result<(), Error> {
-        self.handle_packet_from_radio(Box::new(packet));
+        block_on(self.handle_a_packet_from_radio(Box::new(packet)));
         Ok(())
     }
 
     fn handle_mesh_packet(&mut self, packet: MeshPacket) -> Result<(), Error> {
-        self.gui_sender
-            .try_send(DeviceMeshPacket(Box::new(packet)))
-            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+        block_on(self.handle_a_mesh_packet(&packet));
         Ok(())
     }
 
@@ -214,13 +386,13 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     let _none = stream_api.replace(api);
                                     r
                                 }
-                                SendPosition(channel_id, position) => {
+                                SendPosition(channel_id, mcposition) => {
                                     let mut api = stream_api.take().unwrap();
                                     let r = send_position(
                                         &mut api,
                                         &mut my_router,
                                         channel_id,
-                                        position,
+                                        mcposition.into(),
                                     )
                                     .await;
                                     let _none = stream_api.replace(api);
@@ -233,7 +405,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     r
                                 }
                                 RadioPacket(packet) => {
-                                    my_router.handle_packet_from_radio(packet);
+                                    my_router.handle_a_packet_from_radio(packet).await;
                                     Ok(())
                                 }
                                 SendEmojiReply(emoji, channel_id, reply_to_id) => {
@@ -343,7 +515,6 @@ async fn send_position(
     position: Position,
 ) -> Result<(), Error> {
     let (packet_destination, mesh_channel) = channel_id.to_destination();
-
     stream_api
         .send_mesh_packet(
             my_router,

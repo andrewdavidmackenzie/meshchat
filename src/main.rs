@@ -73,8 +73,18 @@ pub struct MCUser {
     pub is_unmessagable: bool,
 }
 
+#[allow(clippy::from_over_into)]
+impl Into<String> for MCUser {
+    fn into(self) -> String {
+        format!(
+            "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
+            self.long_name, self.short_name, self.id, self.hw_model
+        )
+    }
+}
+
 /// A Node's Info as represented in the App, maybe a superset of User attributes from different meshes
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MCNodeInfo {
     pub num: u32,
     pub user: Option<MCUser>,
@@ -83,11 +93,38 @@ pub struct MCNodeInfo {
     pub is_ignored: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug)]
 pub struct MCPosition {
-    pub latitude_i: i32,
-    pub longitude_i: i32,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub altitude: Option<i32>,
+    pub time: u32,
+    pub location_source: i32,
+    pub altitude_source: i32,
     pub timestamp: u32,
+    pub timestamp_millis_adjust: i32,
+    pub altitude_hae: Option<i32>,
+    pub altitude_geoidal_separation: Option<i32>,
+    pub pdop: u32,
+    pub hdop: u32,
+    pub vdop: u32,
+    pub gps_accuracy: u32,
+    pub ground_speed: Option<u32>,
+    pub ground_track: Option<u32>,
+    pub fix_quality: u32,
+    pub fix_type: u32,
+    pub sats_in_view: u32,
+    pub sensor_id: u32,
+    pub next_update: u32,
+    pub seq_number: u32,
+    pub precision_bits: u32,
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<String> for MCPosition {
+    fn into(self) -> String {
+        format!("📌 {:.2}, {:.2}", self.latitude, self.longitude)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -108,7 +145,7 @@ struct MeshChat {
     show_user: Option<MCUser>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MCChannel {
     pub index: i32,
     pub name: String,
@@ -129,7 +166,7 @@ pub enum Message {
     Exit,
     ConfigLoaded(Config),
     ConfigChange(ConfigChangeMessage),
-    ShowLocation(i32, i32), // lat and long / 1_000_000
+    ShowLocation(MCPosition),
     ShowUserInfo(MCUser),
     CloseShowUser,
     OpenUrl(String),
@@ -276,8 +313,8 @@ impl MeshChat {
                 self.config.save_config()
             }
             RemoveNotification(id) => self.notifications.remove(id),
-            ShowLocation(lat, long) => {
-                let _ = webbrowser::open(&Self::location_url(lat, long));
+            ShowLocation(position) => {
+                let _ = webbrowser::open(&Self::location_url(&position));
                 Task::none()
             }
             OpenUrl(url) => {
@@ -513,12 +550,10 @@ impl MeshChat {
     }
 
     /// Convert a location tuple to a URL that can be opened in a browser.
-    fn location_url(lat: i32, long: i32) -> String {
-        let latitude = 0.0000001 * (lat as f64);
-        let longitude = 0.0000001 * (long as f64);
+    fn location_url(position: &MCPosition) -> String {
         format!(
             "https://maps.google.com/?q={:.7},{:.7}",
-            latitude, longitude
+            position.latitude, position.longitude
         )
     }
 
@@ -563,15 +598,41 @@ impl MeshChat {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel_view_entry::Payload::NewTextMessage;
+    use crate::channel_view_entry::MCMessage::NewTextMessage;
     use iced::keyboard::key::NativeCode::MacOS;
     use iced::keyboard::{Key, Location};
 
     #[test]
     fn test_location_url() {
+        let position = MCPosition {
+            latitude: 50.0,
+            longitude: 1.0,
+            altitude: None,
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+
         assert_eq!(
-            MeshChat::location_url(50, 1),
-            "https://maps.google.com/?q=0.0000050,0.0000001"
+            MeshChat::location_url(&position),
+            "https://maps.google.com/?q=50.0000000,1.0000000"
         );
     }
 
