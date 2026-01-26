@@ -4,11 +4,11 @@ use crate::channel_view_entry::MCMessage;
 use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
-use crate::meshtastic::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::meshtastic::device_subscription::SubscriberMessage::{
+use crate::mesht::device_subscription::DeviceState::{Connected, Disconnected};
+use crate::mesht::device_subscription::SubscriberMessage::{
     Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
-use crate::meshtastic::device_subscription::SubscriptionEvent::{
+use crate::mesht::device_subscription::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
     DisconnectingEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,

@@ -1,5 +1,5 @@
-//! MeshChat is an iced GUI app that uses the meshtastic "rust" crate to discover and control
-//! meshtastic compatible radios connected to the host running it
+//! MeshChat is an iced GUI app that uses the mesht "rust" crate to discover and control
+//! mesht compatible radios connected to the host running it
 
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
@@ -19,7 +19,7 @@ use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::discovery::ble_discovery;
 use crate::linear::Linear;
-use crate::meshtastic::device_subscription;
+use crate::mesht::device_subscription;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{button_chip_style, picker_header_style, tooltip_style};
 use iced::font::Weight;
@@ -53,7 +53,7 @@ mod styles;
 mod icons;
 mod channel_id;
 mod emoji_picker;
-mod meshtastic;
+mod mesht;
 mod notification;
 #[cfg(test)]
 mod test_helper;

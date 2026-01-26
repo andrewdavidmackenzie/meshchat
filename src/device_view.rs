@@ -28,7 +28,7 @@ use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device_list_view::DeviceListView;
-use crate::meshtastic::device_subscription::SubscriptionEvent::{
+use crate::mesht::device_subscription::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
 };
