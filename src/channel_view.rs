@@ -244,7 +244,7 @@ impl ChannelView {
         &'a self,
         nodes: &'a HashMap<u32, MCNodeInfo>,
         enable_position: bool,
-        enable_my_info: bool,
+        enable_my_user: bool,
         device_view: &'a DeviceView,
         config: &'a Config,
         show_position_updates: bool,
@@ -253,7 +253,7 @@ impl ChannelView {
         let channel_view_content = self.channel_view(
             nodes,
             enable_position,
-            enable_my_info,
+            enable_my_user,
             show_position_updates,
             show_user_updates,
         );

@@ -49,8 +49,8 @@ impl fmt::Display for MCMessage {
             NewTextMessage(text) => f.write_str(text.as_str()),
             TextMessageReply(_reply_id, text) => f.write_str(format!("Re: {}", text).as_str()),
             EmojiReply(reply_id, text) => f.write_str(format!("{}: {}", text, reply_id).as_str()),
-            PositionMessage(position) => f.write_str(format!("{:?}", position).as_str()),
-            UserMessage(user) => f.write_str(format!("{:?}", user).as_str()),
+            PositionMessage(position) => f.write_str(format!("{}", position).as_str()),
+            UserMessage(user) => f.write_str(format!("{}", user).as_str()),
         }
     }
 }

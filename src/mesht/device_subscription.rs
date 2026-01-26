@@ -1,5 +1,5 @@
 use crate::SubscriberMessage::{
-    Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,
+    Connect, Disconnect, RadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
 };
 use crate::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
@@ -19,10 +19,8 @@ use iced::stream;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
 use meshtastic::errors::Error;
 use meshtastic::packet::{PacketReceiver, PacketRouter};
-use meshtastic::protobufs::config::device_config::Role;
-use meshtastic::protobufs::from_radio::PayloadVariant;
 use meshtastic::protobufs::from_radio::PayloadVariant::{
-    ClientNotification, MyInfo, NodeInfo, Packet,
+    Channel, ClientNotification, MyInfo, NodeInfo, Packet,
 };
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
@@ -44,7 +42,6 @@ enum DeviceState {
 struct MyRouter {
     gui_sender: futures_channel::mpsc::Sender<SubscriptionEvent>,
     my_node_num: Option<u32>,
-    my_user: User,
 }
 
 impl MyRouter {
@@ -55,18 +52,6 @@ impl MyRouter {
         MyRouter {
             gui_sender,
             my_node_num: None,
-            my_user: User {
-                id: "Unknown".to_string(),
-                long_name: "Unknown".to_string(),
-                short_name: "UNKN".to_string(),
-                #[allow(deprecated)]
-                macaddr: vec![],
-                hw_model: 0,
-                is_licensed: false,
-                role: Role::Client as i32,
-                public_key: vec![],
-                is_unmessagable: Some(true),
-            },
         }
     }
 
@@ -106,20 +91,13 @@ impl MyRouter {
             }
             // Information about a Node that exists on the radio - which could be myself
             Some(NodeInfo(node_info)) => {
-                // Once I know my own node id number, then I can capture my own node's [User] info
-                if Some(node_info.num) == self.my_node_num
-                    && let Some(user) = &node_info.user
-                {
-                    self.my_user = user.clone();
-                }
-
                 self.gui_sender
                     .send(NewNode(MCNodeInfo::from(node_info)))
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
             // This Packet conveys information about a Channel that exists on the radio
-            Some(PayloadVariant::Channel(channel)) => {
+            Some(Channel(channel)) => {
                 if meshtastic::protobufs::channel::Role::try_from(channel.role)
                     != Ok(meshtastic::protobufs::channel::Role::Disabled)
                 {
@@ -364,9 +342,15 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     let _none = stream_api.replace(api);
                                     r
                                 }
-                                SendInfo(channel_id) => {
+                                SendUser(channel_id, mcuser) => {
                                     let mut api = stream_api.take().unwrap();
-                                    let r = send_info(&mut api, &mut my_router, channel_id).await;
+                                    let r = send_user(
+                                        &mut api,
+                                        &mut my_router,
+                                        channel_id,
+                                        mcuser.into(),
+                                    )
+                                    .await;
                                     let _none = stream_api.replace(api);
                                     r
                                 }
@@ -498,17 +482,18 @@ async fn send_position(
 }
 
 /// Send a [User] info "ping" message to the channel or other node
-async fn send_info(
+async fn send_user(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
     channel_id: ChannelId,
+    user: User,
 ) -> Result<(), Error> {
     let (packet_destination, mesh_channel) = channel_id.to_destination();
 
     stream_api
         .send_mesh_packet(
             my_router,
-            my_router.my_user.encode_to_vec().into(),
+            user.encode_to_vec().into(),
             PortNum::NodeinfoApp,
             packet_destination,
             mesh_channel,

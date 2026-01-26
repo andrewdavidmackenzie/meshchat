@@ -1,5 +1,5 @@
 use crate::SubscriberMessage::{
-    Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
+    Connect, Disconnect, SendEmojiReply, SendPosition, SendText, SendUser,
 };
 use crate::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent, DisconnectingEvent,
@@ -85,7 +85,7 @@ pub struct DeviceView {
     subscription_sender: Option<Sender<SubscriberMessage>>,
     my_node_num: Option<u32>,
     my_position: Option<MCPosition>,
-    my_info: bool,
+    my_user: Option<MCUser>,
     viewing_channel: Option<ChannelId>,
     /// Map of ChannelViews, indexed by ChannelId
     pub channel_views: HashMap<ChannelId, ChannelView>,
@@ -179,7 +179,9 @@ impl DeviceView {
                 }
             }
             SendInfoMessage(channel_id) => {
-                return self.subscriber_send(SendInfo(channel_id), Message::None);
+                if let Some(user) = &self.my_user {
+                    return self.subscriber_send(SendUser(channel_id, user.clone()), Message::None);
+                }
             }
             ShowChannel(channel_id) => {
                 return self.channel_change(channel_id.clone());
@@ -402,7 +404,7 @@ impl DeviceView {
         } else {
             if Some(node_info.num) == self.my_node_num {
                 self.my_position = node_info.position.clone();
-                self.my_info = true;
+                self.my_user = node_info.user.clone();
             }
 
             let channel_id = Node(node_info.num);
@@ -434,6 +436,10 @@ impl DeviceView {
     fn update_node_position(&mut self, from: u32, position: &MCPosition) {
         if let Some(node) = self.nodes.get_mut(&from) {
             node.position = Some(position.clone());
+
+            if Some(from) == self.my_node_num {
+                self.my_position = Some(position.clone());
+            }
         }
     }
 
@@ -569,7 +575,7 @@ impl DeviceView {
             return channel_view.view(
                 &self.nodes,
                 self.my_position.is_some(),
-                self.my_info,
+                self.my_user.is_some(),
                 self,
                 config,
                 self.show_position_updates,

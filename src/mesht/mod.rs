@@ -14,11 +14,30 @@ impl From<&User> for MCUser {
             id: user.id.clone(),
             long_name: user.long_name.clone(),
             short_name: user.short_name.clone(),
-            hw_model: user.hw_model().as_str_name().to_string(),
+            hw_model_str: user.hw_model().as_str_name().to_string(),
+            hw_model: user.hw_model,
             is_licensed: user.is_licensed,
-            role: user.role().as_str_name().to_string(),
+            role_str: user.role().as_str_name().to_string(),
+            role: user.role,
             public_key: user.public_key.clone(),
             is_unmessagable: user.is_unmessagable.unwrap_or(false),
+        }
+    }
+}
+
+/// Conversions between [MCUser] and MeshChat [User]
+impl From<MCUser> for User {
+    fn from(user: MCUser) -> Self {
+        User {
+            id: user.id.clone(),
+            long_name: user.long_name.clone(),
+            short_name: user.short_name.clone(),
+            hw_model: user.hw_model,
+            is_licensed: user.is_licensed,
+            role: user.role,
+            public_key: user.public_key.clone(),
+            is_unmessagable: Some(user.is_unmessagable),
+            ..Default::default()
         }
     }
 }
@@ -75,8 +94,8 @@ impl From<&Position> for MCPosition {
 #[allow(clippy::from_over_into)]
 impl Into<Position> for MCPosition {
     fn into(self) -> Position {
-        let lat = self.latitude as i32 * 1000000;
-        let long = self.longitude as i32 * 1000000;
+        let lat = (self.latitude * 10_000_000.0) as i32;
+        let long = (self.longitude * 10_000_000.0) as i32;
         Position {
             latitude_i: Some(lat),
             longitude_i: Some(long),

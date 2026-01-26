@@ -37,6 +37,8 @@ use self_update::Status;
 use std::cmp::PartialEq;
 #[cfg(feature = "auto-update")]
 use std::error::Error;
+use std::fmt;
+use std::fmt::Formatter;
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 
@@ -92,7 +94,7 @@ pub enum SubscriberMessage {
     SendText(String, ChannelId, Option<u32>), // Optional reply to message id
     SendEmojiReply(String, ChannelId, u32),
     SendPosition(ChannelId, MCPosition),
-    SendInfo(ChannelId),
+    SendUser(ChannelId, MCUser),
     RadioPacket(Box<FromRadio>),
 }
 
@@ -102,19 +104,22 @@ pub struct MCUser {
     pub id: String,
     pub long_name: String,
     pub short_name: String,
-    pub hw_model: String,
+    pub hw_model_str: String,
+    pub hw_model: i32,
     pub is_licensed: bool,
-    pub role: String,
+    pub role_str: String,
+    pub role: i32,
     pub public_key: Vec<u8>,
     pub is_unmessagable: bool,
 }
 
 #[allow(clippy::from_over_into)]
-impl Into<String> for MCUser {
-    fn into(self) -> String {
-        format!(
+impl fmt::Display for MCUser {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
-            self.long_name, self.short_name, self.id, self.hw_model
+            self.long_name, self.short_name, self.id, self.hw_model_str
         )
     }
 }
@@ -157,9 +162,9 @@ pub struct MCPosition {
 }
 
 #[allow(clippy::from_over_into)]
-impl Into<String> for MCPosition {
-    fn into(self) -> String {
-        format!("📌 {:.2}, {:.2}", self.latitude, self.longitude)
+impl fmt::Display for MCPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "📌 {:.2}, {:.2}", self.latitude, self.longitude)
     }
 }
 
@@ -514,9 +519,9 @@ impl MeshChat {
             .push(text(format!("ID: {}", user.id)))
             .push(text(format!("Long Name: {}", user.long_name)))
             .push(text(format!("Short Name: {}", user.short_name)))
-            .push(text(format!("Hardware Model: {}", user.hw_model)))
+            .push(text(format!("Hardware Model: {}", user.hw_model_str)))
             .push(text(format!("Licensed: {}", user.is_licensed)))
-            .push(text(format!("Role: {}", user.role)))
+            .push(text(format!("Role: {}", user.role_str)))
             .push(text(format!("Public Key: {:X?}", user.public_key)))
             .push(text(format!("Unmessageable: {}", user.is_unmessagable)));
 
