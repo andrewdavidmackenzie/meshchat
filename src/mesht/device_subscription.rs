@@ -1,5 +1,5 @@
 use crate::SubscriberMessage::{
-    Connect, Disconnect, RadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
+    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
 };
 use crate::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
@@ -257,13 +257,13 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
             let mut my_router = MyRouter::new(gui_sender.clone());
             let (subscriber_sender, mut subscriber_receiver) = channel::<SubscriberMessage>(100);
 
-            // Send the event sender back to the GUI, so it can send messages
+            //Inform the GUI the subscription is ready to receive messages, so it can send messages
             let _ = gui_sender
                 .send(SubscriptionEvent::Ready(subscriber_sender.clone()))
                 .await;
 
             // Convert the channels to a `Stream`.
-            let mut subscriber_receiver = Box::pin(async_stream::stream! {
+            let mut gui_stream = Box::pin(async_stream::stream! {
                   while let Some(item) = subscriber_receiver.recv().await {
                       yield item;
                   }
@@ -275,7 +275,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     Disconnected => {
                         // Wait for a message from the UI to request that we connect to a device
                         // No need to wait for any messages from a radio, as we are not connected to one
-                        if let Some(Connect(ble_device)) = subscriber_receiver.next().await {
+                        if let Some(Connect(ble_device)) = gui_stream.next().await {
                             gui_sender
                                 .send(ConnectingEvent(ble_device.clone()))
                                 .await
@@ -305,10 +305,11 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
                     }
                     Connected(ble_device, packet_receiver) => {
-                        let radio_stream = UnboundedReceiverStream::from(packet_receiver)
-                            .map(|fr| RadioPacket(Box::new(fr)));
+                        let from_radio_stream = UnboundedReceiverStream::from(packet_receiver).map(
+                            |from_radio_packet| MeshTasticRadioPacket(Box::new(from_radio_packet)),
+                        );
 
-                        let mut merged_stream = radio_stream.merge(&mut subscriber_receiver);
+                        let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
 
                         while let Some(message) = StreamExt::next(&mut merged_stream).await {
                             let result = match message {
@@ -354,7 +355,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     let _none = stream_api.replace(api);
                                     r
                                 }
-                                RadioPacket(packet) => {
+                                MeshTasticRadioPacket(packet) => {
                                     my_router.handle_a_packet_from_radio(packet).await;
                                     Ok(())
                                 }
