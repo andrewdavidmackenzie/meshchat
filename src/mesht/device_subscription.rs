@@ -176,8 +176,8 @@ impl MyRouter {
                     self.gui_sender
                         .send(MCMessageReceived(
                             channel_id,
-                            data.request_id,
-                            data.source,
+                            mesh_packet.id,
+                            mesh_packet.from,
                             message,
                         ))
                         .await
