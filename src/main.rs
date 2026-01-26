@@ -11,6 +11,7 @@ use crate::Message::{
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
+use crate::channel_view_entry::MCMessage;
 use crate::config::{Config, HistoryLength, load_config};
 use crate::device_list_view::{DeviceListEvent, DeviceListView};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
@@ -30,12 +31,14 @@ use iced::widget::{
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
+use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
 use self_update::Status;
 use std::cmp::PartialEq;
 #[cfg(feature = "auto-update")]
 use std::error::Error;
 use std::time::Duration;
+use tokio::sync::mpsc::Sender;
 
 mod battery;
 mod channel_view;
@@ -59,6 +62,39 @@ mod notification;
 mod test_helper;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Events are Messages sent from the subscription to the GUI
+#[derive(Debug, Clone)]
+pub enum SubscriptionEvent {
+    /// The subscription is ready to receive [SubscriberMessage] from the GUI
+    Ready(Sender<SubscriberMessage>),
+    ConnectedEvent(String),
+    ConnectingEvent(String),
+    DisconnectingEvent(String),
+    DisconnectedEvent(String),
+    ConnectionError(String, String, String),
+    NotReady,
+    MyNodeNum(u32),
+    NewChannel(MCChannel),
+    NewNode(MCNodeInfo),
+    RadioNotification(String),
+    MessageACK(ChannelId, u32),
+    MCMessageReceived(ChannelId, u32, u32, MCMessage), // channel, id, from, MCMessage
+    NewNodeInfo(ChannelId, u32, u32, MCUser),          // channel_id, id, from, MCUser
+    NewNodePosition(ChannelId, u32, u32, MCPosition),  // channel_id, id, from, MCPosition
+    DeviceBatteryLevel(Option<u32>),
+}
+
+/// Messages sent from the GUI to the subscription
+pub enum SubscriberMessage {
+    Connect(String),
+    Disconnect,
+    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
+    SendEmojiReply(String, ChannelId, u32),
+    SendPosition(ChannelId, MCPosition),
+    SendInfo(ChannelId),
+    RadioPacket(Box<FromRadio>),
+}
 
 /// A User as represented in the App, maybe a superset of User attributes from different meshes
 #[derive(Debug, Clone)]

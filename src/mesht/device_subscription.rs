@@ -1,19 +1,18 @@
-use crate::channel_id::ChannelId;
-use crate::channel_id::ChannelId::Node;
-use crate::channel_view_entry::MCMessage;
-use crate::channel_view_entry::MCMessage::{
-    AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
-};
-use crate::mesht::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::mesht::device_subscription::SubscriberMessage::{
+use crate::SubscriberMessage::{
     Connect, Disconnect, RadioPacket, SendEmojiReply, SendInfo, SendPosition, SendText,
 };
-use crate::mesht::device_subscription::SubscriptionEvent::{
+use crate::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
     DisconnectingEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
 };
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
+use crate::channel_id::ChannelId;
+use crate::channel_id::ChannelId::Node;
+use crate::channel_view_entry::MCMessage::{
+    AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
+};
+use crate::mesht::device_subscription::DeviceState::{Connected, Disconnected};
+use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, SubscriberMessage, SubscriptionEvent};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -33,42 +32,9 @@ use meshtastic::utils::stream::BleId;
 use meshtastic::{Message, utils};
 use std::pin::Pin;
 use std::time::Duration;
-use tokio::sync::mpsc::{Sender, channel};
+use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::{Stream, StreamExt};
-
-/// Messages sent from the subscription to the GUI
-#[derive(Debug, Clone)]
-pub enum SubscriptionEvent {
-    /// A message from the subscription to indicate it is ready to receive messages
-    Ready(Sender<SubscriberMessage>),
-    ConnectedEvent(String),
-    ConnectingEvent(String),
-    DisconnectingEvent(String),
-    DisconnectedEvent(String),
-    ConnectionError(String, String, String),
-    NotReady,
-    MyNodeNum(u32),
-    NewChannel(MCChannel),
-    NewNode(MCNodeInfo),
-    RadioNotification(String),
-    MessageACK(ChannelId, u32),
-    MCMessageReceived(ChannelId, u32, u32, MCMessage), // channel, id, from, MCMessage
-    NewNodeInfo(ChannelId, u32, u32, MCUser),          // channel_id, id, from, MCUser
-    NewNodePosition(ChannelId, u32, u32, MCPosition),  // channel_id, id, from, MCPosition
-    DeviceBatteryLevel(Option<u32>),
-}
-
-/// A message type sent from the UI to the subscriber
-pub enum SubscriberMessage {
-    Connect(String),
-    Disconnect,
-    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
-    SendEmojiReply(String, ChannelId, u32),
-    SendPosition(ChannelId, MCPosition),
-    SendInfo(ChannelId),
-    RadioPacket(Box<FromRadio>),
-}
 
 enum DeviceState {
     Disconnected,

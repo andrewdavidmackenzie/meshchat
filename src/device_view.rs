@@ -1,15 +1,14 @@
+use crate::SubscriberMessage::{
+    Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
+};
+use crate::SubscriptionEvent::{
+    ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent, DisconnectingEvent,
+    NotReady, Ready,
+};
 use crate::battery::{Battery, BatteryState};
 use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
 use crate::config::{Config, HistoryLength};
-use crate::device_subscription::SubscriberMessage::{
-    Connect, Disconnect, SendEmojiReply, SendInfo, SendPosition, SendText,
-};
-use crate::device_subscription::SubscriptionEvent::{
-    ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent, DisconnectingEvent,
-    NotReady, Ready,
-};
-use crate::device_subscription::{SubscriberMessage, SubscriptionEvent};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{
     AliasInput, ChannelMsg, ClearFilter, ConnectRequest, DisconnectRequest, ForwardMessage,
@@ -17,21 +16,22 @@ use crate::device_view::DeviceViewMessage::{
     ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
     SubscriptionMessage,
 };
+use crate::{SubscriberMessage, SubscriptionEvent};
 
 use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{
     AddNodeAlias, AppError, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation,
     ShowUserInfo, ToggleNodeFavourite,
 };
+use crate::SubscriptionEvent::{
+    DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
+    NewNodePosition, RadioNotification,
+};
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device_list_view::DeviceListView;
-use crate::mesht::device_subscription::SubscriptionEvent::{
-    DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
-    NewNodePosition, RadioNotification,
-};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
     scrollbar_style, text_input_style, tooltip_style,
@@ -1009,8 +1009,8 @@ pub fn long_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
 #[cfg(test)]
 mod tests {
     use crate::Message::Navigation;
+    use crate::SubscriberMessage::{Connect, Disconnect};
     use crate::View::DeviceList;
-    use crate::device_subscription::SubscriberMessage::{Connect, Disconnect};
     use crate::device_view::ConnectionState::Disconnected;
     use crate::test_helper;
     use btleplug::api::BDAddr;

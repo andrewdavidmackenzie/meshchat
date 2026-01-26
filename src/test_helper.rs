@@ -1,9 +1,9 @@
+use crate::SubscriptionEvent::MyNodeNum;
 use crate::channel_id::ChannelId;
 use crate::channel_view_entry::MCMessage;
 use crate::config::HistoryLength;
 use crate::device_view::DeviceView;
 use crate::device_view::DeviceViewMessage::SubscriptionMessage;
-use crate::mesht::device_subscription::SubscriptionEvent::MyNodeNum;
 use crate::{MCChannel, MeshChat, channel_view_entry};
 
 pub fn test_app() -> MeshChat {
