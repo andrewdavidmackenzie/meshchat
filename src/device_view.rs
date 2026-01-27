@@ -18,10 +18,9 @@ use crate::device_view::DeviceViewMessage::{
 };
 use crate::{SubscriberMessage, SubscriptionEvent};
 
-use crate::ConfigChangeMessage::DeviceAndChannel;
 use crate::Message::{
-    AddNodeAlias, AppError, DeviceViewEvent, Navigation, RemoveNodeAlias, ShowLocation,
-    ShowUserInfo, ToggleNodeFavourite,
+    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, RemoveNodeAlias,
+    ShowLocation, ShowUserInfo, ToggleNodeFavourite,
 };
 use crate::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
@@ -36,7 +35,7 @@ use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
     scrollbar_style, text_input_style, tooltip_style,
 };
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat, Message, View, icons};
+use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
@@ -240,7 +239,7 @@ impl DeviceView {
                 let channel_id = channel_id.clone();
                 let device = ble_device.clone();
                 return Task::perform(empty(), move |_| {
-                    Message::ConfigChange(DeviceAndChannel(Some(device), channel_id))
+                    Message::DeviceAndChannelChange(Some(device), channel_id)
                 });
             }
         }
@@ -276,10 +275,10 @@ impl DeviceView {
                         let channel_id = self.viewing_channel.clone();
                         let device = ble_device.clone();
                         Task::perform(empty(), move |_| {
-                            Message::ConfigChange(DeviceAndChannel(
+                            Message::DeviceAndChannelChange(
                                 Some(device),
                                 channel_id.clone(),
-                            ))
+                            )
                         })
                     }
                     Some(channel_id) => {
@@ -395,6 +394,19 @@ impl DeviceView {
                 Task::none()
             }
         }
+    }
+
+    /// Generate a Settings button
+    pub fn settings_button<'a>() -> Element<'a, Message> {
+        tooltip(
+            button(icons::cog())
+                .style(button_chip_style)
+                .on_press(OpenSettingsDialog),
+            "Open Settings Dialog",
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .into()
     }
 
     ///  Add a new node to the list if it has the User info we want and is not marked to be ignored
@@ -537,7 +549,7 @@ impl DeviceView {
             )
         }
 
-        header.push(MeshChat::settings_button()).into()
+        header.push(Self::settings_button()).into()
     }
 
     /// Return an element that displays the battery level of the connected device

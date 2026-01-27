@@ -1,6 +1,8 @@
 //! MeshChat is an iced GUI app that uses the mesht "rust" crate to discover and control
 //! mesht compatible radios connected to the host running it
 
+#[cfg(feature = "auto-update")]
+use crate::Message::UpdateChecked;
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
     ConfigLoaded, CopyToClipBoard, DeviceAndChannelChange, DeviceListViewEvent, DeviceViewEvent,
@@ -22,12 +24,10 @@ use crate::discovery::ble_discovery;
 use crate::linear::Linear;
 use crate::mesht::device_subscription;
 use crate::notification::{Notification, Notifications};
-use crate::styles::{button_chip_style, picker_header_style, tooltip_style};
+use crate::styles::{picker_header_style, tooltip_style};
 use iced::font::Weight;
 use iced::keyboard::key;
-use iced::widget::{
-    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, tooltip,
-};
+use iced::widget::{Column, Space, center, container, mouse_area, opaque, operation, stack, text};
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
@@ -35,8 +35,6 @@ use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
 use self_update::Status;
 use std::cmp::PartialEq;
-#[cfg(feature = "auto-update")]
-use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::Duration;
@@ -64,39 +62,6 @@ mod notification;
 mod test_helper;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Events are Messages sent from the subscription to the GUI
-#[derive(Debug, Clone)]
-pub enum SubscriptionEvent {
-    /// The subscription is ready to receive [SubscriberMessage] from the GUI
-    Ready(Sender<SubscriberMessage>),
-    ConnectedEvent(String),
-    ConnectingEvent(String),
-    DisconnectingEvent(String),
-    DisconnectedEvent(String),
-    ConnectionError(String, String, String),
-    NotReady,
-    MyNodeNum(u32),
-    NewChannel(MCChannel),
-    NewNode(MCNodeInfo),
-    RadioNotification(String),
-    MessageACK(ChannelId, u32),
-    MCMessageReceived(ChannelId, u32, u32, MCMessage), // channel, id, from, MCMessage
-    NewNodeInfo(ChannelId, u32, u32, MCUser),          // channel_id, id, from, MCUser
-    NewNodePosition(ChannelId, u32, u32, MCPosition),  // channel_id, id, from, MCPosition
-    DeviceBatteryLevel(Option<u32>),
-}
-
-/// Messages sent from the GUI to the subscription
-pub enum SubscriberMessage {
-    Connect(String),
-    Disconnect,
-    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
-    SendEmojiReply(String, ChannelId, u32),
-    SendPosition(ChannelId, MCPosition),
-    SendUser(ChannelId, MCUser),
-    MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
-}
 
 /// A User as represented in the App, maybe a superset of User attributes from different meshes
 #[derive(Debug, Clone)]
@@ -192,6 +157,39 @@ pub struct MCChannel {
     pub name: String,
 }
 
+/// Events are Messages sent from the subscription to the GUI
+#[derive(Debug, Clone)]
+pub enum SubscriptionEvent {
+    /// The subscription is ready to receive [SubscriberMessage] from the GUI
+    Ready(Sender<SubscriberMessage>),
+    ConnectedEvent(String),
+    ConnectingEvent(String),
+    DisconnectingEvent(String),
+    DisconnectedEvent(String),
+    ConnectionError(String, String, String),
+    NotReady,
+    MyNodeNum(u32),
+    NewChannel(MCChannel),
+    NewNode(MCNodeInfo),
+    RadioNotification(String),
+    MessageACK(ChannelId, u32),
+    MCMessageReceived(ChannelId, u32, u32, MCMessage), // channel, id, from, MCMessage
+    NewNodeInfo(ChannelId, u32, u32, MCUser),          // channel_id, id, from, MCUser
+    NewNodePosition(ChannelId, u32, u32, MCPosition),  // channel_id, id, from, MCPosition
+    DeviceBatteryLevel(Option<u32>),
+}
+
+/// Messages sent from the GUI to the subscription
+pub enum SubscriberMessage {
+    Connect(String),
+    Disconnect,
+    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
+    SendEmojiReply(String, ChannelId, u32),
+    SendPosition(ChannelId, MCPosition),
+    SendUser(ChannelId, MCUser),
+    MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
+}
+
 /// These are the messages that MeshChat responds to
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -223,12 +221,14 @@ pub enum Message {
     ToggleAutoReconnect,
     ToggleAutoUpdate,
     HistoryLengthSelected(HistoryLength),
+    #[cfg(feature = "auto-update")]
+    UpdateChecked(Result<Status, String>),
     None,
 }
 
 /// Check for a new release of MeshChat and update if available
 #[cfg(feature = "auto-update")]
-fn update() -> Result<Status, Box<dyn Error>> {
+async fn check_for_update() -> Result<Status, String> {
     let mut update_builder = self_update::backends::github::Update::configure();
 
     let release_update = update_builder
@@ -239,9 +239,10 @@ fn update() -> Result<Status, Box<dyn Error>> {
         .show_output(false)
         //.current_version(env!("CARGO_PKG_VERSION"))
         .current_version("0.2.0")
-        .build()?;
+        .build()
+        .map_err(|e| e.to_string())?;
 
-    release_update.update().map_err(|e| e.into())
+    release_update.update().map_err(|e| e.to_string())
 }
 
 fn main() -> iced::Result {
@@ -313,32 +314,33 @@ impl MeshChat {
 
                 self.config = config;
 
-                // TODO put into a task
-                #[cfg(feature = "auto-update")]
-                if self.config.auto_update_startup {
-                    match update() {
-                        Ok(Status::UpToDate(version)) => {
-                            println!("Already up to date: `{}`", version)
-                        }
-                        Ok(Status::Updated(version)) => {
-                            println!("Updated to version: `{}`", version)
-                        }
-                        Err(e) => eprintln!("Error updating: {:?}", e),
+                let update_task = {
+                    #[cfg(feature = "auto-update")]
+                    if self.config.auto_update_startup {
+                        Task::perform(check_for_update(), UpdateChecked)
+                    } else {
+                        Task::none()
                     }
-                }
+                    #[cfg(not(feature = "auto-update"))]
+                    Task::none()
+                };
 
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
-                if let Some(ble_device) = &self.config.ble_device
-                    && !self.config.disable_auto_reconnect
-                {
-                    self.device_view.update(DeviceViewMessage::ConnectRequest(
-                        ble_device.clone(),
-                        self.config.channel_id.clone(),
-                    ))
-                } else {
-                    Task::none()
-                }
+                let connect_task = {
+                    if let Some(ble_device) = &self.config.ble_device
+                        && !self.config.disable_auto_reconnect
+                    {
+                        self.device_view.update(DeviceViewMessage::ConnectRequest(
+                            ble_device.clone(),
+                            self.config.channel_id.clone(),
+                        ))
+                    } else {
+                        Task::none()
+                    }
+                };
+
+                Task::batch(vec![update_task, connect_task])
             }
             DeviceAndChannelChange(ble_device, channel) => {
                 self.config.ble_device = ble_device;
@@ -455,6 +457,19 @@ impl MeshChat {
                 self.show_user = None;
                 Task::none()
             }
+            #[cfg(feature = "auto-update")]
+            UpdateChecked(result) => {
+                match result {
+                    Ok(Status::UpToDate(version)) => {
+                        println!("Already up to date: `{}`", version)
+                    }
+                    Ok(Status::Updated(version)) => {
+                        println!("Updated to version: `{}`", version)
+                    }
+                    Err(e) => eprintln!("Error updating: {:?}", e),
+                }
+                Task::none()
+            }
         }
     }
 
@@ -537,19 +552,6 @@ impl MeshChat {
             )
             .push(settings_column);
         container(inner).style(tooltip_style).into()
-    }
-
-    /// Generate a Settings button
-    pub fn settings_button<'a>() -> Element<'a, Message> {
-        tooltip(
-            button(icons::cog())
-                .style(button_chip_style)
-                .on_press(OpenSettingsDialog),
-            "Open Settings Dialog",
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .into()
     }
 
     /// Function to create a modal dialog in the middle of the screen
