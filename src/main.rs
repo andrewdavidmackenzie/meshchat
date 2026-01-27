@@ -95,7 +95,7 @@ pub enum SubscriberMessage {
     SendEmojiReply(String, ChannelId, u32),
     SendPosition(ChannelId, MCPosition),
     SendUser(ChannelId, MCUser),
-    MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not from the UI
+    MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
 }
 
 /// A User as represented in the App, maybe a superset of User attributes from different meshes
