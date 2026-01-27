@@ -3,8 +3,8 @@
 
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
-    ConfigChange, ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit,
-    HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
+    ConfigLoaded, CopyToClipBoard, DeviceAndChannelChange, DeviceListViewEvent, DeviceViewEvent,
+    Exit, HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
     RemoveNodeAlias, RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect,
     ToggleAutoUpdate, ToggleNodeFavourite, ToggleShowPositionUpdates, ToggleShowUserUpdates,
     WindowEvent,
@@ -192,11 +192,6 @@ pub struct MCChannel {
     pub name: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum ConfigChangeMessage {
-    DeviceAndChannel(Option<String>, Option<ChannelId>),
-}
-
 /// These are the messages that MeshChat responds to
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -206,7 +201,7 @@ pub enum Message {
     DeviceViewEvent(DeviceViewMessage),
     Exit,
     ConfigLoaded(Config),
-    ConfigChange(ConfigChangeMessage),
+    DeviceAndChannelChange(Option<String>, Option<ChannelId>),
     ShowLocation(MCPosition),
     ShowUserInfo(MCUser),
     CloseShowUser,
@@ -345,14 +340,9 @@ impl MeshChat {
                     Task::none()
                 }
             }
-            ConfigChange(config_change) => {
-                // Merge in what has changed
-                match config_change {
-                    ConfigChangeMessage::DeviceAndChannel(ble_device, channel) => {
-                        self.config.ble_device = ble_device;
-                        self.config.channel_id = channel;
-                    }
-                }
+            DeviceAndChannelChange(ble_device, channel) => {
+                self.config.ble_device = ble_device;
+                self.config.channel_id = channel;
                 // and save it asynchronously, so that we don't block the GUI thread
                 self.config.save_config()
             }
@@ -433,7 +423,6 @@ impl MeshChat {
                 self.showing_settings = false;
                 Task::none()
             }
-            // TODO unify these with ConfigChange event above
             ToggleShowPositionUpdates => {
                 self.config.show_position_updates = !self.config.show_position_updates;
                 self.device_view
