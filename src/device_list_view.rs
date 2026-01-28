@@ -5,9 +5,9 @@ use crate::config::Config;
 use crate::device_list_view::DeviceListEvent::{
     AliasInput, BLERadioFound, BLERadioLost, Error, StartEditingAlias,
 };
-use crate::device_view::ConnectionState;
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
+use crate::device_view::{ConnectionState, DeviceView};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
 use crate::{MeshChat, Message, View};
 use iced::Bottom;
@@ -55,7 +55,11 @@ impl DeviceListView {
             }
             Error(e) => {
                 return Task::perform(empty(), move |_| {
-                    Message::AppError("Discovery Error".to_string(), e.to_string())
+                    Message::AppError(
+                        "Discovery Error".to_string(),
+                        e.to_string(),
+                        MeshChat::now(),
+                    )
                 });
             }
             StartEditingAlias(device) => return self.start_editing_alias(device),
@@ -133,7 +137,7 @@ impl DeviceListView {
             )
         }
 
-        header.push(MeshChat::settings_button()).into()
+        header.push(DeviceView::settings_button()).into()
     }
 
     pub fn view<'a>(

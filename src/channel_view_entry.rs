@@ -1,9 +1,8 @@
-use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::channel_id::ChannelId;
 use crate::channel_view::ChannelViewMessage;
 use crate::channel_view::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyWithEmoji};
-use crate::channel_view_entry::Payload::{
+use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
@@ -13,6 +12,7 @@ use crate::styles::{
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
     menu_button_style, message_text_style, tooltip_style,
 };
+use crate::{MCNodeInfo, MCPosition, MCUser, Message};
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::advanced::text::Span;
@@ -23,7 +23,6 @@ use iced::widget::{
 use iced::{Bottom, Color, Element, Fill, Font, Left, Padding, Renderer, Right, Theme, Top};
 use iced_aw::menu::Menu;
 use iced_aw::{MenuBar, menu_bar, menu_items};
-use meshtastic::protobufs::{NodeInfo, User};
 use ringmap::RingMap;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -31,50 +30,48 @@ use std::default::Default;
 use std::fmt;
 use std::fmt::Formatter;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
-pub enum Payload {
-    AlertMessage(String),
-    NewTextMessage(String),
-    TextMessageReply(u32, String),
-    EmojiReply(u32, String),
-    PositionMessage(i32, i32),
-    UserMessage(User),
+pub enum MCMessage {
+    AlertMessage(String),          // message_text
+    NewTextMessage(String),        // message_text
+    TextMessageReply(u32, String), // reply_id, reply_text
+    EmojiReply(u32, String),       // reply_id, reply_emoji_text
+    PositionMessage(MCPosition),   // position
+    UserMessage(MCUser),           // user
 }
 
-impl fmt::Display for Payload {
+impl fmt::Display for MCMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            AlertMessage(text_message) => f.write_str(text_message),
-            NewTextMessage(text_message) => f.write_str(text_message),
-            TextMessageReply(_, reply_text) => f.write_str(reply_text),
-            EmojiReply(_, _) => f.write_str(""), // Not possible
-            PositionMessage(lat, long) => f.write_str(&ChannelViewEntry::location_text(lat, long)),
-            UserMessage(user) => f.write_str(&ChannelViewEntry::user_text(user)),
+            AlertMessage(text) => f.write_str(text.as_str()),
+            NewTextMessage(text) => f.write_str(text.as_str()),
+            TextMessageReply(_reply_id, text) => f.write_str(format!("Re: {}", text).as_str()),
+            EmojiReply(reply_id, text) => f.write_str(format!("{}: {}", text, reply_id).as_str()),
+            PositionMessage(position) => f.write_str(format!("{}", position).as_str()),
+            UserMessage(user) => f.write_str(format!("{}", user).as_str()),
         }
     }
 }
 
-impl Default for Payload {
+impl Default for MCMessage {
     fn default() -> Self {
         NewTextMessage(String::default())
     }
 }
 
 /// An entry in the Channel View that represents some type of message sent to either this user on
-/// this device or to a channel this device can read. Can be any of [Payload] types.
+/// this device or to a channel this device can read. Can be any of [MCMessage] types.
 #[allow(dead_code)] // Remove when the 'seen' field is used
 #[derive(Clone, Debug, Default)]
 pub struct ChannelViewEntry {
     /// NodeId of the node that sent this message
     from: u32,
-    // Unique message ID for this message
     message_id: u32,
     /// The daytime the message was sent/received
     rx_daytime: DateTime<Local>,
     /// The message contents of differing types
-    payload: Payload,
+    message: MCMessage,
     /// Has the user of the app seen this message?
     seen: bool,
     /// Has the entry been acknowledged as received by a receiver?
@@ -87,23 +84,18 @@ pub struct ChannelViewEntry {
 impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(payload: Payload, from: u32, message_id: u32) -> Self {
+    pub fn new(message_id: u32, from: u32, message: MCMessage, rx_time: u32) -> Self {
         ChannelViewEntry {
-            payload,
+            message,
             from,
             message_id,
-            rx_daytime: Self::now(),
+            rx_daytime: Self::rx_time(rx_time),
             ..Default::default()
         }
     }
 
     /// Get the time now as a [DateTime<Local>]
-    pub fn now() -> DateTime<Local> {
-        let rx_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|t| t.as_secs())
-            .unwrap_or(0);
-
+    pub fn rx_time(rx_time: u32) -> DateTime<Local> {
         let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
         datetime_utc.with_timezone(&Local)
     }
@@ -114,8 +106,8 @@ impl ChannelViewEntry {
     }
 
     /// Get a reference to the payload of this message
-    pub fn payload(&self) -> &Payload {
-        &self.payload
+    pub fn message(&self) -> &MCMessage {
+        &self.message
     }
 
     /// Return the message_id
@@ -141,7 +133,7 @@ impl ChannelViewEntry {
         self.acked
     }
 
-    /// Return true if this message has been seen by the user already
+    /// Return true if the user has seen this message already
     pub fn seen(&self) -> bool {
         self.seen
     }
@@ -170,7 +162,7 @@ impl ChannelViewEntry {
     pub fn reply_quote(entries: &RingMap<u32, ChannelViewEntry>, id: &u32) -> Option<String> {
         entries
             .get(id)
-            .map(|entry| format!("Re: {}", entry.payload))
+            .map(|entry| format!("Re: {}", entry.message))
             .map(|mut text| {
                 if text.len() > 20 {
                     text = Self::truncate(&text, 20).to_string();
@@ -213,7 +205,7 @@ impl ChannelViewEntry {
     /// Return an element (currently a Column) with a list of the names of the nodes that sent the
     /// given emoji.
     fn list_of_nodes<'a>(
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         sources: &'a Vec<u32>,
     ) -> Element<'a, Message> {
         let mut col = Column::new();
@@ -257,20 +249,12 @@ impl ChannelViewEntry {
     pub fn view<'a>(
         &'a self,
         entries: &'a RingMap<u32, ChannelViewEntry>,
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         channel_id: &'a ChannelId,
         mine: bool,
         emoji_picker: &'a crate::emoji_picker::EmojiPicker,
     ) -> Element<'a, Message> {
-        let message_text = match self.payload() {
-            AlertMessage(text_msg) => text_msg.clone(),
-            NewTextMessage(text_msg) => text_msg.clone(),
-            TextMessageReply(_, text_msg) => text_msg.clone(),
-            PositionMessage(lat, long) => Self::location_text(lat, long),
-            UserMessage(user) => Self::user_text(user),
-            EmojiReply(_, _) => String::default(), // Should never happen
-        };
-
+        let message_text = self.message().to_string();
         let mut message_content_column = Column::new();
 
         if !mine {
@@ -284,7 +268,7 @@ impl ChannelViewEntry {
             );
         }
 
-        let content: Element<'static, Message> = match self.payload() {
+        let content: Element<'static, Message> = match self.message() {
             AlertMessage(_) => rich_text(Self::tokenize(message_text))
                 .style(alert_message_style)
                 .size(18)
@@ -304,10 +288,10 @@ impl ChannelViewEntry {
                     .size(18)
                     .into()
             }
-            PositionMessage(lat, long) => button(text(message_text))
+            PositionMessage(position) => button(text(message_text))
                 .padding([1, 5])
                 .style(button_chip_style)
-                .on_press(ShowLocation(*lat, *long))
+                .on_press(ShowLocation(position.clone()))
                 .into(),
             EmojiReply(_, _) => text(message_text).into(),
         };
@@ -380,24 +364,6 @@ impl ChannelViewEntry {
             .into()
     }
 
-    fn user_text(user: &User) -> String {
-        format!(
-            "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
-            user.long_name,
-            user.short_name,
-            user.id,
-            user.hw_model().as_str_name()
-        )
-    }
-
-    /// Takes lat and long as found in [Position], normalize into real lat/long and format into a
-    /// string with a location icon and the lat/long values with two decimal places
-    fn location_text(lat: &i32, long: &i32) -> String {
-        let latitude = 0.0000001 * *lat as f64;
-        let longitude = 0.0000001 * *long as f64;
-        format!("📌 {:.2}, {:.2}", latitude, longitude)
-    }
-
     /// Add a row to the content column with the name of the source node
     fn top_row<'a>(
         &'a self,
@@ -433,7 +399,7 @@ impl ChannelViewEntry {
     /// Append an element to the column that contains the emoji replies for this message, if any.
     fn emoji_row<'a>(
         &'a self,
-        nodes: &'a HashMap<u32, NodeInfo>,
+        nodes: &'a HashMap<u32, MCNodeInfo>,
         mut message_column: Column<'a, Message>,
     ) -> Column<'a, Message> {
         if !self.emojis().is_empty() {
@@ -461,8 +427,6 @@ impl ChannelViewEntry {
         message_column
     }
 
-    // TODO differentiate if we are in a node or channel view
-    // if a node view, don't show the DM menu item
     fn menu_bar<'a>(
         &'a self,
         name: &'a str,
@@ -485,15 +449,25 @@ impl ChannelViewEntry {
             });
 
         #[rustfmt::skip]
-        let menu_items = menu_items!(
-            (button(Row::new().push(text("react")).push(Space::new().width(Fill)).push(text("▶"))).style(button_chip_style).width(Fill),
-            menu_tpl_2(menu_items!(
-            (picker_element)))),
-            (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
-            (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
-            (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(channel_id.clone(), ChannelViewMessage::PrepareReply(self.message_id))))),
-            (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
-        );
+        let menu_items = if matches!(channel_id, ChannelId::Channel(_)) {
+            menu_items!(
+                (button(Row::new().push(text("react")).push(Space::new().width(Fill)).push(text("▶"))).style(button_chip_style).width(Fill),
+                menu_tpl_2(menu_items!(
+                (picker_element)))),
+                (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
+                (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
+                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(channel_id.clone(), ChannelViewMessage::PrepareReply(self.message_id))))),
+                (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
+            )
+        } else {
+            menu_items!(
+                (button(Row::new().push(text("react")).push(Space::new().width(Fill)).push(text("▶"))).style(button_chip_style).width(Fill),
+                menu_tpl_2(menu_items!(
+                (picker_element)))),
+                (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
+                (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
+                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(channel_id.clone(), ChannelViewMessage::PrepareReply(self.message_id))))))
+    };
 
         // Create the menu bar with the root button and list of options
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);

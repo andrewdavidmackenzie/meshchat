@@ -1,10 +1,10 @@
-use crate::Message;
 use crate::Message::{
     HistoryLengthSelected, ToggleAutoReconnect, ToggleAutoUpdate, ToggleShowPositionUpdates,
     ToggleShowUserUpdates,
 };
 use crate::channel_id::ChannelId;
 use crate::styles::{picker_header_style, tooltip_style};
+use crate::{MeshChat, Message};
 use directories::ProjectDirs;
 use iced::font::Weight;
 use iced::widget::{Column, container, pick_list, text, toggler};
@@ -107,6 +107,7 @@ impl Config {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
+                        MeshChat::now(),
                     ),
                 }
             })
@@ -257,6 +258,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
+                        MeshChat::now(),
                     ),
                 }
             })
@@ -271,6 +273,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
+                        MeshChat::now(),
                     ),
                 }
             })
@@ -352,35 +355,6 @@ mod tests {
         );
     }
 
-    /*
-    #[tokio::test]
-    async fn name_saved_when_default_mac() {
-        let config = Config {
-            device_mac_address: Some(BDAddr {
-                ::
-            }from([0, 1, 2, 3, 4, 6])),
-            ..Default::default()
-        };
-
-        let tempfile = tempfile::Builder::new()
-            .prefix("meshchat")
-            .tempdir()
-            .expect("Could not create a temp file for test");
-        save(tempfile.path().join("config.toml"), config.clone())
-            .await
-            .expect("Could not save config file");
-
-        let returned = load(tempfile.path().join("config.toml"))
-            .await
-            .expect("Could not load config file");
-        assert_eq!(
-            returned.device_mac_address,
-            Some(BDAddr::from([0, 1, 2, 3, 4, 6]))
-        );
-    }
-
-
-     */
     #[tokio::test]
     async fn history_length_default_saved() {
         let config = Config {

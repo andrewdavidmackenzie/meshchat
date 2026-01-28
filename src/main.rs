@@ -1,16 +1,19 @@
-//! MeshChat is an iced GUI app that uses the meshtastic "rust" crate to discover and control
-//! meshtastic compatible radios connected to the host running it
+//! MeshChat is an iced GUI app that uses the mesht "rust" crate to discover and control
+//! mesht compatible radios connected to the host running it
 
+#[cfg(feature = "auto-update")]
+use crate::Message::UpdateChecked;
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
-    ConfigChange, ConfigLoaded, CopyToClipBoard, DeviceListViewEvent, DeviceViewEvent, Exit,
-    HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
+    ConfigLoaded, CopyToClipBoard, DeviceAndChannelChange, DeviceListViewEvent, DeviceViewEvent,
+    Exit, HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
     RemoveNodeAlias, RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect,
     ToggleAutoUpdate, ToggleNodeFavourite, ToggleShowPositionUpdates, ToggleShowUserUpdates,
     WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
+use crate::channel_view_entry::MCMessage;
 use crate::config::{Config, HistoryLength, load_config};
 use crate::device_list_view::{DeviceListEvent, DeviceListView};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
@@ -19,30 +22,29 @@ use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::discovery::ble_discovery;
 use crate::linear::Linear;
+use crate::mesht::device_subscription;
 use crate::notification::{Notification, Notifications};
-use crate::styles::{button_chip_style, picker_header_style, tooltip_style};
+use crate::styles::{picker_header_style, tooltip_style};
 use iced::font::Weight;
 use iced::keyboard::key;
-use iced::widget::{
-    Column, Space, button, center, container, mouse_area, opaque, operation, stack, text, tooltip,
-};
+use iced::widget::{Column, Space, center, container, mouse_area, opaque, operation, stack, text};
 use iced::window::icon;
 use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
-use meshtastic::protobufs::User;
+use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
 use self_update::Status;
 use std::cmp::PartialEq;
-#[cfg(feature = "auto-update")]
-use std::error::Error;
-use std::time::Duration;
+use std::fmt;
+use std::fmt::Formatter;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::mpsc::Sender;
 
 mod battery;
 mod channel_view;
 mod channel_view_entry;
 mod config;
 mod device_list_view;
-mod device_subscription;
 mod device_view;
 mod discovery;
 mod easing;
@@ -54,11 +56,82 @@ mod styles;
 mod icons;
 mod channel_id;
 mod emoji_picker;
+mod mesht;
 mod notification;
 #[cfg(test)]
 mod test_helper;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// A User as represented in the App, maybe a superset of User attributes from different meshes
+#[derive(Debug, Clone)]
+pub struct MCUser {
+    pub id: String,
+    pub long_name: String,
+    pub short_name: String,
+    pub hw_model_str: String,
+    pub hw_model: i32,
+    pub is_licensed: bool,
+    pub role_str: String,
+    pub role: i32,
+    pub public_key: Vec<u8>,
+    pub is_unmessagable: bool,
+}
+
+#[allow(clippy::from_over_into)]
+impl fmt::Display for MCUser {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ⓘ from '{}' ('{}'), id = '{}', with hardware '{}'",
+            self.long_name, self.short_name, self.id, self.hw_model_str
+        )
+    }
+}
+
+/// A Node's Info as represented in the App, maybe a superset of User attributes from different meshes
+#[derive(Clone, Debug)]
+pub struct MCNodeInfo {
+    pub num: u32,
+    pub user: Option<MCUser>,
+    pub position: Option<MCPosition>,
+    pub channel: u32,
+    pub is_ignored: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct MCPosition {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub altitude: Option<i32>,
+    pub time: u32,
+    pub location_source: i32,
+    pub altitude_source: i32,
+    pub timestamp: u32,
+    pub timestamp_millis_adjust: i32,
+    pub altitude_hae: Option<i32>,
+    pub altitude_geoidal_separation: Option<i32>,
+    pub pdop: u32,
+    pub hdop: u32,
+    pub vdop: u32,
+    pub gps_accuracy: u32,
+    pub ground_speed: Option<u32>,
+    pub ground_track: Option<u32>,
+    pub fix_quality: u32,
+    pub fix_type: u32,
+    pub sats_in_view: u32,
+    pub sensor_id: u32,
+    pub next_update: u32,
+    pub seq_number: u32,
+    pub precision_bits: u32,
+}
+
+#[allow(clippy::from_over_into)]
+impl fmt::Display for MCPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "📌 {:.2}, {:.2}", self.latitude, self.longitude)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
@@ -75,12 +148,46 @@ struct MeshChat {
     device_view: DeviceView,
     notifications: Notifications,
     showing_settings: bool,
-    show_user: Option<User>,
+    show_user: Option<MCUser>,
 }
 
+#[derive(Clone, Debug)]
+pub struct MCChannel {
+    pub index: i32,
+    pub name: String,
+}
+
+/// Events are Messages sent from the subscription to the GUI
 #[derive(Debug, Clone)]
-pub enum ConfigChangeMessage {
-    DeviceAndChannel(Option<String>, Option<ChannelId>),
+pub enum SubscriptionEvent {
+    /// The subscription is ready to receive [SubscriberMessage] from the GUI
+    Ready(Sender<SubscriberMessage>),
+    ConnectedEvent(String),
+    ConnectingEvent(String),
+    DisconnectingEvent(String),
+    DisconnectedEvent(String),
+    ConnectionError(String, String, String),
+    NotReady,
+    MyNodeNum(u32),
+    NewChannel(MCChannel),
+    NewNode(MCNodeInfo),
+    RadioNotification(String, u32), // Message, rx_time
+    MessageACK(ChannelId, u32),
+    MCMessageReceived(ChannelId, u32, u32, MCMessage, u32), // channel, id, from, MCMessage, rx_time
+    NewNodeInfo(ChannelId, u32, u32, MCUser, u32),          // channel_id, id, from, MCUser, rx_time
+    NewNodePosition(ChannelId, u32, u32, MCPosition, u32), // channel_id, id, from, MCPosition, rx_time
+    DeviceBatteryLevel(Option<u32>),
+}
+
+/// Messages sent from the GUI to the subscription
+pub enum SubscriberMessage {
+    Connect(String),
+    Disconnect,
+    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
+    SendEmojiReply(String, ChannelId, u32),
+    SendPosition(ChannelId, MCPosition),
+    SendUser(ChannelId, MCUser),
+    MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
 }
 
 /// These are the messages that MeshChat responds to
@@ -92,13 +199,13 @@ pub enum Message {
     DeviceViewEvent(DeviceViewMessage),
     Exit,
     ConfigLoaded(Config),
-    ConfigChange(ConfigChangeMessage),
-    ShowLocation(i32, i32), // lat and long / 1_000_000
-    ShowUserInfo(User),
+    DeviceAndChannelChange(Option<String>, Option<ChannelId>),
+    ShowLocation(MCPosition),
+    ShowUserInfo(MCUser),
     CloseShowUser,
     OpenUrl(String),
-    AppNotification(String, String),
-    AppError(String, String),
+    AppNotification(String, String, u32), // Message, detail, rx_time
+    AppError(String, String, u32),        // Message, detail, rx_time
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
     CopyToClipBoard(String),
@@ -114,12 +221,14 @@ pub enum Message {
     ToggleAutoReconnect,
     ToggleAutoUpdate,
     HistoryLengthSelected(HistoryLength),
+    #[cfg(feature = "auto-update")]
+    UpdateChecked(Result<Status, String>),
     None,
 }
 
 /// Check for a new release of MeshChat and update if available
 #[cfg(feature = "auto-update")]
-fn update() -> Result<Status, Box<dyn Error>> {
+async fn check_for_update() -> Result<Status, String> {
     let mut update_builder = self_update::backends::github::Update::configure();
 
     let release_update = update_builder
@@ -130,9 +239,10 @@ fn update() -> Result<Status, Box<dyn Error>> {
         .show_output(false)
         //.current_version(env!("CARGO_PKG_VERSION"))
         .current_version("0.2.0")
-        .build()?;
+        .build()
+        .map_err(|e| e.to_string())?;
 
-    release_update.update().map_err(|e| e.into())
+    release_update.update().map_err(|e| e.to_string())
 }
 
 fn main() -> iced::Result {
@@ -158,6 +268,14 @@ impl MeshChat {
     /// Create a new instance of the app and load the config asynchronously
     fn new() -> (Self, Task<Message>) {
         (Self::default(), load_config())
+    }
+
+    /// Get the current time in epoch as u32
+    pub fn now() -> u32 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32
     }
 
     /// Return the title of the app, which is used in the window title bar.
@@ -187,61 +305,60 @@ impl MeshChat {
             }
             DeviceViewEvent(device_event) => self.device_view.update(device_event),
             Exit => window::latest().and_then(window::close),
-            AppNotification(summary, detail) => {
-                self.notifications.add(Notification::Info(summary, detail))
-            }
-            AppError(summary, detail) => {
-                self.notifications.add(Notification::Error(summary, detail))
-            }
+            AppNotification(summary, detail, rx_time) => self
+                .notifications
+                .add(Notification::Info(summary, detail, rx_time)),
+            AppError(summary, detail, rx_time) => self
+                .notifications
+                .add(Notification::Error(summary, detail, rx_time)),
             Message::None => Task::none(),
             ConfigLoaded(config) => {
                 self.device_view
                     .set_history_length(config.history_length.clone());
                 self.device_view
                     .set_show_position_updates(config.show_position_updates);
+                self.device_view
+                    .set_show_user_updates(config.show_user_updates);
+
                 self.config = config;
 
-                // TODO put into a task
-                #[cfg(feature = "auto-update")]
-                if self.config.auto_update_startup {
-                    match update() {
-                        Ok(Status::UpToDate(version)) => {
-                            println!("Already up to date: `{}`", version)
-                        }
-                        Ok(Status::Updated(version)) => {
-                            println!("Updated to version: `{}`", version)
-                        }
-                        Err(e) => eprintln!("Error updating: {:?}", e),
+                let update_task = {
+                    #[cfg(feature = "auto-update")]
+                    if self.config.auto_update_startup {
+                        Task::perform(check_for_update(), UpdateChecked)
+                    } else {
+                        Task::none()
                     }
-                }
+                    #[cfg(not(feature = "auto-update"))]
+                    Task::none()
+                };
 
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
-                if let Some(ble_device) = &self.config.ble_device
-                    && !self.config.disable_auto_reconnect
-                {
-                    self.device_view.update(DeviceViewMessage::ConnectRequest(
-                        ble_device.clone(),
-                        self.config.channel_id.clone(),
-                    ))
-                } else {
-                    Task::none()
-                }
-            }
-            ConfigChange(config_change) => {
-                // Merge in what has changed
-                match config_change {
-                    ConfigChangeMessage::DeviceAndChannel(ble_device, channel) => {
-                        self.config.ble_device = ble_device;
-                        self.config.channel_id = channel;
+                let connect_task = {
+                    if let Some(ble_device) = &self.config.ble_device
+                        && !self.config.disable_auto_reconnect
+                    {
+                        self.device_view.update(DeviceViewMessage::ConnectRequest(
+                            ble_device.clone(),
+                            self.config.channel_id.clone(),
+                        ))
+                    } else {
+                        Task::none()
                     }
-                }
+                };
+
+                Task::batch(vec![update_task, connect_task])
+            }
+            DeviceAndChannelChange(ble_device, channel) => {
+                self.config.ble_device = ble_device;
+                self.config.channel_id = channel;
                 // and save it asynchronously, so that we don't block the GUI thread
                 self.config.save_config()
             }
             RemoveNotification(id) => self.notifications.remove(id),
-            ShowLocation(lat, long) => {
-                let _ = webbrowser::open(&Self::location_url(lat, long));
+            ShowLocation(position) => {
+                let _ = webbrowser::open(&Self::location_url(&position));
                 Task::none()
             }
             OpenUrl(url) => {
@@ -316,7 +433,6 @@ impl MeshChat {
                 self.showing_settings = false;
                 Task::none()
             }
-            // TODO unify these with ConfigChange event above
             ToggleShowPositionUpdates => {
                 self.config.show_position_updates = !self.config.show_position_updates;
                 self.device_view
@@ -347,6 +463,19 @@ impl MeshChat {
             }
             CloseShowUser => {
                 self.show_user = None;
+                Task::none()
+            }
+            #[cfg(feature = "auto-update")]
+            UpdateChecked(result) => {
+                match result {
+                    Ok(Status::UpToDate(version)) => {
+                        println!("Already up to date: `{}`", version)
+                    }
+                    Ok(Status::Updated(version)) => {
+                        println!("Updated to version: `{}`", version)
+                    }
+                    Err(e) => eprintln!("Error updating: {:?}", e),
+                }
                 Task::none()
             }
         }
@@ -399,20 +528,17 @@ impl MeshChat {
     }
 
     /// Create a view for a User
-    fn user<'a>(&self, user: &User) -> Element<'a, Message> {
+    fn user<'a>(&self, user: &MCUser) -> Element<'a, Message> {
         let settings_column = Column::new()
             .padding(8)
             .push(text(format!("ID: {}", user.id)))
             .push(text(format!("Long Name: {}", user.long_name)))
             .push(text(format!("Short Name: {}", user.short_name)))
-            .push(text(format!(
-                "Hardware Model: {}",
-                user.hw_model().as_str_name()
-            )))
+            .push(text(format!("Hardware Model: {}", user.hw_model_str)))
             .push(text(format!("Licensed: {}", user.is_licensed)))
-            .push(text(format!("Role: {}", user.role().as_str_name())))
+            .push(text(format!("Role: {}", user.role_str)))
             .push(text(format!("Public Key: {:X?}", user.public_key)))
-            .push(text(format!("Unmessageable: {}", user.is_unmessagable())));
+            .push(text(format!("Unmessageable: {}", user.is_unmessagable)));
 
         let inner = Column::new()
             .spacing(8)
@@ -434,19 +560,6 @@ impl MeshChat {
             )
             .push(settings_column);
         container(inner).style(tooltip_style).into()
-    }
-
-    /// Generate a Settings button
-    pub fn settings_button<'a>() -> Element<'a, Message> {
-        tooltip(
-            button(icons::cog())
-                .style(button_chip_style)
-                .on_press(OpenSettingsDialog),
-            "Open Settings Dialog",
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .into()
     }
 
     /// Function to create a modal dialog in the middle of the screen
@@ -480,12 +593,10 @@ impl MeshChat {
     }
 
     /// Convert a location tuple to a URL that can be opened in a browser.
-    fn location_url(lat: i32, long: i32) -> String {
-        let latitude = 0.0000001 * (lat as f64);
-        let longitude = 0.0000001 * (long as f64);
+    fn location_url(position: &MCPosition) -> String {
         format!(
             "https://maps.google.com/?q={:.7},{:.7}",
-            latitude, longitude
+            position.latitude, position.longitude
         )
     }
 
@@ -530,15 +641,41 @@ impl MeshChat {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel_view_entry::Payload::NewTextMessage;
+    use crate::channel_view_entry::MCMessage::NewTextMessage;
     use iced::keyboard::key::NativeCode::MacOS;
     use iced::keyboard::{Key, Location};
 
     #[test]
     fn test_location_url() {
+        let position = MCPosition {
+            latitude: 50.0,
+            longitude: 1.0,
+            altitude: None,
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+
         assert_eq!(
-            MeshChat::location_url(50, 1),
-            "https://maps.google.com/?q=0.0000050,0.0000001"
+            MeshChat::location_url(&position),
+            "https://maps.google.com/?q=50.0000000,1.0000000"
         );
     }
 

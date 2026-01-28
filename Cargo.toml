@@ -17,7 +17,7 @@ hot = ["iced/hot"]
 auto-update = ["self_update"]
 
 [dependencies]
-# For communications with BLE connected radios running meshtastic firmware
+# For communications with BLE connected radios running mesht firmware
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"] }
 # GUI framework
 iced = { version = "0.14", features = ["wgpu", "tokio", "advanced", "canvas", "x11", "wayland", "advanced-shaping", "image"] }
