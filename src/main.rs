@@ -37,7 +37,7 @@ use self_update::Status;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::Formatter;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 
 mod battery;
@@ -171,7 +171,7 @@ pub enum SubscriptionEvent {
     MyNodeNum(u32),
     NewChannel(MCChannel),
     NewNode(MCNodeInfo),
-    RadioNotification(String),
+    RadioNotification(String, u32), // Message, rx_time
     MessageACK(ChannelId, u32),
     MCMessageReceived(ChannelId, u32, u32, MCMessage, u32), // channel, id, from, MCMessage, rx_time
     NewNodeInfo(ChannelId, u32, u32, MCUser, u32),          // channel_id, id, from, MCUser, rx_time
@@ -204,8 +204,8 @@ pub enum Message {
     ShowUserInfo(MCUser),
     CloseShowUser,
     OpenUrl(String),
-    AppNotification(String, String),
-    AppError(String, String),
+    AppNotification(String, String, u32), // Message, detail, rx_time
+    AppError(String, String, u32),        // Message, detail, rx_time
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
     CopyToClipBoard(String),
@@ -270,6 +270,14 @@ impl MeshChat {
         (Self::default(), load_config())
     }
 
+    /// Get the current time in epoch as u32
+    pub fn now() -> u32 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32
+    }
+
     /// Return the title of the app, which is used in the window title bar.
     /// Include the version number of the app and the number of unread messages, if any
     fn title(&self) -> String {
@@ -297,12 +305,12 @@ impl MeshChat {
             }
             DeviceViewEvent(device_event) => self.device_view.update(device_event),
             Exit => window::latest().and_then(window::close),
-            AppNotification(summary, detail) => {
-                self.notifications.add(Notification::Info(summary, detail))
-            }
-            AppError(summary, detail) => {
-                self.notifications.add(Notification::Error(summary, detail))
-            }
+            AppNotification(summary, detail, rx_time) => self
+                .notifications
+                .add(Notification::Info(summary, detail), rx_time),
+            AppError(summary, detail, rx_time) => self
+                .notifications
+                .add(Notification::Error(summary, detail), rx_time),
             Message::None => Task::none(),
             ConfigLoaded(config) => {
                 self.device_view

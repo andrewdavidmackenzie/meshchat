@@ -16,7 +16,7 @@ use crate::device_view::DeviceViewMessage::{
     ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
     SubscriptionMessage,
 };
-use crate::{SubscriberMessage, SubscriptionEvent};
+use crate::{MeshChat, SubscriberMessage, SubscriptionEvent};
 
 use crate::Message::{
     AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, RemoveNodeAlias,
@@ -219,7 +219,11 @@ impl DeviceView {
             let future = async move { sender.send(subscriber_message).await };
             Task::perform(future, |result| match result {
                 Ok(()) => success_message,
-                Err(e) => AppError("Connection Error".to_string(), format!("{:?}", e)),
+                Err(e) => AppError(
+                    "Connection Error".to_string(),
+                    format!("{:?}", e),
+                    MeshChat::now(),
+                ),
             })
         } else {
             Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)))
@@ -313,14 +317,15 @@ impl DeviceView {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                 Task::perform(empty(), |_| Navigation(DeviceList))
                     .chain(Task::perform(empty(), move |_| {
-                        AppError(summary.clone(), detail.clone())
+                        AppError(summary.clone(), detail.clone(), MeshChat::now())
                     }))
             }
             NotReady => {
                 Task::perform(empty(), |_| Navigation(DeviceList))
                     .chain(Task::perform(empty(), move |_| {
                         AppError("Subscription not ready".to_string(),
-                                 "An attempt was made to communicate to radio prior to the subscription being Ready".to_string())
+                                 "An attempt was made to communicate to radio prior to the subscription being Ready".to_string(),
+                        MeshChat::now())
                     }))
             }
             MyNodeNum(my_node_num) => {
@@ -335,11 +340,12 @@ impl DeviceView {
                 self.add_node(node_info);
                 Task::none()
             }
-            RadioNotification(message) => {
+            RadioNotification(message, rx_time) => {
                 Task::perform(empty(), move |_| {
                     Message::AppNotification(
                         "Radio Notification".to_string(),
                         message,
+                        rx_time
                     )
                 })
             }

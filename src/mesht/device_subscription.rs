@@ -112,7 +112,10 @@ impl MyRouter {
                 // messages that should to be displayed to the user in the form of push
                 // notifications or validation messages when saving invalid configuration.
                 self.gui_sender
-                    .send(RadioNotification(notification.message.clone()))
+                    .send(RadioNotification(
+                        notification.message.clone(),
+                        notification.time,
+                    ))
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }

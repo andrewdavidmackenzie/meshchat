@@ -9,7 +9,7 @@ use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, D
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
 use crate::device_view::{ConnectionState, DeviceView};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
-use crate::{Message, View};
+use crate::{MeshChat, Message, View};
 use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -55,7 +55,11 @@ impl DeviceListView {
             }
             Error(e) => {
                 return Task::perform(empty(), move |_| {
-                    Message::AppError("Discovery Error".to_string(), e.to_string())
+                    Message::AppError(
+                        "Discovery Error".to_string(),
+                        e.to_string(),
+                        MeshChat::now(),
+                    )
                 });
             }
             StartEditingAlias(device) => return self.start_editing_alias(device),

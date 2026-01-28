@@ -88,7 +88,7 @@ impl ChannelView {
     }
 
     /// Get the time now as a [DateTime<Local>]
-    fn now() -> DateTime<Local> {
+    fn now_local() -> DateTime<Local> {
         let rx_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|t| t.as_secs())
@@ -109,7 +109,7 @@ impl ChannelView {
                 }
             }
             HistoryLength::Duration(duration) => {
-                let oldest = Self::now() - *duration;
+                let oldest = Self::now_local() - *duration;
                 while self
                     .entries
                     .pop_front_if(|_k, v| v.time() < oldest)

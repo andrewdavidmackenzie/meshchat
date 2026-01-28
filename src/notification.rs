@@ -63,7 +63,7 @@ impl Notifications {
     /// Add a notification to the list of notifications to display at the top of the screen.
     /// Notifications are displayed in a list, with the most recent at the top.
     /// Each notification has a unique id, which is used to remove it from the list.
-    pub fn add(&mut self, notification: Notification) -> Task<Message> {
+    pub fn add(&mut self, notification: Notification, _rx_time: u32) -> Task<Message> {
         self.inner.push((self.next_id, notification));
         self.next_id += 1;
         Task::none()
@@ -79,6 +79,7 @@ impl Notifications {
 
 #[cfg(test)]
 mod tests {
+    use crate::MeshChat;
     use crate::notification::{Notification, Notifications};
 
     #[test]
@@ -90,7 +91,10 @@ mod tests {
     #[test]
     fn test_add() {
         let mut notifications = Notifications::default();
-        let _ = notifications.add(Notification::Info("test".into(), "test".into()));
+        let _ = notifications.add(
+            Notification::Info("test".into(), "test".into()),
+            MeshChat::now(),
+        );
         assert_eq!(notifications.inner.len(), 1);
     }
 
@@ -104,8 +108,14 @@ mod tests {
     #[test]
     fn test_add_and_remove() {
         let mut notifications = Notifications::default();
-        let _ = notifications.add(Notification::Info("test1".into(), "test1".into()));
-        let _ = notifications.add(Notification::Info("test2".into(), "test2".into()));
+        let _ = notifications.add(
+            Notification::Info("test1".into(), "test1".into()),
+            MeshChat::now(),
+        );
+        let _ = notifications.add(
+            Notification::Info("test2".into(), "test2".into()),
+            MeshChat::now(),
+        );
         let _ = notifications.remove(0);
         assert_eq!(notifications.inner.len(), 1);
     }
