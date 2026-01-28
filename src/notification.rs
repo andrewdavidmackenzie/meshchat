@@ -1,16 +1,21 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
-use crate::styles::{button_chip_style, error_notification_style, info_notification_style};
+use crate::styles::{
+    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, error_notification_style,
+    info_notification_style,
+};
+use chrono::{DateTime, Local, Utc};
+use iced::Length::Fixed;
 use iced::widget::container::Style;
-use iced::widget::{Column, Container, Row, button, text};
-use iced::{Element, Fill, Right, Task, Theme};
+use iced::widget::{Column, Container, Row, Text, button, text};
+use iced::{Element, Fill, Renderer, Right, Task, Theme};
 
 /// A [Notification] can be one of two notification types:
 /// - Error(summary, detail)
 /// - Info(summary, detail)
 pub enum Notification {
-    Error(String, String),
-    Info(String, String),
+    Error(String, String, u32), // Message, Detail, rx_time
+    Info(String, String, u32),  // Message, Detail, rx_time
 }
 
 /// A collection of notifications that should be shown on screen
@@ -27,11 +32,15 @@ impl Notifications {
 
         for (id, notification) in &self.inner {
             notifications = notifications.push(match notification {
-                Notification::Error(summary, details) => {
-                    Self::notification_box(*id, summary, details, error_notification_style)
-                }
-                Notification::Info(summary, details) => {
-                    Self::notification_box(*id, summary, details, info_notification_style)
+                Notification::Error(summary, details, rx_time) => Self::notification_box(
+                    *id,
+                    summary,
+                    details,
+                    *rx_time,
+                    error_notification_style,
+                ),
+                Notification::Info(summary, details, rx_time) => {
+                    Self::notification_box(*id, summary, details, *rx_time, info_notification_style)
                 }
             });
         }
@@ -43,9 +52,10 @@ impl Notifications {
         id: usize,
         summary: &'a str,
         detail: &'a str,
+        rx_time: u32,
         style: impl Fn(&Theme) -> Style + 'static,
     ) -> Element<'a, Message> {
-        let row = Row::new().width(Fill).push(text(summary).size(20)).push(
+        let top_row = Row::new().width(Fill).push(text(summary).size(20)).push(
             Column::new().width(Fill).align_x(Right).push(
                 button("OK")
                     .style(button_chip_style)
@@ -53,17 +63,32 @@ impl Notifications {
             ),
         );
 
-        Container::new(Column::new().push(row).push(text(detail).size(14)))
+        let bottom_row = Row::new()
+            .push(text(detail).size(14))
+            .push(Self::time_to_text(rx_time));
+
+        Container::new(Column::new().push(top_row).push(bottom_row))
             .padding([6, 12])
             .style(style)
             .width(Fill)
             .into()
     }
 
+    /// Convert the notification creation time to a Text element
+    fn time_to_text<'a>(rx_time: u32) -> Text<'a, Theme, Renderer> {
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
+        let datetime_local = datetime_utc.with_timezone(&Local);
+        let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
+        text(time_str)
+            .color(TIME_TEXT_COLOR)
+            .size(TIME_TEXT_SIZE)
+            .width(Fixed(TIME_TEXT_WIDTH))
+    }
+
     /// Add a notification to the list of notifications to display at the top of the screen.
     /// Notifications are displayed in a list, with the most recent at the top.
     /// Each notification has a unique id, which is used to remove it from the list.
-    pub fn add(&mut self, notification: Notification, _rx_time: u32) -> Task<Message> {
+    pub fn add(&mut self, notification: Notification) -> Task<Message> {
         self.inner.push((self.next_id, notification));
         self.next_id += 1;
         Task::none()
@@ -91,10 +116,11 @@ mod tests {
     #[test]
     fn test_add() {
         let mut notifications = Notifications::default();
-        let _ = notifications.add(
-            Notification::Info("test".into(), "test".into()),
+        let _ = notifications.add(Notification::Info(
+            "test".into(),
+            "test".into(),
             MeshChat::now(),
-        );
+        ));
         assert_eq!(notifications.inner.len(), 1);
     }
 
@@ -108,14 +134,16 @@ mod tests {
     #[test]
     fn test_add_and_remove() {
         let mut notifications = Notifications::default();
-        let _ = notifications.add(
-            Notification::Info("test1".into(), "test1".into()),
+        let _ = notifications.add(Notification::Info(
+            "test1".into(),
+            "test1".into(),
             MeshChat::now(),
-        );
-        let _ = notifications.add(
-            Notification::Info("test2".into(), "test2".into()),
+        ));
+        let _ = notifications.add(Notification::Info(
+            "test2".into(),
+            "test2".into(),
             MeshChat::now(),
-        );
+        ));
         let _ = notifications.remove(0);
         assert_eq!(notifications.inner.len(), 1);
     }

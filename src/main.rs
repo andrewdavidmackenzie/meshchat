@@ -307,10 +307,10 @@ impl MeshChat {
             Exit => window::latest().and_then(window::close),
             AppNotification(summary, detail, rx_time) => self
                 .notifications
-                .add(Notification::Info(summary, detail), rx_time),
+                .add(Notification::Info(summary, detail, rx_time)),
             AppError(summary, detail, rx_time) => self
                 .notifications
-                .add(Notification::Error(summary, detail), rx_time),
+                .add(Notification::Error(summary, detail, rx_time)),
             Message::None => Task::none(),
             ConfigLoaded(config) => {
                 self.device_view
