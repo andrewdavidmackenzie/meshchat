@@ -351,9 +351,9 @@ impl DeviceView {
                 }
                 Task::none()
             }
-            MCMessageReceived(channel_id, id, from, mc_message) => {
+            MCMessageReceived(channel_id, id, from, mc_message, rx_time) => {
                 if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                    let new_message = ChannelViewEntry::new(id, from, mc_message);
+                    let new_message = ChannelViewEntry::new(id, from, mc_message, rx_time);
                     channel_view.new_message(new_message, &self.history_length)
                 } else {
                     eprintln!("No channel for MCMessage");
@@ -364,12 +364,12 @@ impl DeviceView {
                 self.battery_level = level;
                 Task::none()
             }
-            NewNodeInfo(channel_id, id,  from, mc_user) => {
+            NewNodeInfo(channel_id, id,  from, mc_user, rx_time) => {
                 self.update_node_user(from, &mc_user);
 
                 if self.show_user_updates {
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(id, from, UserMessage(mc_user));
+                        let new_message = ChannelViewEntry::new(id, from, UserMessage(mc_user), rx_time);
                         return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("NewNodeInfo: Node '{}' unknown", mc_user.long_name);
@@ -377,7 +377,7 @@ impl DeviceView {
                 }
                 Task::none()
             }
-            NewNodePosition(channel_id, id, from, position) => {
+            NewNodePosition(channel_id, id, from, position, rx_time) => {
                 self.update_node_position(from, &position);
                 if self.show_position_updates {
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
@@ -385,6 +385,7 @@ impl DeviceView {
                                 id,
                                 from,
                                 PositionMessage(position),
+                                rx_time,
                             );
                             return channel_view.new_message(new_message, &self.history_length);
                     } else {

@@ -5,6 +5,7 @@ use crate::config::HistoryLength;
 use crate::device_view::DeviceView;
 use crate::device_view::DeviceViewMessage::SubscriptionMessage;
 use crate::{MCChannel, MeshChat, channel_view_entry};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn test_app() -> MeshChat {
     let mut meshchat = MeshChat::default();
@@ -22,7 +23,15 @@ pub fn test_app() -> MeshChat {
 
 impl MeshChat {
     pub fn new_message(&mut self, msg: MCMessage) {
-        let channel_view_entry = channel_view_entry::ChannelViewEntry::new(0, 1, msg);
+        let channel_view_entry = channel_view_entry::ChannelViewEntry::new(
+            0,
+            1,
+            msg,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
+        );
         let channel_view = self
             .device_view
             .channel_views

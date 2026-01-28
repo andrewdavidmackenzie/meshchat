@@ -19,7 +19,7 @@ use crate::styles::{
 };
 use crate::{MCNodeInfo, MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
-use chrono::{Datelike, Local};
+use chrono::{Datelike, Local, Utc};
 use iced::font::Style::Italic;
 use iced::font::Weight;
 use iced::padding::right;
@@ -33,6 +33,7 @@ use iced::widget::{Id, operation};
 use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
 use ringmap::RingMap;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const MESSAGE_INPUT_ID: &str = "message_input";
 const CHANNEL_VIEW_SCROLLABLE: &str = "channel_view_scrollable";
@@ -86,6 +87,17 @@ impl ChannelView {
         }
     }
 
+    /// Get the time now as a [DateTime<Local>]
+    fn now() -> DateTime<Local> {
+        let rx_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|t| t.as_secs())
+            .unwrap_or(0);
+
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
+        datetime_utc.with_timezone(&Local)
+    }
+
     /// Remove older messages according to the passed in history_length setting
     fn trim_history(&mut self, history_length: &HistoryLength) {
         // if there is an active config for the maximum length of history, then trim
@@ -97,7 +109,7 @@ impl ChannelView {
                 }
             }
             HistoryLength::Duration(duration) => {
-                let oldest = ChannelViewEntry::now() - *duration;
+                let oldest = Self::now() - *duration;
                 while self
                     .entries
                     .pop_front_if(|_k, v| v.time() < oldest)
@@ -545,7 +557,7 @@ mod test {
     use crate::channel_view_entry::ChannelViewEntry;
     use crate::channel_view_entry::MCMessage::NewTextMessage;
     use crate::config::HistoryLength;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[tokio::test]
     async fn message_ordering_test() {
@@ -557,13 +569,37 @@ mod test {
 
         // create a set of messages with more than a second between them
         // message ids are not in order
-        let oldest_message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
+        let oldest_message = ChannelViewEntry::new(
+            1,
+            1,
+            NewTextMessage("Hello 1".to_string()),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
+        );
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let middle_message = ChannelViewEntry::new(2, 1000, NewTextMessage("Hello 2".to_string()));
+        let middle_message = ChannelViewEntry::new(
+            2,
+            1000,
+            NewTextMessage("Hello 2".to_string()),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
+        );
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let newest_message = ChannelViewEntry::new(3, 500, NewTextMessage("Hello 3".to_string()));
+        let newest_message = ChannelViewEntry::new(
+            3,
+            500,
+            NewTextMessage("Hello 3".to_string()),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
+        );
 
         // Add them out of order - they should be ordered by the time of creation, not entry
         let _ = channel_view.new_message(newest_message.clone(), &HistoryLength::All);
@@ -608,7 +644,15 @@ mod test {
     #[test]
     fn test_unread_count() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
+        let message = ChannelViewEntry::new(
+            1,
+            1,
+            NewTextMessage("Hello 1".to_string()),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
+        );
         let _ = channel_view.new_message(message.clone(), &HistoryLength::All);
         assert_eq!(channel_view.unread_count(), 1);
     }
@@ -616,7 +660,15 @@ mod test {
     #[test]
     fn test_replying_valid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
+        let message = ChannelViewEntry::new(
+            1,
+            1,
+            NewTextMessage("Hello 1".to_string()),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
+        );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
         let _ = channel_view.update(PrepareReply(0));
@@ -627,7 +679,15 @@ mod test {
     #[test]
     fn test_replying_invalid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        let message = ChannelViewEntry::new(1, 1, NewTextMessage("Hello 1".to_string()));
+        let message = ChannelViewEntry::new(
+            1,
+            1,
+            NewTextMessage("Hello 1".to_string()),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32,
+        );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
         let _ = channel_view.update(PrepareReply(1));

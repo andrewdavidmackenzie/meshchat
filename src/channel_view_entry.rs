@@ -30,7 +30,6 @@ use std::default::Default;
 use std::fmt;
 use std::fmt::Formatter;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
 pub enum MCMessage {
@@ -85,23 +84,18 @@ pub struct ChannelViewEntry {
 impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(message_id: u32, from: u32, message: MCMessage) -> Self {
+    pub fn new(message_id: u32, from: u32, message: MCMessage, rx_time: u32) -> Self {
         ChannelViewEntry {
             message,
             from,
             message_id,
-            rx_daytime: Self::now(),
+            rx_daytime: Self::rx_time(rx_time),
             ..Default::default()
         }
     }
 
     /// Get the time now as a [DateTime<Local>]
-    pub fn now() -> DateTime<Local> {
-        let rx_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|t| t.as_secs())
-            .unwrap_or(0);
-
+    pub fn rx_time(rx_time: u32) -> DateTime<Local> {
         let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
         datetime_utc.with_timezone(&Local)
     }
