@@ -393,3 +393,311 @@ impl StyleSheet for iced::Theme {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test BatteryState enum
+    #[test]
+    fn test_battery_state_default() {
+        let state = BatteryState::default();
+        assert_eq!(state, BatteryState::Charged(100));
+    }
+
+    #[test]
+    fn test_battery_state_charging() {
+        let state = BatteryState::Charging;
+        assert_eq!(state, BatteryState::Charging);
+    }
+
+    #[test]
+    fn test_battery_state_charged() {
+        let state = BatteryState::Charged(75);
+        assert_eq!(state, BatteryState::Charged(75));
+    }
+
+    #[test]
+    fn test_battery_state_charged_zero() {
+        let state = BatteryState::Charged(0);
+        assert_eq!(state, BatteryState::Charged(0));
+    }
+
+    #[test]
+    fn test_battery_state_unknown() {
+        let state = BatteryState::Unknown;
+        assert_eq!(state, BatteryState::Unknown);
+    }
+
+    #[test]
+    fn test_battery_state_clone() {
+        let state = BatteryState::Charged(50);
+        let cloned = state;
+        assert_eq!(cloned, BatteryState::Charged(50));
+    }
+
+    #[test]
+    fn test_battery_state_copy() {
+        let state = BatteryState::Charging;
+        let copied: BatteryState = state;
+        assert_eq!(copied, BatteryState::Charging);
+        // Original still valid (Copy trait)
+        assert_eq!(state, BatteryState::Charging);
+    }
+
+    #[test]
+    fn test_battery_state_debug() {
+        let state = BatteryState::Charged(42);
+        let debug_str = format!("{:?}", state);
+        assert!(debug_str.contains("Charged"));
+        assert!(debug_str.contains("42"));
+    }
+
+    #[test]
+    fn test_battery_state_equality() {
+        assert_eq!(BatteryState::Charging, BatteryState::Charging);
+        assert_eq!(BatteryState::Unknown, BatteryState::Unknown);
+        assert_eq!(BatteryState::Charged(50), BatteryState::Charged(50));
+        assert_ne!(BatteryState::Charged(50), BatteryState::Charged(51));
+        assert_ne!(BatteryState::Charging, BatteryState::Unknown);
+        assert_ne!(BatteryState::Charged(100), BatteryState::Charging);
+    }
+
+    // Test Battery struct and builder methods
+    #[test]
+    fn test_battery_new() {
+        let battery: Battery<iced::Theme> = Battery::new();
+        assert_eq!(battery.width, Length::Fixed(40.0));
+        assert_eq!(battery.height, Length::Fixed(20.0));
+        assert_eq!(battery.state, BatteryState::Charged(100));
+    }
+
+    #[test]
+    fn test_battery_default() {
+        let battery: Battery<iced::Theme> = Battery::default();
+        assert_eq!(battery.width, Length::Fixed(40.0));
+        assert_eq!(battery.height, Length::Fixed(20.0));
+        assert_eq!(battery.state, BatteryState::Charged(100));
+    }
+
+    #[test]
+    fn test_battery_width() {
+        let battery: Battery<iced::Theme> = Battery::new().width(Length::Fixed(60.0));
+        assert_eq!(battery.width, Length::Fixed(60.0));
+    }
+
+    #[test]
+    fn test_battery_width_fill() {
+        let battery: Battery<iced::Theme> = Battery::new().width(Length::Fill);
+        assert_eq!(battery.width, Length::Fill);
+    }
+
+    #[test]
+    fn test_battery_height() {
+        let battery: Battery<iced::Theme> = Battery::new().height(Length::Fixed(30.0));
+        assert_eq!(battery.height, Length::Fixed(30.0));
+    }
+
+    #[test]
+    fn test_battery_height_shrink() {
+        let battery: Battery<iced::Theme> = Battery::new().height(Length::Shrink);
+        assert_eq!(battery.height, Length::Shrink);
+    }
+
+    #[test]
+    fn test_battery_style() {
+        let battery: Battery<iced::Theme> = Battery::new().style(());
+        assert_eq!(battery.style, ());
+    }
+
+    #[test]
+    fn test_battery_state_builder() {
+        let battery: Battery<iced::Theme> = Battery::new().state(BatteryState::Charging);
+        assert_eq!(battery.state, BatteryState::Charging);
+    }
+
+    #[test]
+    fn test_battery_state_charged_builder() {
+        let battery: Battery<iced::Theme> = Battery::new().state(BatteryState::Charged(25));
+        assert_eq!(battery.state, BatteryState::Charged(25));
+    }
+
+    #[test]
+    fn test_battery_state_unknown_builder() {
+        let battery: Battery<iced::Theme> = Battery::new().state(BatteryState::Unknown);
+        assert_eq!(battery.state, BatteryState::Unknown);
+    }
+
+    #[test]
+    fn test_battery_set_state() {
+        let mut battery: Battery<iced::Theme> = Battery::new();
+        assert_eq!(battery.state, BatteryState::Charged(100));
+
+        battery.set_state(BatteryState::Charging);
+        assert_eq!(battery.state, BatteryState::Charging);
+
+        battery.set_state(BatteryState::Charged(50));
+        assert_eq!(battery.state, BatteryState::Charged(50));
+
+        battery.set_state(BatteryState::Unknown);
+        assert_eq!(battery.state, BatteryState::Unknown);
+    }
+
+    #[test]
+    fn test_battery_builder_chain() {
+        let battery: Battery<iced::Theme> = Battery::new()
+            .width(Length::Fixed(80.0))
+            .height(Length::Fixed(40.0))
+            .state(BatteryState::Charged(75));
+
+        assert_eq!(battery.width, Length::Fixed(80.0));
+        assert_eq!(battery.height, Length::Fixed(40.0));
+        assert_eq!(battery.state, BatteryState::Charged(75));
+    }
+
+    // Test Appearance struct
+    #[test]
+    fn test_appearance_default() {
+        let appearance = Appearance::default();
+        assert_eq!(
+            appearance.background_color,
+            Color::from_rgba(0.1, 0.1, 0.1, 1.0)
+        );
+        assert_eq!(appearance.border_color, Color::WHITE);
+    }
+
+    #[test]
+    fn test_appearance_default_charging_color() {
+        let appearance = Appearance::default();
+        assert_eq!(appearance.charging_color, Color::from_rgb(0.2, 0.8, 0.2));
+    }
+
+    #[test]
+    fn test_appearance_default_charge_colors() {
+        let appearance = Appearance::default();
+        // High color is green
+        assert_eq!(appearance.charge_high_color, Color::from_rgb(0.2, 0.8, 0.2));
+        // Medium color is yellow
+        assert_eq!(
+            appearance.charge_medium_color,
+            Color::from_rgb(0.95, 0.9, 0.2)
+        );
+        // Low color is red
+        assert_eq!(appearance.charge_low_color, Color::from_rgb(0.9, 0.2, 0.2));
+    }
+
+    #[test]
+    fn test_appearance_default_unknown_color() {
+        let appearance = Appearance::default();
+        assert_eq!(appearance.unknown_color, Color::from_rgb(0.7, 0.7, 0.7));
+    }
+
+    #[test]
+    fn test_appearance_custom() {
+        let appearance = Appearance {
+            background_color: Color::BLACK,
+            border_color: Color::WHITE,
+            charging_color: Color::from_rgb(0.0, 1.0, 0.0),
+            charge_high_color: Color::from_rgb(0.0, 1.0, 0.0),
+            charge_medium_color: Color::from_rgb(1.0, 1.0, 0.0),
+            charge_low_color: Color::from_rgb(1.0, 0.0, 0.0),
+            unknown_color: Color::from_rgb(0.5, 0.5, 0.5),
+        };
+        assert_eq!(appearance.background_color, Color::BLACK);
+        assert_eq!(appearance.border_color, Color::WHITE);
+    }
+
+    #[test]
+    fn test_appearance_clone() {
+        let appearance = Appearance::default();
+        let cloned = appearance;
+        assert_eq!(cloned.background_color, appearance.background_color);
+        assert_eq!(cloned.border_color, appearance.border_color);
+    }
+
+    #[test]
+    fn test_appearance_debug() {
+        let appearance = Appearance::default();
+        let debug_str = format!("{:?}", appearance);
+        assert!(debug_str.contains("Appearance"));
+        assert!(debug_str.contains("background_color"));
+        assert!(debug_str.contains("border_color"));
+    }
+
+    // Test StyleSheet implementation for iced::Theme
+    #[test]
+    fn test_theme_stylesheet_appearance() {
+        let theme = iced::Theme::Dark;
+        let appearance = theme.appearance(&());
+        // Verify colors are set
+        assert_eq!(
+            appearance.background_color,
+            Color::from_rgb(0.05, 0.05, 0.05)
+        );
+        assert_eq!(appearance.border_color, Color::from_rgb(0.4, 0.4, 0.4));
+    }
+
+    #[test]
+    fn test_theme_stylesheet_charging_color() {
+        let theme = iced::Theme::Dark;
+        let appearance = theme.appearance(&());
+        assert_eq!(appearance.charging_color, Color::from_rgb(0.0, 0.7, 0.0));
+    }
+
+    #[test]
+    fn test_theme_stylesheet_charge_colors() {
+        let theme = iced::Theme::Dark;
+        let appearance = theme.appearance(&());
+        assert_eq!(appearance.charge_high_color, Color::from_rgb(0.0, 0.7, 0.0));
+        assert_eq!(
+            appearance.charge_medium_color,
+            Color::from_rgb(0.8, 0.7, 0.0)
+        );
+        assert_eq!(appearance.charge_low_color, Color::from_rgb(0.8, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_theme_stylesheet_unknown_color() {
+        let theme = iced::Theme::Dark;
+        let appearance = theme.appearance(&());
+        assert_eq!(appearance.unknown_color, Color::from_rgb(0.5, 0.5, 0.5));
+    }
+
+    #[test]
+    fn test_theme_stylesheet_light() {
+        let theme = iced::Theme::Light;
+        let appearance = theme.appearance(&());
+        // Light theme should also return valid colors
+        assert_eq!(
+            appearance.background_color,
+            Color::from_rgb(0.05, 0.05, 0.05)
+        );
+    }
+
+    // Test Widget trait methods
+    #[test]
+    fn test_battery_size() {
+        use iced::advanced::Widget;
+
+        let battery: Battery<iced::Theme> = Battery::new()
+            .width(Length::Fixed(50.0))
+            .height(Length::Fixed(25.0));
+
+        let size =
+            <Battery<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::size(&battery);
+        assert_eq!(size.width, Length::Fixed(50.0));
+        assert_eq!(size.height, Length::Fixed(25.0));
+    }
+
+    #[test]
+    fn test_battery_size_default() {
+        use iced::advanced::Widget;
+
+        let battery: Battery<iced::Theme> = Battery::new();
+
+        let size =
+            <Battery<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::size(&battery);
+        assert_eq!(size.width, Length::Fixed(40.0));
+        assert_eq!(size.height, Length::Fixed(20.0));
+    }
+}
