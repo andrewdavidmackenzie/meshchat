@@ -99,7 +99,7 @@ fn process_device_changes(
             *unseen_count += 1;
             println!("'{}' Unseen once", device_name);
         } else {
-            // Reset count if device is seen again
+            // Reset count if the device is seen again
             *unseen_count = 0;
         }
 
@@ -353,7 +353,7 @@ mod tests {
         assert_eq!(tracked.get("Device4"), Some(&0)); // New
     }
 
-    // Test full lifecycle
+    // Test the full lifecycle
     #[test]
     fn test_device_full_lifecycle() {
         let mut tracked: HashMap<String, i32> = HashMap::new();
