@@ -281,7 +281,10 @@ impl MeshChat {
     /// Return the title of the app, which is used in the window title bar.
     /// Include the version number of the app and the number of unread messages, if any
     fn title(&self) -> String {
-        let unread_count = self.device_view.unread_count();
+        let unread_count = self.device_view.unread_count(
+            self.config.show_position_updates,
+            self.config.show_user_updates,
+        );
         if unread_count > 0 {
             format!("MeshChat {} ({} unread)", VERSION, unread_count)
         } else {

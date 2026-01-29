@@ -505,7 +505,10 @@ impl DeviceView {
                         device_list_view.device_name_or_alias(device, config)
                     )))
                     .push(Space::new().width(4))
-                    .push(Self::unread_counter(self.unread_count()));
+                    .push(Self::unread_counter(self.unread_count(
+                        self.show_position_updates,
+                        self.show_user_updates,
+                    )));
                 let mut button = button(name_row).style(button_chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
                 if self.viewing_channel.is_some() {
@@ -580,10 +583,10 @@ impl DeviceView {
     }
 
     /// Count all the unread messages available to this device across channels and nodes
-    pub fn unread_count(&self) -> usize {
-        self.channel_views
-            .values()
-            .fold(0, |acc, channel| acc + channel.unread_count())
+    pub fn unread_count(&self, show_position_updates: bool, show_user_updates: bool) -> usize {
+        self.channel_views.values().fold(0, |acc, channel| {
+            acc + channel.unread_count(show_position_updates, show_user_updates)
+        })
     }
 
     /// Create the Element that shows the channels, nodes, etc.
@@ -664,7 +667,10 @@ impl DeviceView {
                 let channel_id = ChannelId::Channel(index as i32);
                 let channel_row = Self::channel_row(
                     channel_name,
-                    self.channel_views.get(&channel_id).unwrap().unread_count(),
+                    self.channel_views
+                        .get(&channel_id)
+                        .unwrap()
+                        .unread_count(self.show_position_updates, self.show_user_updates),
                     channel_id,
                     select,
                 );
@@ -706,14 +712,17 @@ impl DeviceView {
             for fav_node_id in fav_nodes {
                 let channel_id = Node(fav_node_id);
                 if let Some(channel_view) = self.channel_views.get(&channel_id) {
-                    channels_list = channels_list.push(self.node_row(
-                        channel_view.unread_count(),
-                        fav_node_id,
-                        true, // Favourite
-                        config,
-                        add_buttons,
-                        select,
-                    ));
+                    channels_list = channels_list.push(
+                        self.node_row(
+                            channel_view
+                                .unread_count(self.show_position_updates, self.show_user_updates),
+                            fav_node_id,
+                            true, // Favourite
+                            config,
+                            add_buttons,
+                            select,
+                        ),
+                    );
                 }
             }
         }
@@ -754,14 +763,19 @@ impl DeviceView {
             for node_id in other_nodes_list {
                 let channel_id = Node(*node_id);
 
-                channels_list = channels_list.push(self.node_row(
-                    self.channel_views.get(&channel_id).unwrap().unread_count(),
-                    *node_id,
-                    false, // Not a Favourite
-                    config,
-                    add_buttons,
-                    select,
-                ));
+                channels_list = channels_list.push(
+                    self.node_row(
+                        self.channel_views
+                            .get(&channel_id)
+                            .unwrap()
+                            .unread_count(self.show_position_updates, self.show_user_updates),
+                        *node_id,
+                        false, // Not a Favourite
+                        config,
+                        add_buttons,
+                        select,
+                    ),
+                );
             }
         }
 

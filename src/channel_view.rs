@@ -160,13 +160,6 @@ impl ChannelView {
         }
     }
 
-    /// Return the number of unread messages in the channel
-    pub fn unread_count(&self) -> usize {
-        self.entries
-            .values()
-            .fold(0, |acc, e| if !e.seen() { acc + 1 } else { acc })
-    }
-
     /// Cancel any interactive modes underway
     pub fn cancel_interactive(&mut self) {
         self.preparing_reply = None;
@@ -275,6 +268,22 @@ impl ChannelView {
         } else {
             channel_view_content
         }
+    }
+
+    /// Return the number of unread messages in the channel, not counting message types that
+    /// are currently not being shown
+    pub fn unread_count(&self, show_position_updates: bool, show_user_updates: bool) -> usize {
+        self.entries.values().fold(0, |acc, entry| {
+            if (matches!(entry.message(), PositionMessage(..)) && !show_position_updates)
+                || (matches!(entry.message(), UserMessage(..)) && !show_user_updates)
+            {
+                acc
+            } else if !entry.seen() {
+                acc + 1
+            } else {
+                acc
+            }
+        })
     }
 
     fn channel_view<'a>(
@@ -611,7 +620,7 @@ mod test {
             "There should be 3 messages in the list"
         );
         assert_eq!(
-            channel_view.unread_count(),
+            channel_view.unread_count(true, true),
             3,
             "The unread count should be 3"
         );
@@ -638,7 +647,7 @@ mod test {
     #[test]
     fn test_initial_unread_count() {
         let channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        assert_eq!(channel_view.unread_count(), 0);
+        assert_eq!(channel_view.unread_count(true, true), 0);
     }
 
     #[test]
@@ -654,7 +663,7 @@ mod test {
                 .as_secs() as u32,
         );
         let _ = channel_view.new_message(message.clone(), &HistoryLength::All);
-        assert_eq!(channel_view.unread_count(), 1);
+        assert_eq!(channel_view.unread_count(true, true), 1);
     }
 
     #[test]
