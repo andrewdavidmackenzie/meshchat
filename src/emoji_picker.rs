@@ -141,3 +141,152 @@ impl Default for EmojiPicker {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let picker = EmojiPicker::new();
+        assert_eq!(picker.group, Group::SmileysAndEmotion);
+        assert_eq!(picker.width, Length::Fill);
+        assert_eq!(picker.height, Length::Fill);
+    }
+
+    #[test]
+    fn test_default() {
+        let picker = EmojiPicker::default();
+        assert_eq!(picker.group, Group::SmileysAndEmotion);
+    }
+
+    #[test]
+    fn test_with_group() {
+        let picker = EmojiPicker::new().with_group(Group::FoodAndDrink);
+        assert_eq!(picker.group, Group::FoodAndDrink);
+    }
+
+    #[test]
+    fn test_width() {
+        let picker = EmojiPicker::new().width(Length::Fixed(300.0));
+        assert_eq!(picker.width, Length::Fixed(300.0));
+    }
+
+    #[test]
+    fn test_height() {
+        let picker = EmojiPicker::new().height(Length::Fixed(200.0));
+        assert_eq!(picker.height, Length::Fixed(200.0));
+    }
+
+    #[test]
+    fn test_chained_builders() {
+        let picker = EmojiPicker::new()
+            .with_group(Group::AnimalsAndNature)
+            .width(Length::Fixed(400.0))
+            .height(Length::Fixed(300.0));
+
+        assert_eq!(picker.group, Group::AnimalsAndNature);
+        assert_eq!(picker.width, Length::Fixed(400.0));
+        assert_eq!(picker.height, Length::Fixed(300.0));
+    }
+
+    #[test]
+    fn test_update_group_selected() {
+        let mut picker = EmojiPicker::new();
+        assert_eq!(picker.group, Group::SmileysAndEmotion);
+
+        let result: Option<String> = picker.update(PickerMessage::GroupSelected(Group::Flags));
+
+        assert!(result.is_none()); // Group changes don't return a message
+        assert_eq!(picker.group, Group::Flags);
+    }
+
+    #[test]
+    fn test_update_emoji_selected() {
+        let mut picker = EmojiPicker::new();
+
+        let result: Option<String> =
+            picker.update(PickerMessage::EmojiSelected("selected_emoji".to_string()));
+
+        assert_eq!(result, Some("selected_emoji".to_string()));
+        // Group should remain unchanged
+        assert_eq!(picker.group, Group::SmileysAndEmotion);
+    }
+
+    #[test]
+    fn test_all_groups() {
+        let mut picker = EmojiPicker::new();
+
+        // Test all emoji groups can be selected
+        let groups = [
+            Group::SmileysAndEmotion,
+            Group::PeopleAndBody,
+            Group::AnimalsAndNature,
+            Group::FoodAndDrink,
+            Group::TravelAndPlaces,
+            Group::Activities,
+            Group::Objects,
+            Group::Symbols,
+            Group::Flags,
+        ];
+
+        for group in groups {
+            let _: Option<String> = picker.update(PickerMessage::GroupSelected(group));
+            assert_eq!(picker.group, group);
+        }
+    }
+
+    #[test]
+    fn test_group_has_emojis() {
+        // Verify each group has at least some emojis
+        let groups = [
+            Group::SmileysAndEmotion,
+            Group::PeopleAndBody,
+            Group::AnimalsAndNature,
+            Group::FoodAndDrink,
+            Group::TravelAndPlaces,
+            Group::Activities,
+            Group::Objects,
+            Group::Symbols,
+            Group::Flags,
+        ];
+
+        for group in groups {
+            let count = group.emojis().count();
+            assert!(count > 0, "Group {:?} should have emojis", group);
+        }
+    }
+
+    #[test]
+    fn test_picker_message_clone() {
+        let msg: PickerMessage<String> = PickerMessage::GroupSelected(Group::FoodAndDrink);
+        let cloned = msg.clone();
+        match cloned {
+            PickerMessage::GroupSelected(g) => assert_eq!(g, Group::FoodAndDrink),
+            _ => panic!("Expected GroupSelected"),
+        }
+    }
+
+    #[test]
+    fn test_picker_message_debug() {
+        let msg: PickerMessage<String> = PickerMessage::GroupSelected(Group::Symbols);
+        let debug = format!("{:?}", msg);
+        assert!(debug.contains("GroupSelected"));
+    }
+
+    #[test]
+    fn test_emoji_selected_with_custom_type() {
+        #[derive(Debug, Clone, PartialEq)]
+        enum MyMessage {
+            EmojiChosen(String),
+        }
+
+        let mut picker = EmojiPicker::new();
+
+        let result: Option<MyMessage> = picker.update(PickerMessage::EmojiSelected(
+            MyMessage::EmojiChosen("👍".to_string()),
+        ));
+
+        assert_eq!(result, Some(MyMessage::EmojiChosen("👍".to_string())));
+    }
+}
