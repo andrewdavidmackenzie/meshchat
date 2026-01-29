@@ -295,3 +295,314 @@ impl StyleSheet for iced::Theme {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test State enum
+    #[test]
+    fn test_state_default_is_expanding() {
+        let state = State::default();
+        assert!(matches!(state, State::Expanding { progress, .. } if progress == 0.0));
+    }
+
+    #[test]
+    fn test_state_expanding_next_is_contracting() {
+        let state = State::Expanding {
+            start: Instant::now(),
+            progress: 0.5,
+        };
+        let next = state.next(Instant::now());
+        assert!(matches!(next, State::Contracting { progress, .. } if progress == 0.0));
+    }
+
+    #[test]
+    fn test_state_contracting_next_is_expanding() {
+        let state = State::Contracting {
+            start: Instant::now(),
+            progress: 0.5,
+        };
+        let next = state.next(Instant::now());
+        assert!(matches!(next, State::Expanding { progress, .. } if progress == 0.0));
+    }
+
+    #[test]
+    fn test_state_start_expanding() {
+        let start_time = Instant::now();
+        let state = State::Expanding {
+            start: start_time,
+            progress: 0.3,
+        };
+        assert_eq!(state.start(), start_time);
+    }
+
+    #[test]
+    fn test_state_start_contracting() {
+        let start_time = Instant::now();
+        let state = State::Contracting {
+            start: start_time,
+            progress: 0.7,
+        };
+        assert_eq!(state.start(), start_time);
+    }
+
+    #[test]
+    fn test_state_with_elapsed_expanding() {
+        let start_time = Instant::now();
+        let state = State::Expanding {
+            start: start_time,
+            progress: 0.0,
+        };
+        let cycle_duration = Duration::from_millis(1000);
+        let elapsed = Duration::from_millis(500);
+        let new_state = state.with_elapsed(cycle_duration, elapsed);
+
+        match new_state {
+            State::Expanding { start, progress } => {
+                assert_eq!(start, start_time);
+                assert!((progress - 0.5).abs() < 0.01);
+            }
+            _ => panic!("Expected Expanding state"),
+        }
+    }
+
+    #[test]
+    fn test_state_with_elapsed_contracting() {
+        let start_time = Instant::now();
+        let state = State::Contracting {
+            start: start_time,
+            progress: 0.0,
+        };
+        let cycle_duration = Duration::from_millis(1000);
+        let elapsed = Duration::from_millis(250);
+        let new_state = state.with_elapsed(cycle_duration, elapsed);
+
+        match new_state {
+            State::Contracting { start, progress } => {
+                assert_eq!(start, start_time);
+                assert!((progress - 0.25).abs() < 0.01);
+            }
+            _ => panic!("Expected Contracting state"),
+        }
+    }
+
+    #[test]
+    fn test_state_timed_transition_no_transition() {
+        let start_time = Instant::now();
+        let state = State::Expanding {
+            start: start_time,
+            progress: 0.0,
+        };
+        let cycle_duration = Duration::from_millis(1000);
+        // Immediately check - should stay expanding with small progress
+        let new_state = state.timed_transition(cycle_duration, start_time);
+        assert!(matches!(new_state, State::Expanding { .. }));
+    }
+
+    #[test]
+    fn test_state_timed_transition_triggers_transition() {
+        let start_time = Instant::now();
+        let state = State::Expanding {
+            start: start_time,
+            progress: 0.0,
+        };
+        let cycle_duration = Duration::from_millis(100);
+        // Check after cycle duration has passed
+        let later = start_time + Duration::from_millis(150);
+        let new_state = state.timed_transition(cycle_duration, later);
+        assert!(matches!(new_state, State::Contracting { progress, .. } if progress == 0.0));
+    }
+
+    #[test]
+    fn test_state_clone() {
+        let state = State::Expanding {
+            start: Instant::now(),
+            progress: 0.5,
+        };
+        let cloned = state;
+        assert!(matches!(cloned, State::Expanding { progress, .. } if progress == 0.5));
+    }
+
+    #[test]
+    fn test_state_copy() {
+        let state = State::Contracting {
+            start: Instant::now(),
+            progress: 0.75,
+        };
+        let copied: State = state;
+        assert!(matches!(copied, State::Contracting { progress, .. } if progress == 0.75));
+        // Original still valid (Copy trait)
+        assert!(matches!(state, State::Contracting { progress, .. } if progress == 0.75));
+    }
+
+    // Test Appearance
+    #[test]
+    fn test_appearance_default() {
+        let appearance = Appearance::default();
+        assert_eq!(appearance.track_color, Color::TRANSPARENT);
+        assert_eq!(appearance.bar_color, Color::BLACK);
+    }
+
+    #[test]
+    fn test_appearance_custom() {
+        let appearance = Appearance {
+            track_color: Color::WHITE,
+            bar_color: Color::from_rgb(1.0, 0.0, 0.0),
+        };
+        assert_eq!(appearance.track_color, Color::WHITE);
+        assert_eq!(appearance.bar_color.r, 1.0);
+        assert_eq!(appearance.bar_color.g, 0.0);
+        assert_eq!(appearance.bar_color.b, 0.0);
+    }
+
+    #[test]
+    fn test_appearance_clone() {
+        let appearance = Appearance {
+            track_color: Color::WHITE,
+            bar_color: Color::BLACK,
+        };
+        let cloned = appearance;
+        assert_eq!(cloned.track_color, Color::WHITE);
+        assert_eq!(cloned.bar_color, Color::BLACK);
+    }
+
+    #[test]
+    fn test_appearance_debug() {
+        let appearance = Appearance::default();
+        let debug_str = format!("{:?}", appearance);
+        assert!(debug_str.contains("Appearance"));
+    }
+
+    // Test StyleSheet implementation for iced::Theme
+    #[test]
+    fn test_theme_stylesheet_appearance() {
+        let theme = iced::Theme::Dark;
+        let appearance = theme.appearance(&());
+        // bar_color should be CYAN
+        assert_eq!(appearance.bar_color, CYAN);
+        // track_color should be from theme palette (not transparent or default)
+        assert_ne!(appearance.track_color, Color::TRANSPARENT);
+    }
+
+    #[test]
+    fn test_theme_stylesheet_light() {
+        let theme = iced::Theme::Light;
+        let appearance = theme.appearance(&());
+        assert_eq!(appearance.bar_color, CYAN);
+    }
+
+    // Test Linear struct and builder methods
+    #[test]
+    fn test_linear_new() {
+        let linear: Linear<iced::Theme> = Linear::new();
+        assert_eq!(linear.width, Length::Fixed(100.0));
+        assert_eq!(linear.height, Length::Fixed(4.0));
+        assert_eq!(linear.cycle_duration, Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_linear_default() {
+        let linear: Linear<iced::Theme> = Linear::default();
+        assert_eq!(linear.width, Length::Fixed(100.0));
+        assert_eq!(linear.height, Length::Fixed(4.0));
+    }
+
+    #[test]
+    fn test_linear_width() {
+        let linear: Linear<iced::Theme> = Linear::new().width(Length::Fixed(200.0));
+        assert_eq!(linear.width, Length::Fixed(200.0));
+    }
+
+    #[test]
+    fn test_linear_width_fill() {
+        let linear: Linear<iced::Theme> = Linear::new().width(Length::Fill);
+        assert_eq!(linear.width, Length::Fill);
+    }
+
+    #[test]
+    fn test_linear_height() {
+        let linear: Linear<iced::Theme> = Linear::new().height(Length::Fixed(10.0));
+        assert_eq!(linear.height, Length::Fixed(10.0));
+    }
+
+    #[test]
+    fn test_linear_height_shrink() {
+        let linear: Linear<iced::Theme> = Linear::new().height(Length::Shrink);
+        assert_eq!(linear.height, Length::Shrink);
+    }
+
+    #[test]
+    fn test_linear_style() {
+        let linear: Linear<iced::Theme> = Linear::new().style(());
+        assert_eq!(linear.style, ());
+    }
+
+    #[test]
+    fn test_linear_easing() {
+        let custom_easing = easing::emphasized_accelerate();
+        let linear: Linear<iced::Theme> = Linear::new().easing(custom_easing);
+        // Verify easing was set by checking it's not the default
+        assert!(std::ptr::eq(linear.easing, custom_easing));
+    }
+
+    #[test]
+    fn test_linear_cycle_duration() {
+        let linear: Linear<iced::Theme> = Linear::new().cycle_duration(Duration::from_millis(1000));
+        // cycle_duration is halved internally
+        assert_eq!(linear.cycle_duration, Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_linear_cycle_duration_custom() {
+        let linear: Linear<iced::Theme> = Linear::new().cycle_duration(Duration::from_secs(2));
+        assert_eq!(linear.cycle_duration, Duration::from_secs(1));
+    }
+
+    #[test]
+    fn test_linear_builder_chain() {
+        let linear: Linear<iced::Theme> = Linear::new()
+            .width(Length::Fixed(300.0))
+            .height(Length::Fixed(8.0))
+            .cycle_duration(Duration::from_millis(800));
+
+        assert_eq!(linear.width, Length::Fixed(300.0));
+        assert_eq!(linear.height, Length::Fixed(8.0));
+        assert_eq!(linear.cycle_duration, Duration::from_millis(400));
+    }
+
+    // Test Widget trait methods that don't require renderer
+    #[test]
+    fn test_linear_size() {
+        use iced::advanced::Widget;
+
+        let linear: Linear<iced::Theme> = Linear::new()
+            .width(Length::Fixed(150.0))
+            .height(Length::Fixed(6.0));
+
+        let size = <Linear<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::size(&linear);
+        assert_eq!(size.width, Length::Fixed(150.0));
+        assert_eq!(size.height, Length::Fixed(6.0));
+    }
+
+    #[test]
+    fn test_linear_tag() {
+        use iced::advanced::Widget;
+        use iced::advanced::widget::tree;
+
+        let linear: Linear<iced::Theme> = Linear::new();
+        let tag = <Linear<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::tag(&linear);
+        assert_eq!(tag, tree::Tag::of::<State>());
+    }
+
+    #[test]
+    fn test_linear_state() {
+        use iced::advanced::Widget;
+
+        let linear: Linear<iced::Theme> = Linear::new();
+        let state =
+            <Linear<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::state(&linear);
+        // State should be created (we can't easily inspect it, but it shouldn't panic)
+        let _ = state;
+    }
+}
