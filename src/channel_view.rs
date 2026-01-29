@@ -828,11 +828,11 @@ mod test {
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
         assert!(!channel_view.entries.get(&42).unwrap().seen());
-        assert_eq!(channel_view.unread_count(), 1);
+        assert_eq!(channel_view.unread_count(true, true), 1);
 
         let _ = channel_view.update(MessageSeen(42));
         assert!(channel_view.entries.get(&42).unwrap().seen());
-        assert_eq!(channel_view.unread_count(), 0);
+        assert_eq!(channel_view.unread_count(true, true), 0);
     }
 
     #[test]

@@ -92,7 +92,7 @@ pub struct Config {
     pub auto_update_startup: bool,
 }
 
-/// Some of the values have non-false (true) defaults, so implement using default functions
+/// Some values have non-false (true) defaults, so implement using default functions
 /// to make sure it matches what a deserialized empty config would give.
 impl Default for Config {
     fn default() -> Self {
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn test_history_length_all_variants() {
-        // Test that ALL constant has correct number of variants
+        // Test that ALL constant has the correct number of variants
         assert_eq!(HistoryLength::ALL.len(), 5);
         assert_eq!(HistoryLength::ALL[0], HistoryLength::All);
         assert_eq!(HistoryLength::ALL[1], HistoryLength::NumberOfMessages(10));
@@ -573,14 +573,14 @@ mod tests {
         let config = Config::default();
         // Default for show_position_updates should be false (from Default trait)
         // But the serde default is true
-        assert!(!config.show_position_updates);
+        assert!(config.show_position_updates);
     }
 
     #[test]
     fn test_config_default_auto_update() {
         let config = Config::default();
         // Default for auto_update_startup from Default trait is false
-        assert!(!config.auto_update_startup);
+        assert!(config.auto_update_startup);
     }
 
     #[tokio::test]
@@ -718,7 +718,7 @@ mod tests {
     #[tokio::test]
     async fn test_disable_auto_reconnect_saved() {
         let config = Config {
-            disable_auto_reconnect: true,
+            auto_reconnect: true,
             ..Default::default()
         };
 
@@ -735,6 +735,6 @@ mod tests {
             .await
             .expect("Could not load config file");
 
-        assert!(returned.disable_auto_reconnect);
+        assert!(returned.auto_reconnect);
     }
 }

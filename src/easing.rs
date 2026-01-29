@@ -114,7 +114,7 @@ mod tests {
         let easing = builder.build();
         // Should be able to query the easing curve
         let y = easing.y_at_x(0.5);
-        assert!(y >= 0.0 && y <= 1.0);
+        assert!((0.0..=1.0).contains(&y));
     }
 
     #[test]
@@ -146,7 +146,7 @@ mod tests {
         for x in [0.0, 0.25, 0.5, 0.75, 1.0] {
             let y = easing.y_at_x(x);
             assert!(
-                y >= 0.0 && y <= 1.0,
+                (0.0..=1.0).contains(&y),
                 "y should be between 0 and 1 at x={}, got {}",
                 x,
                 y
@@ -161,7 +161,7 @@ mod tests {
         for x in [0.0, 0.25, 0.5, 0.75, 1.0] {
             let y = easing.y_at_x(x);
             assert!(
-                y >= 0.0 && y <= 1.0,
+                (0.0..=1.0).contains(&y),
                 "y should be between 0 and 1 at x={}, got {}",
                 x,
                 y
@@ -176,7 +176,7 @@ mod tests {
             .build();
 
         let y = easing.y_at_x(0.5);
-        assert!(y >= 0.0 && y <= 1.0);
+        assert!((0.0..=1.0).contains(&y));
     }
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
             .build();
 
         let y = easing.y_at_x(0.5);
-        assert!(y >= 0.0 && y <= 1.0);
+        assert!((0.0..=1.0).contains(&y));
     }
 
     #[test]
@@ -197,7 +197,7 @@ mod tests {
             .build();
 
         let y = easing.y_at_x(0.5);
-        assert!(y >= 0.0 && y <= 1.0);
+        assert!((0.0..=1.0).contains(&y));
     }
 
     #[test]

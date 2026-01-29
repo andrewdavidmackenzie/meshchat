@@ -1197,7 +1197,7 @@ mod tests {
     fn test_device_view_default() {
         let device_view = DeviceView::default();
         assert_eq!(device_view.connection_state(), &Disconnected(None, None));
-        assert_eq!(device_view.unread_count(), 0);
+        assert_eq!(device_view.unread_count(true, true), 0);
         assert!(device_view.channel_views.is_empty());
     }
 
@@ -1222,9 +1222,11 @@ mod tests {
 
     #[test]
     fn test_cancel_interactive() {
-        let mut device_view = DeviceView::default();
-        device_view.editing_alias = Some(123);
-        device_view.alias = "test alias".into();
+        let mut device_view = DeviceView {
+            editing_alias: Some(123),
+            alias: "test alias".into(),
+            ..Default::default()
+        };
 
         device_view.cancel_interactive();
 
@@ -1235,8 +1237,10 @@ mod tests {
 
     #[test]
     fn test_start_editing_alias() {
-        let mut device_view = DeviceView::default();
-        device_view.alias = "existing".into();
+        let mut device_view = DeviceView {
+            alias: "existing".into(),
+            ..Default::default()
+        };
 
         let _ = device_view.update(StartEditingAlias(456));
 
@@ -1246,9 +1250,11 @@ mod tests {
 
     #[test]
     fn test_stop_editing_alias() {
-        let mut device_view = DeviceView::default();
-        device_view.editing_alias = Some(123);
-        device_view.alias = "test".into();
+        let mut device_view = DeviceView {
+            editing_alias: Some(123),
+            alias: "test".into(),
+            ..Default::default()
+        };
 
         device_view.stop_editing_alias();
 
@@ -1299,7 +1305,7 @@ mod tests {
         let mut device_view = DeviceView::default();
         assert!(device_view.forwarding_message.is_none());
 
-        let entry = crate::channel_view_entry::ChannelViewEntry::new(
+        let entry = ChannelViewEntry::new(
             1,
             100,
             crate::channel_view_entry::MCMessage::NewTextMessage("test".into()),
@@ -1313,7 +1319,7 @@ mod tests {
     #[test]
     fn test_stop_forwarding_message() {
         let mut device_view = DeviceView::default();
-        let entry = crate::channel_view_entry::ChannelViewEntry::new(
+        let entry = ChannelViewEntry::new(
             1,
             100,
             crate::channel_view_entry::MCMessage::NewTextMessage("test".into()),
@@ -1329,6 +1335,6 @@ mod tests {
     #[test]
     fn test_unread_count_empty() {
         let device_view = DeviceView::default();
-        assert_eq!(device_view.unread_count(), 0);
+        assert_eq!(device_view.unread_count(true, true), 0);
     }
 }

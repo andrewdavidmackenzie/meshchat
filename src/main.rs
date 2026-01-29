@@ -767,7 +767,7 @@ mod tests {
             View::Device(Some(ChannelId::Channel(0))),
             View::Device(Some(ChannelId::Channel(0)))
         );
-        assert_ne!(View::DeviceList, View::Device(None));
+        assert_ne!(DeviceList, View::Device(None));
     }
 
     #[test]
@@ -966,10 +966,10 @@ mod tests {
     #[test]
     fn test_toggle_auto_reconnect() {
         let mut meshchat = test_helper::test_app();
-        let initial = meshchat.config.disable_auto_reconnect;
+        let initial = meshchat.config.auto_reconnect;
 
         let _ = meshchat.update(ToggleAutoReconnect);
-        assert_eq!(meshchat.config.disable_auto_reconnect, !initial);
+        assert_eq!(meshchat.config.auto_reconnect, !initial);
     }
 
     #[test]
