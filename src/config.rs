@@ -571,8 +571,8 @@ mod tests {
     #[test]
     fn test_config_default_show_position() {
         let config = Config::default();
-        // Default for show_position_updates should be false (from Default trait)
-        // But the serde default is true
+        // Default for show_position_updates should be false (from Default trait),
+        // but the serde default is true
         assert!(config.show_position_updates);
     }
 
