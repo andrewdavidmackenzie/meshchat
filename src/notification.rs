@@ -147,4 +147,92 @@ mod tests {
         let _ = notifications.remove(0);
         assert_eq!(notifications.inner.len(), 1);
     }
+
+    #[test]
+    fn test_add_error_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Error(
+            "Error summary".into(),
+            "Error detail".into(),
+            MeshChat::now(),
+        ));
+        assert_eq!(notifications.inner.len(), 1);
+
+        // Check it's stored with correct id
+        assert_eq!(notifications.inner[0].0, 0);
+    }
+
+    #[test]
+    fn test_ids_increment() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+        let _ = notifications.add(Notification::Info("2".into(), "2".into(), 0));
+        let _ = notifications.add(Notification::Info("3".into(), "3".into(), 0));
+
+        assert_eq!(notifications.inner[0].0, 0);
+        assert_eq!(notifications.inner[1].0, 1);
+        assert_eq!(notifications.inner[2].0, 2);
+        assert_eq!(notifications.next_id, 3);
+    }
+
+    #[test]
+    fn test_remove_specific_id() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+        let _ = notifications.add(Notification::Info("2".into(), "2".into(), 0));
+        let _ = notifications.add(Notification::Info("3".into(), "3".into(), 0));
+
+        // Remove the middle one (id 1)
+        let _ = notifications.remove(1);
+
+        assert_eq!(notifications.inner.len(), 2);
+        // Should still have ids 0 and 2
+        assert_eq!(notifications.inner[0].0, 0);
+        assert_eq!(notifications.inner[1].0, 2);
+    }
+
+    #[test]
+    fn test_remove_nonexistent_id() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+
+        // Remove an id that doesn't exist
+        let _ = notifications.remove(999);
+
+        // Should still have the original
+        assert_eq!(notifications.inner.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_all() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+        let _ = notifications.add(Notification::Info("2".into(), "2".into(), 0));
+
+        let _ = notifications.remove(0);
+        let _ = notifications.remove(1);
+
+        assert!(notifications.inner.is_empty());
+    }
+
+    #[test]
+    fn test_mixed_notification_types() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("info".into(), "detail".into(), 0));
+        let _ = notifications.add(Notification::Error("error".into(), "detail".into(), 0));
+        let _ = notifications.add(Notification::Info("info2".into(), "detail".into(), 0));
+
+        assert_eq!(notifications.inner.len(), 3);
+    }
+
+    #[test]
+    fn test_default_next_id_is_zero() {
+        let notifications = Notifications::default();
+        assert_eq!(notifications.next_id, 0);
+    }
 }

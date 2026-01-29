@@ -161,8 +161,9 @@ impl ChannelId {
 
 #[cfg(test)]
 mod test {
-    use crate::channel_id::ChannelId;
+    use super::*;
     use meshtastic::packet::PacketDestination;
+    use meshtastic::protobufs::{ChannelSettings, Position, User};
     use meshtastic::types::MeshChannel;
 
     #[test]
@@ -175,5 +176,250 @@ mod test {
             PacketDestination::Node(_) => panic!("Should not be node"),
         };
         assert_eq!(channel, MeshChannel::from(0));
+    }
+
+    #[test]
+    fn test_to_node_destination() {
+        let channel_id = ChannelId::Node(12345);
+        let (destination, channel) = channel_id.to_destination();
+        match destination {
+            PacketDestination::Local => panic!("Should not be local"),
+            PacketDestination::Broadcast => panic!("Should not be broadcast"),
+            PacketDestination::Node(_node_id) => {
+                // Node destination was created correctly
+            }
+        };
+        assert_eq!(channel, MeshChannel::default());
+    }
+
+    #[test]
+    fn test_user_conversion_from() {
+        let user = User {
+            id: "test_id".to_string(),
+            long_name: "Test User".to_string(),
+            short_name: "TEST".to_string(),
+            hw_model: 0,
+            is_licensed: true,
+            role: 0,
+            public_key: vec![1, 2, 3],
+            is_unmessagable: Some(false),
+            ..Default::default()
+        };
+
+        let mc_user: MCUser = (&user).into();
+
+        assert_eq!(mc_user.id, "test_id");
+        assert_eq!(mc_user.long_name, "Test User");
+        assert_eq!(mc_user.short_name, "TEST");
+        assert!(mc_user.is_licensed);
+        assert_eq!(mc_user.public_key, vec![1, 2, 3]);
+        assert!(!mc_user.is_unmessagable);
+    }
+
+    #[test]
+    fn test_user_conversion_to() {
+        let mc_user = MCUser {
+            id: "test_id".to_string(),
+            long_name: "Test User".to_string(),
+            short_name: "TEST".to_string(),
+            hw_model_str: "TBEAM".to_string(),
+            hw_model: 4,
+            is_licensed: false,
+            role_str: "CLIENT".to_string(),
+            role: 0,
+            public_key: vec![4, 5, 6],
+            is_unmessagable: true,
+        };
+
+        let user: User = mc_user.into();
+
+        assert_eq!(user.id, "test_id");
+        assert_eq!(user.long_name, "Test User");
+        assert_eq!(user.short_name, "TEST");
+        assert!(!user.is_licensed);
+        assert_eq!(user.public_key, vec![4, 5, 6]);
+        assert_eq!(user.is_unmessagable, Some(true));
+    }
+
+    #[test]
+    fn test_user_unmessagable_none_defaults_to_false() {
+        let user = User {
+            id: "test".to_string(),
+            is_unmessagable: None,
+            ..Default::default()
+        };
+
+        let mc_user: MCUser = (&user).into();
+        assert!(!mc_user.is_unmessagable);
+    }
+
+    #[test]
+    fn test_position_conversion_from() {
+        let position = Position {
+            latitude_i: Some(500000000), // 50.0 degrees
+            longitude_i: Some(10000000), // 1.0 degree
+            altitude: Some(100),
+            timestamp: 12345,
+            time: 67890,
+            ..Default::default()
+        };
+
+        let mc_position: MCPosition = (&position).into();
+
+        assert!((mc_position.latitude - 50.0).abs() < 0.0001);
+        assert!((mc_position.longitude - 1.0).abs() < 0.0001);
+        assert_eq!(mc_position.altitude, Some(100));
+        assert_eq!(mc_position.timestamp, 12345);
+        assert_eq!(mc_position.time, 67890);
+    }
+
+    #[test]
+    fn test_position_conversion_to() {
+        let mc_position = MCPosition {
+            latitude: 50.0,
+            longitude: 1.0,
+            altitude: Some(200),
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+
+        let position: Position = mc_position.into();
+
+        assert_eq!(position.latitude_i, Some(500000000));
+        assert_eq!(position.longitude_i, Some(10000000));
+        assert_eq!(position.altitude, Some(200));
+    }
+
+    #[test]
+    fn test_position_none_coordinates() {
+        let position = Position {
+            latitude_i: None,
+            longitude_i: None,
+            ..Default::default()
+        };
+
+        let mc_position: MCPosition = (&position).into();
+
+        assert_eq!(mc_position.latitude, 0.0);
+        assert_eq!(mc_position.longitude, 0.0);
+    }
+
+    #[test]
+    fn test_channel_conversion_with_name() {
+        let channel = meshtastic::protobufs::Channel {
+            index: 1,
+            settings: Some(ChannelSettings {
+                name: "MyChannel".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let mc_channel: MCChannel = (&channel).into();
+
+        assert_eq!(mc_channel.index, 1);
+        assert_eq!(mc_channel.name, "MyChannel");
+    }
+
+    #[test]
+    fn test_channel_conversion_empty_name() {
+        let channel = meshtastic::protobufs::Channel {
+            index: 0,
+            settings: Some(ChannelSettings {
+                name: "".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let mc_channel: MCChannel = (&channel).into();
+
+        assert_eq!(mc_channel.index, 0);
+        assert_eq!(mc_channel.name, "Default");
+    }
+
+    #[test]
+    fn test_channel_conversion_no_settings() {
+        let channel = meshtastic::protobufs::Channel {
+            index: 2,
+            settings: None,
+            ..Default::default()
+        };
+
+        let mc_channel: MCChannel = (&channel).into();
+
+        assert_eq!(mc_channel.index, 2);
+        assert_eq!(mc_channel.name, "Default");
+    }
+
+    #[test]
+    fn test_node_info_conversion() {
+        let user = User {
+            id: "test".to_string(),
+            long_name: "Test Node".to_string(),
+            short_name: "TN".to_string(),
+            ..Default::default()
+        };
+
+        let node_info = meshtastic::protobufs::NodeInfo {
+            num: 12345,
+            user: Some(user),
+            position: None,
+            channel: 0,
+            is_ignored: false,
+            ..Default::default()
+        };
+
+        let mc_node_info: MCNodeInfo = (&node_info).into();
+
+        assert_eq!(mc_node_info.num, 12345);
+        assert!(mc_node_info.user.is_some());
+        assert_eq!(mc_node_info.user.as_ref().unwrap().long_name, "Test Node");
+        assert!(mc_node_info.position.is_none());
+        assert!(!mc_node_info.is_ignored);
+    }
+
+    #[test]
+    fn test_node_info_with_position() {
+        let position = Position {
+            latitude_i: Some(510000000),
+            longitude_i: Some(-1000000),
+            ..Default::default()
+        };
+
+        let node_info = meshtastic::protobufs::NodeInfo {
+            num: 99999,
+            user: None,
+            position: Some(position),
+            channel: 1,
+            is_ignored: true,
+            ..Default::default()
+        };
+
+        let mc_node_info: MCNodeInfo = (&node_info).into();
+
+        assert_eq!(mc_node_info.num, 99999);
+        assert!(mc_node_info.user.is_none());
+        assert!(mc_node_info.position.is_some());
+        assert!(mc_node_info.is_ignored);
+        assert_eq!(mc_node_info.channel, 1);
     }
 }

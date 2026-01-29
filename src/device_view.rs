@@ -1047,10 +1047,12 @@ pub fn long_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::Message::Navigation;
     use crate::SubscriberMessage::{Connect, Disconnect};
     use crate::View::DeviceList;
-    use crate::device_view::ConnectionState::Disconnected;
+    use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
+    use crate::device_view::DeviceViewMessage::{ClearFilter, SearchInput};
     use crate::test_helper;
     use btleplug::api::BDAddr;
 
@@ -1080,5 +1082,253 @@ mod tests {
             meshchat.device_view.connection_state,
             Disconnected(None, None)
         );
+    }
+
+    #[test]
+    fn test_connection_state_default() {
+        let state = ConnectionState::default();
+        assert_eq!(state, Disconnected(None, None));
+    }
+
+    #[test]
+    fn test_connection_state_variants() {
+        let disconnected = Disconnected(Some("device1".into()), Some("error".into()));
+        let connecting = Connecting("device1".into());
+        let connected = Connected("device1".into());
+        let disconnecting = Disconnecting("device1".into());
+
+        // Test equality
+        assert_eq!(
+            disconnected,
+            Disconnected(Some("device1".into()), Some("error".into()))
+        );
+        assert_eq!(connecting, Connecting("device1".into()));
+        assert_eq!(connected, Connected("device1".into()));
+        assert_eq!(disconnecting, Disconnecting("device1".into()));
+
+        // Test inequality
+        assert_ne!(connecting, connected);
+        assert_ne!(connected, disconnecting);
+    }
+
+    #[test]
+    fn test_short_name_unknown_node() {
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        assert_eq!(short_name(&nodes, 12345), "????");
+    }
+
+    #[test]
+    fn test_short_name_known_node() {
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            12345,
+            MCNodeInfo {
+                num: 12345,
+                user: Some(MCUser {
+                    id: "test".into(),
+                    long_name: "Test User".into(),
+                    short_name: "TEST".into(),
+                    hw_model_str: "TBEAM".into(),
+                    hw_model: 0,
+                    is_licensed: false,
+                    role_str: "CLIENT".into(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        assert_eq!(short_name(&nodes, 12345), "TEST");
+    }
+
+    #[test]
+    fn test_short_name_node_without_user() {
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            12345,
+            MCNodeInfo {
+                num: 12345,
+                user: None,
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        assert_eq!(short_name(&nodes, 12345), "????");
+    }
+
+    #[test]
+    fn test_long_name_unknown_node() {
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        assert_eq!(long_name(&nodes, 12345), "Node information not available");
+    }
+
+    #[test]
+    fn test_long_name_known_node() {
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            12345,
+            MCNodeInfo {
+                num: 12345,
+                user: Some(MCUser {
+                    id: "test".into(),
+                    long_name: "Test User Long Name".into(),
+                    short_name: "TEST".into(),
+                    hw_model_str: "TBEAM".into(),
+                    hw_model: 0,
+                    is_licensed: false,
+                    role_str: "CLIENT".into(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        assert_eq!(long_name(&nodes, 12345), "Test User Long Name");
+    }
+
+    #[test]
+    fn test_device_view_default() {
+        let device_view = DeviceView::default();
+        assert_eq!(device_view.connection_state(), &Disconnected(None, None));
+        assert_eq!(device_view.unread_count(), 0);
+        assert!(device_view.channel_views.is_empty());
+    }
+
+    #[test]
+    fn test_search_input() {
+        let mut device_view = DeviceView::default();
+        assert!(device_view.filter.is_empty());
+
+        let _ = device_view.update(SearchInput("test".into()));
+        assert_eq!(device_view.filter, "test");
+    }
+
+    #[test]
+    fn test_clear_filter() {
+        let mut device_view = DeviceView::default();
+        let _ = device_view.update(SearchInput("test".into()));
+        assert!(!device_view.filter.is_empty());
+
+        let _ = device_view.update(ClearFilter);
+        assert!(device_view.filter.is_empty());
+    }
+
+    #[test]
+    fn test_cancel_interactive() {
+        let mut device_view = DeviceView::default();
+        device_view.editing_alias = Some(123);
+        device_view.alias = "test alias".into();
+
+        device_view.cancel_interactive();
+
+        assert!(device_view.editing_alias.is_none());
+        assert!(device_view.alias.is_empty());
+        assert!(device_view.forwarding_message.is_none());
+    }
+
+    #[test]
+    fn test_start_editing_alias() {
+        let mut device_view = DeviceView::default();
+        device_view.alias = "existing".into();
+
+        let _ = device_view.update(StartEditingAlias(456));
+
+        assert_eq!(device_view.editing_alias, Some(456));
+        assert!(device_view.alias.is_empty()); // Should be cleared
+    }
+
+    #[test]
+    fn test_stop_editing_alias() {
+        let mut device_view = DeviceView::default();
+        device_view.editing_alias = Some(123);
+        device_view.alias = "test".into();
+
+        device_view.stop_editing_alias();
+
+        assert!(device_view.editing_alias.is_none());
+        assert!(device_view.alias.is_empty());
+    }
+
+    #[test]
+    fn test_alias_input() {
+        let mut device_view = DeviceView::default();
+        let _ = device_view.update(AliasInput("new alias".into()));
+        assert_eq!(device_view.alias, "new alias");
+    }
+
+    #[test]
+    fn test_set_history_length() {
+        let mut device_view = DeviceView::default();
+        device_view.set_history_length(HistoryLength::NumberOfMessages(50));
+        assert_eq!(
+            device_view.history_length,
+            HistoryLength::NumberOfMessages(50)
+        );
+    }
+
+    #[test]
+    fn test_set_show_position_updates() {
+        let mut device_view = DeviceView::default();
+        assert!(!device_view.show_position_updates);
+
+        device_view.set_show_position_updates(true);
+        assert!(device_view.show_position_updates);
+
+        device_view.set_show_position_updates(false);
+        assert!(!device_view.show_position_updates);
+    }
+
+    #[test]
+    fn test_set_show_user_updates() {
+        let mut device_view = DeviceView::default();
+        assert!(!device_view.show_user_updates);
+
+        device_view.set_show_user_updates(true);
+        assert!(device_view.show_user_updates);
+    }
+
+    #[test]
+    fn test_start_forwarding_message() {
+        let mut device_view = DeviceView::default();
+        assert!(device_view.forwarding_message.is_none());
+
+        let entry = crate::channel_view_entry::ChannelViewEntry::new(
+            1,
+            100,
+            crate::channel_view_entry::MCMessage::NewTextMessage("test".into()),
+            0,
+        );
+        let _ = device_view.update(StartForwardingMessage(entry));
+
+        assert!(device_view.forwarding_message.is_some());
+    }
+
+    #[test]
+    fn test_stop_forwarding_message() {
+        let mut device_view = DeviceView::default();
+        let entry = crate::channel_view_entry::ChannelViewEntry::new(
+            1,
+            100,
+            crate::channel_view_entry::MCMessage::NewTextMessage("test".into()),
+            0,
+        );
+        let _ = device_view.update(StartForwardingMessage(entry));
+        assert!(device_view.forwarding_message.is_some());
+
+        let _ = device_view.update(StopForwardingMessage);
+        assert!(device_view.forwarding_message.is_none());
+    }
+
+    #[test]
+    fn test_unread_count_empty() {
+        let device_view = DeviceView::default();
+        assert_eq!(device_view.unread_count(), 0);
     }
 }

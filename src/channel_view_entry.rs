@@ -507,7 +507,20 @@ impl PartialEq<Self> for ChannelViewEntry {
 
 #[cfg(test)]
 mod tests {
-    use crate::channel_view_entry::ChannelViewEntry;
+    use super::*;
+    use crate::channel_view_entry::MCMessage::{
+        AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
+    };
+    use chrono::Datelike;
+    use ringmap::RingMap;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn now_secs() -> u32 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32
+    }
 
     #[test]
     fn test_empty_spans() {
@@ -530,5 +543,216 @@ mod tests {
         assert!(spans[0].link.is_none());
         assert!(spans[1].link.is_some());
         assert!(spans[2].link.is_none());
+    }
+
+    #[test]
+    fn test_tokenize_http_link() {
+        let spans = ChannelViewEntry::tokenize("check http://example.com out".into());
+        assert_eq!(spans.len(), 3);
+        assert!(spans[1].link.is_some());
+    }
+
+    #[test]
+    fn test_tokenize_multiple_links() {
+        let spans = ChannelViewEntry::tokenize(
+            "visit https://first.com and https://second.com today".into(),
+        );
+        // "visit " -> span 0
+        // "https://first.com " -> span 1 (link)
+        // "and " -> span 2
+        // "https://second.com " -> span 3 (link)
+        // "today" -> span 4
+        assert_eq!(spans.len(), 5);
+        assert!(spans[0].link.is_none()); // "visit "
+        assert!(spans[1].link.is_some()); // first link
+        assert!(spans[2].link.is_none()); // "and "
+        assert!(spans[3].link.is_some()); // second link
+        assert!(spans[4].link.is_none()); // "today"
+    }
+
+    #[test]
+    fn test_tokenize_only_link() {
+        let spans = ChannelViewEntry::tokenize("https://example.com".into());
+        assert_eq!(spans.len(), 1);
+        assert!(spans[0].link.is_some());
+    }
+
+    #[test]
+    fn test_truncate_shorter_than_max() {
+        let result = ChannelViewEntry::truncate("hello", 10);
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_truncate_exact_length() {
+        let result = ChannelViewEntry::truncate("hello", 5);
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_truncate_longer_than_max() {
+        let result = ChannelViewEntry::truncate("hello world", 5);
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_truncate_unicode() {
+        // Test with multi-byte unicode characters
+        let result = ChannelViewEntry::truncate("héllo wörld", 5);
+        assert_eq!(result, "héllo");
+    }
+
+    #[test]
+    fn test_truncate_emoji() {
+        // Emoji are multi-byte
+        let result = ChannelViewEntry::truncate("👋🌍hello", 2);
+        assert_eq!(result, "👋🌍");
+    }
+
+    #[test]
+    fn test_channel_view_entry_new() {
+        let entry = ChannelViewEntry::new(123, 456, NewTextMessage("Hello".into()), now_secs());
+
+        assert_eq!(entry.message_id(), 123);
+        assert_eq!(entry.from(), 456);
+        assert!(!entry.seen());
+        assert!(!entry.acked());
+    }
+
+    #[test]
+    fn test_mark_seen() {
+        let mut entry = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        assert!(!entry.seen());
+
+        entry.mark_seen();
+        assert!(entry.seen());
+    }
+
+    #[test]
+    fn test_ack() {
+        let mut entry = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        assert!(!entry.acked());
+
+        entry.ack();
+        assert!(entry.acked());
+    }
+
+    #[test]
+    fn test_add_emoji() {
+        let mut entry = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        assert!(entry.emojis().is_empty());
+
+        entry.add_emoji("👍".to_string(), 100);
+        assert_eq!(entry.emojis().len(), 1);
+        assert!(entry.emojis().contains_key("👍"));
+        assert_eq!(entry.emojis().get("👍").unwrap(), &vec![100]);
+    }
+
+    #[test]
+    fn test_add_emoji_multiple_same() {
+        let mut entry = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+
+        entry.add_emoji("👍".to_string(), 100);
+        entry.add_emoji("👍".to_string(), 200);
+
+        assert_eq!(entry.emojis().len(), 1);
+        assert_eq!(entry.emojis().get("👍").unwrap(), &vec![100, 200]);
+    }
+
+    #[test]
+    fn test_add_emoji_different() {
+        let mut entry = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+
+        entry.add_emoji("👍".to_string(), 100);
+        entry.add_emoji("❤️".to_string(), 200);
+
+        assert_eq!(entry.emojis().len(), 2);
+    }
+
+    #[test]
+    fn test_reply_quote_found() {
+        let mut entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let entry = ChannelViewEntry::new(
+            1,
+            100,
+            NewTextMessage("Original message".into()),
+            now_secs(),
+        );
+        entries.insert(1, entry);
+
+        let quote = ChannelViewEntry::reply_quote(&entries, &1);
+        assert!(quote.is_some());
+        assert!(quote.unwrap().contains("Re:"));
+    }
+
+    #[test]
+    fn test_reply_quote_not_found() {
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let quote = ChannelViewEntry::reply_quote(&entries, &999);
+        assert!(quote.is_none());
+    }
+
+    #[test]
+    fn test_reply_quote_truncates_long_message() {
+        let mut entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let long_message = "This is a very long message that should be truncated when quoted";
+        let entry = ChannelViewEntry::new(1, 100, NewTextMessage(long_message.into()), now_secs());
+        entries.insert(1, entry);
+
+        let quote = ChannelViewEntry::reply_quote(&entries, &1).unwrap();
+        assert!(quote.len() < long_message.len() + 10); // "Re: " prefix + some truncation
+        assert!(quote.ends_with("..."));
+    }
+
+    #[test]
+    fn test_sort_by_rx_time() {
+        let older = ChannelViewEntry::new(1, 100, NewTextMessage("old".into()), 1000);
+        let newer = ChannelViewEntry::new(2, 100, NewTextMessage("new".into()), 2000);
+
+        let ordering = ChannelViewEntry::sort_by_rx_time(&1, &older, &2, &newer);
+        assert_eq!(ordering, std::cmp::Ordering::Less);
+
+        let ordering = ChannelViewEntry::sort_by_rx_time(&2, &newer, &1, &older);
+        assert_eq!(ordering, std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn test_mc_message_display_alert() {
+        let msg = AlertMessage("Alert!".into());
+        assert_eq!(format!("{}", msg), "Alert!");
+    }
+
+    #[test]
+    fn test_mc_message_display_new_text() {
+        let msg = NewTextMessage("Hello".into());
+        assert_eq!(format!("{}", msg), "Hello");
+    }
+
+    #[test]
+    fn test_mc_message_display_text_reply() {
+        let msg = TextMessageReply(123, "Reply text".into());
+        assert_eq!(format!("{}", msg), "Re: Reply text");
+    }
+
+    #[test]
+    fn test_mc_message_display_emoji_reply() {
+        let msg = EmojiReply(123, "👍".into());
+        assert_eq!(format!("{}", msg), "👍: 123");
+    }
+
+    #[test]
+    fn test_mc_message_default() {
+        let msg = MCMessage::default();
+        matches!(msg, NewTextMessage(s) if s.is_empty());
+    }
+
+    #[test]
+    fn test_channel_view_entry_time() {
+        let rx_time = now_secs();
+        let entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), rx_time);
+
+        // The time should be convertible and reasonable
+        let time = entry.time();
+        assert!(time.year() >= 2020);
     }
 }

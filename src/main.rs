@@ -745,4 +745,301 @@ mod tests {
         meshchat.new_message(NewTextMessage("Hello World".into()));
         assert_eq!(meshchat.title(), format!("MeshChat {} (1 unread)", VERSION));
     }
+
+    #[test]
+    fn test_title_multiple_unreads() {
+        let mut meshchat = test_helper::test_app();
+        meshchat.new_message(NewTextMessage("Message 1".into()));
+        meshchat.new_message(NewTextMessage("Message 2".into()));
+        meshchat.new_message(NewTextMessage("Message 3".into()));
+        assert_eq!(meshchat.title(), format!("MeshChat {} (3 unread)", VERSION));
+    }
+
+    #[test]
+    fn test_view_default() {
+        assert_eq!(View::default(), DeviceList);
+    }
+
+    #[test]
+    fn test_view_equality() {
+        assert_eq!(View::Device(None), View::Device(None));
+        assert_eq!(
+            View::Device(Some(ChannelId::Channel(0))),
+            View::Device(Some(ChannelId::Channel(0)))
+        );
+        assert_ne!(View::DeviceList, View::Device(None));
+    }
+
+    #[test]
+    fn test_mc_user_display() {
+        let user = MCUser {
+            id: "!abc123".to_string(),
+            long_name: "Test User".to_string(),
+            short_name: "TEST".to_string(),
+            hw_model_str: "TBEAM".to_string(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "CLIENT".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+
+        let display = format!("{}", user);
+        assert!(display.contains("Test User"));
+        assert!(display.contains("TEST"));
+        assert!(display.contains("!abc123"));
+        assert!(display.contains("TBEAM"));
+    }
+
+    #[test]
+    fn test_mc_position_display() {
+        let position = MCPosition {
+            latitude: 51.5074,
+            longitude: -0.1278,
+            altitude: Some(11),
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+
+        let display = format!("{}", position);
+        assert!(display.contains("51.51"));
+        assert!(display.contains("-0.13"));
+        assert!(display.contains("📌"));
+    }
+
+    #[test]
+    fn test_location_url_negative_coordinates() {
+        let position = MCPosition {
+            latitude: -33.8688,
+            longitude: 151.2093,
+            altitude: None,
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+
+        let url = MeshChat::location_url(&position);
+        assert!(url.contains("-33.8688"));
+        assert!(url.contains("151.2093"));
+        assert!(url.starts_with("https://maps.google.com"));
+    }
+
+    #[test]
+    fn test_now_returns_valid_timestamp() {
+        let now = MeshChat::now();
+        // Should be a reasonable recent timestamp (after 2020)
+        assert!(now > 1577836800); // Jan 1, 2020
+    }
+
+    #[test]
+    fn test_toggle_node_favourite() {
+        let mut meshchat = test_helper::test_app();
+        assert!(!meshchat.config.fav_nodes.contains(&12345));
+
+        // Toggle on
+        let _ = meshchat.update(ToggleNodeFavourite(12345));
+        assert!(meshchat.config.fav_nodes.contains(&12345));
+
+        // Toggle off
+        let _ = meshchat.update(ToggleNodeFavourite(12345));
+        assert!(!meshchat.config.fav_nodes.contains(&12345));
+    }
+
+    #[test]
+    fn test_add_node_alias() {
+        let mut meshchat = test_helper::test_app();
+        assert!(meshchat.config.aliases.is_empty());
+
+        let _ = meshchat.update(AddNodeAlias(123, "My Friend".to_string()));
+        assert_eq!(
+            meshchat.config.aliases.get(&123),
+            Some(&"My Friend".to_string())
+        );
+    }
+
+    #[test]
+    fn test_add_empty_node_alias() {
+        let mut meshchat = test_helper::test_app();
+        let _ = meshchat.update(AddNodeAlias(123, "".to_string()));
+        // Empty alias should not be added
+        assert!(!meshchat.config.aliases.contains_key(&123));
+    }
+
+    #[test]
+    fn test_remove_node_alias() {
+        let mut meshchat = test_helper::test_app();
+        meshchat.config.aliases.insert(123, "Friend".to_string());
+
+        let _ = meshchat.update(RemoveNodeAlias(123));
+        assert!(!meshchat.config.aliases.contains_key(&123));
+    }
+
+    #[test]
+    fn test_add_device_alias() {
+        let mut meshchat = test_helper::test_app();
+        assert!(meshchat.config.device_aliases.is_empty());
+
+        let _ = meshchat.update(AddDeviceAlias(
+            "AA:BB:CC:DD:EE:FF".to_string(),
+            "My Radio".to_string(),
+        ));
+        assert_eq!(
+            meshchat.config.device_aliases.get("AA:BB:CC:DD:EE:FF"),
+            Some(&"My Radio".to_string())
+        );
+    }
+
+    #[test]
+    fn test_remove_device_alias() {
+        let mut meshchat = test_helper::test_app();
+        meshchat
+            .config
+            .device_aliases
+            .insert("AA:BB:CC:DD:EE:FF".to_string(), "Radio".to_string());
+
+        let _ = meshchat.update(RemoveDeviceAlias("AA:BB:CC:DD:EE:FF".to_string()));
+        assert!(
+            !meshchat
+                .config
+                .device_aliases
+                .contains_key("AA:BB:CC:DD:EE:FF")
+        );
+    }
+
+    #[test]
+    fn test_toggle_show_position_updates() {
+        let mut meshchat = test_helper::test_app();
+        let initial = meshchat.config.show_position_updates;
+
+        let _ = meshchat.update(ToggleShowPositionUpdates);
+        assert_eq!(meshchat.config.show_position_updates, !initial);
+
+        let _ = meshchat.update(ToggleShowPositionUpdates);
+        assert_eq!(meshchat.config.show_position_updates, initial);
+    }
+
+    #[test]
+    fn test_toggle_show_user_updates() {
+        let mut meshchat = test_helper::test_app();
+        let initial = meshchat.config.show_user_updates;
+
+        let _ = meshchat.update(ToggleShowUserUpdates);
+        assert_eq!(meshchat.config.show_user_updates, !initial);
+    }
+
+    #[test]
+    fn test_toggle_auto_reconnect() {
+        let mut meshchat = test_helper::test_app();
+        let initial = meshchat.config.disable_auto_reconnect;
+
+        let _ = meshchat.update(ToggleAutoReconnect);
+        assert_eq!(meshchat.config.disable_auto_reconnect, !initial);
+    }
+
+    #[test]
+    fn test_toggle_auto_update() {
+        let mut meshchat = test_helper::test_app();
+        let initial = meshchat.config.auto_update_startup;
+
+        let _ = meshchat.update(ToggleAutoUpdate);
+        assert_eq!(meshchat.config.auto_update_startup, !initial);
+    }
+
+    #[test]
+    fn test_history_length_selected() {
+        use crate::config::HistoryLength;
+
+        let mut meshchat = test_helper::test_app();
+        let _ = meshchat.update(HistoryLengthSelected(HistoryLength::NumberOfMessages(50)));
+        assert_eq!(
+            meshchat.config.history_length,
+            HistoryLength::NumberOfMessages(50)
+        );
+    }
+
+    #[test]
+    fn test_show_user_info() {
+        let mut meshchat = test_helper::test_app();
+        assert!(meshchat.show_user.is_none());
+
+        let user = MCUser {
+            id: "test".to_string(),
+            long_name: "Test".to_string(),
+            short_name: "T".to_string(),
+            hw_model_str: "TBEAM".to_string(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "CLIENT".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+
+        let _ = meshchat.update(ShowUserInfo(user));
+        assert!(meshchat.show_user.is_some());
+    }
+
+    #[test]
+    fn test_close_show_user() {
+        let mut meshchat = test_helper::test_app();
+        meshchat.show_user = Some(MCUser {
+            id: "test".to_string(),
+            long_name: "Test".to_string(),
+            short_name: "T".to_string(),
+            hw_model_str: "TBEAM".to_string(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "CLIENT".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        });
+
+        let _ = meshchat.update(CloseShowUser);
+        assert!(meshchat.show_user.is_none());
+    }
+
+    #[test]
+    fn test_none_message_does_nothing() {
+        let mut meshchat = test_helper::test_app();
+        let initial_view = meshchat.current_view.clone();
+        let _ = meshchat.update(Message::None);
+        assert_eq!(meshchat.current_view, initial_view);
+    }
 }
