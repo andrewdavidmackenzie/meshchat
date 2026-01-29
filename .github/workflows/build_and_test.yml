@@ -74,9 +74,9 @@ jobs:
       - name: Clean up coverage
         if: runner.os != 'Windows'
         run: |
-          grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" --ignore "**/test_helper.rs" --ignore "**/icons.rs" -o lcov.info
+          grcov . --binary-path target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "/*" --ignore "**/test_helper.rs" --ignore "**/icons.rs" --ignore "**/styles.rs" -o lcov.info
           lcov --remove lcov.info 'target/debug/build/**' 'target/release/build/**' '/usr*' '**/errors.rs' \
-          '**/build.rs' '*tests/*' '**/test_helper.rs' '**/icons.rs' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors \
+          '**/build.rs' '*tests/*' '**/test_helper.rs' '**/icons.rs' '**/styles.rs' --ignore-errors unused,unused --ignore-errors unsupported --ignore-errors \
           inconsistent --ignore-errors empty,empty -o lcov.info --erase-functions "(?=^.*fmt).+" --erase-functions "(?=^.*tests::).+"
 
       - name: UploadCoverage
