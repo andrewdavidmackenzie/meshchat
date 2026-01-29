@@ -531,3 +531,553 @@ async fn do_connect(ble_device: &str) -> Result<(PacketReceiver, ConnectedStream
 async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Error> {
     stream_api.disconnect().await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_channel::mpsc;
+    use meshtastic::protobufs::{
+        Channel as ProtoChannel, Data, MyNodeInfo, NodeInfo as ProtoNodeInfo,
+    };
+
+    // Helper to create a basic MeshPacket for testing
+    #[allow(deprecated)]
+    fn create_mesh_packet(from: u32, to: u32, channel: u32, id: u32) -> MeshPacket {
+        MeshPacket {
+            from,
+            to,
+            channel,
+            id,
+            rx_time: 1234567890,
+            rx_snr: 0.0,
+            hop_limit: 3,
+            want_ack: false,
+            priority: 0,
+            rx_rssi: 0,
+            via_mqtt: false,
+            hop_start: 0,
+            public_key: vec![],
+            pki_encrypted: false,
+            next_hop: 0,
+            relay_node: 0,
+            payload_variant: None,
+            tx_after: 0,
+            transport_mechanism: 0,
+            delayed: 0,
+        }
+    }
+
+    // Helper to create a MeshPacket with decoded text payload
+    fn create_text_mesh_packet(
+        from: u32,
+        to: u32,
+        channel: u32,
+        id: u32,
+        text: &str,
+        reply_id: u32,
+        emoji: u32,
+    ) -> MeshPacket {
+        let mut packet = create_mesh_packet(from, to, channel, id);
+        packet.payload_variant = Some(Decoded(Data {
+            portnum: PortNum::TextMessageApp as i32,
+            payload: text.as_bytes().to_vec(),
+            want_response: false,
+            dest: 0,
+            source: 0,
+            request_id: 0,
+            reply_id,
+            emoji,
+            bitfield: Some(0),
+        }));
+        packet
+    }
+
+    // Helper to create a MeshPacket with routing/ACK payload
+    fn create_ack_mesh_packet(from: u32, to: u32, channel: u32, request_id: u32) -> MeshPacket {
+        let mut packet = create_mesh_packet(from, to, channel, 1);
+        packet.payload_variant = Some(Decoded(Data {
+            portnum: PortNum::RoutingApp as i32,
+            payload: vec![],
+            want_response: false,
+            dest: 0,
+            source: 0,
+            request_id,
+            reply_id: 0,
+            emoji: 0,
+            bitfield: Some(0),
+        }));
+        packet
+    }
+
+    // Test MyRouter::new()
+    #[test]
+    fn test_my_router_new() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let router = MyRouter::new(sender);
+        assert!(router.my_node_num.is_none());
+    }
+
+    // Test PacketRouter::source_node_id() with no node num
+    #[test]
+    fn test_source_node_id_none() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let router = MyRouter::new(sender);
+        assert_eq!(router.source_node_id(), NodeId::from(0u32));
+    }
+
+    // Test PacketRouter::source_node_id() with node num set
+    #[test]
+    fn test_source_node_id_set() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(12345);
+        assert_eq!(router.source_node_id(), NodeId::from(12345u32));
+    }
+
+    // Test channel_id_from_packet - broadcast message
+    #[test]
+    fn test_channel_id_broadcast_channel_0() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let packet = create_mesh_packet(2000, u32::MAX, 0, 1);
+        let channel_id = router.channel_id_from_packet(&packet);
+
+        assert_eq!(channel_id, ChannelId::Channel(0));
+    }
+
+    #[test]
+    fn test_channel_id_broadcast_channel_1() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let packet = create_mesh_packet(2000, u32::MAX, 1, 1);
+        let channel_id = router.channel_id_from_packet(&packet);
+
+        assert_eq!(channel_id, ChannelId::Channel(1));
+    }
+
+    #[test]
+    fn test_channel_id_broadcast_channel_5() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let packet = create_mesh_packet(2000, u32::MAX, 5, 1);
+        let channel_id = router.channel_id_from_packet(&packet);
+
+        assert_eq!(channel_id, ChannelId::Channel(5));
+    }
+
+    // Test channel_id_from_packet - DM from me to another node
+    #[test]
+    fn test_channel_id_dm_from_me() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        // Message from me (1000) to node 2000
+        let packet = create_mesh_packet(1000, 2000, 0, 1);
+        let channel_id = router.channel_id_from_packet(&packet);
+
+        // Should be in node 2000's channel (the recipient)
+        assert_eq!(channel_id, Node(2000));
+    }
+
+    // Test channel_id_from_packet - DM from another node to me
+    #[test]
+    fn test_channel_id_dm_to_me() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        // Message from node 2000 to me (1000)
+        let packet = create_mesh_packet(2000, 1000, 0, 1);
+        let channel_id = router.channel_id_from_packet(&packet);
+
+        // Should be in node 2000's channel (the sender)
+        assert_eq!(channel_id, Node(2000));
+    }
+
+    // Test channel_id_from_packet - DM between two other nodes (edge case)
+    #[test]
+    fn test_channel_id_dm_other_nodes() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        // Message from node 2000 to node 3000 (not involving me)
+        let packet = create_mesh_packet(2000, 3000, 0, 1);
+        let channel_id = router.channel_id_from_packet(&packet);
+
+        // Should be in node 2000's channel (the sender)
+        assert_eq!(channel_id, Node(2000));
+    }
+
+    // Test channel_id_from_packet with my_node_num not set
+    #[test]
+    fn test_channel_id_my_node_unknown() {
+        let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        // my_node_num is None
+
+        let packet = create_mesh_packet(2000, 3000, 0, 1);
+        let channel_id = router.channel_id_from_packet(&packet);
+
+        // Since my_node_num is None, from != my_node_num, so uses Node(from)
+        assert_eq!(channel_id, Node(2000));
+    }
+
+    // Test DeviceState enum
+    #[test]
+    fn test_device_state_disconnected() {
+        let state = Disconnected;
+        assert!(matches!(state, Disconnected));
+    }
+
+    // Async tests for handle_a_packet_from_radio
+
+    #[tokio::test]
+    async fn test_handle_my_info_packet() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+
+        let from_radio = FromRadio {
+            id: 1,
+            payload_variant: Some(MyInfo(MyNodeInfo {
+                my_node_num: 12345,
+                reboot_count: 0,
+                min_app_version: 0,
+                pio_env: String::new(),
+                device_id: vec![],
+                firmware_edition: 0,
+                nodedb_count: 0,
+            })),
+        };
+
+        router
+            .handle_a_packet_from_radio(Box::new(from_radio))
+            .await;
+
+        // Check my_node_num was captured
+        assert_eq!(router.my_node_num, Some(12345));
+
+        // Check event was sent
+        let event = receiver.try_next().unwrap();
+        assert!(matches!(event, Some(MyNodeNum(12345))));
+    }
+
+    #[allow(deprecated)]
+    #[tokio::test]
+    async fn test_handle_node_info_packet() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+
+        let from_radio = FromRadio {
+            id: 1,
+            payload_variant: Some(NodeInfo(ProtoNodeInfo {
+                num: 2000,
+                user: Some(User {
+                    id: "!abc123".to_string(),
+                    long_name: "Test User".to_string(),
+                    short_name: "TU".to_string(),
+                    hw_model: 0,
+                    is_licensed: false,
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: Some(false),
+                    macaddr: vec![],
+                }),
+                position: None,
+                snr: 0.0,
+                last_heard: 0,
+                device_metrics: None,
+                channel: 0,
+                via_mqtt: false,
+                hops_away: Some(0),
+                is_favorite: false,
+                is_ignored: false,
+                is_key_manually_verified: false,
+            })),
+        };
+
+        router
+            .handle_a_packet_from_radio(Box::new(from_radio))
+            .await;
+
+        // Check event was sent
+        let event = receiver.try_next().unwrap();
+        assert!(matches!(event, Some(NewNode(_))));
+    }
+
+    #[allow(deprecated)]
+    #[tokio::test]
+    async fn test_handle_channel_packet_enabled() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+
+        let from_radio = FromRadio {
+            id: 1,
+            payload_variant: Some(Channel(ProtoChannel {
+                index: 0,
+                settings: Some(meshtastic::protobufs::ChannelSettings {
+                    channel_num: 0,
+                    psk: vec![],
+                    name: "TestChannel".to_string(),
+                    id: 0,
+                    uplink_enabled: false,
+                    downlink_enabled: false,
+                    module_settings: None,
+                }),
+                role: meshtastic::protobufs::channel::Role::Primary as i32,
+            })),
+        };
+
+        router
+            .handle_a_packet_from_radio(Box::new(from_radio))
+            .await;
+
+        // Check event was sent
+        let event = receiver.try_next().unwrap();
+        assert!(matches!(event, Some(NewChannel(_))));
+    }
+
+    #[tokio::test]
+    async fn test_handle_channel_packet_disabled() {
+        let (mut sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender.clone());
+
+        let from_radio = FromRadio {
+            id: 1,
+            payload_variant: Some(Channel(ProtoChannel {
+                index: 0,
+                settings: None,
+                role: meshtastic::protobufs::channel::Role::Disabled as i32,
+            })),
+        };
+
+        router
+            .handle_a_packet_from_radio(Box::new(from_radio))
+            .await;
+
+        // Close sender to allow try_next to return None
+        sender.close_channel();
+
+        // No event should be sent for the disabled channel
+        assert!(receiver.try_next().unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_handle_client_notification_packet() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+
+        let from_radio = FromRadio {
+            id: 1,
+            payload_variant: Some(ClientNotification(
+                meshtastic::protobufs::ClientNotification {
+                    reply_id: Some(0),
+                    time: 1234567890,
+                    level: 0,
+                    message: "Test notification".to_string(),
+                    payload_variant: None,
+                },
+            )),
+        };
+
+        router
+            .handle_a_packet_from_radio(Box::new(from_radio))
+            .await;
+
+        // Check event was sent
+        let event = receiver.try_next().unwrap();
+        assert!(
+            matches!(event, Some(RadioNotification(msg, 1234567890)) if msg == "Test notification")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_unknown_payload() {
+        let (mut sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender.clone());
+
+        let from_radio = FromRadio {
+            id: 1,
+            payload_variant: None,
+        };
+
+        router
+            .handle_a_packet_from_radio(Box::new(from_radio))
+            .await;
+
+        // Close sender to allow try_next to return None
+        sender.close_channel();
+
+        // No event should be sent for the unknown payload
+        assert!(receiver.try_next().unwrap().is_none());
+    }
+
+    // Tests for handle_a_mesh_packet
+
+    #[tokio::test]
+    async fn test_handle_text_message_new() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Hello world", 0, 0);
+        router.handle_a_mesh_packet(&packet).await;
+
+        let event = receiver.try_next().unwrap();
+        match event {
+            Some(MCMessageReceived(channel_id, id, from, msg, _rx_time)) => {
+                assert_eq!(channel_id, ChannelId::Channel(0));
+                assert_eq!(id, 123);
+                assert_eq!(from, 2000);
+                assert!(matches!(msg, NewTextMessage(text) if text == "Hello world"));
+            }
+            _ => panic!("Expected MCMessageReceived event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_text_message_reply() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        // Text reply (reply_id set, emoji = 0)
+        let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Reply text", 456, 0);
+        router.handle_a_mesh_packet(&packet).await;
+
+        let event = receiver.try_next().unwrap();
+        match event {
+            Some(MCMessageReceived(_, _, _, msg, _)) => {
+                assert!(
+                    matches!(msg, TextMessageReply(reply_id, text) if reply_id == 456 && text == "Reply text")
+                );
+            }
+            _ => panic!("Expected MCMessageReceived event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_emoji_reply() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        // Emoji reply (reply_id set, emoji != 0)
+        let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "👍", 456, 1);
+        router.handle_a_mesh_packet(&packet).await;
+
+        let event = receiver.try_next().unwrap();
+        match event {
+            Some(MCMessageReceived(_, _, _, msg, _)) => {
+                assert!(
+                    matches!(msg, EmojiReply(reply_id, emoji) if reply_id == 456 && emoji == "👍")
+                );
+            }
+            _ => panic!("Expected MCMessageReceived event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_ack_broadcast() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        // ACK for broadcast (from == to)
+        let packet = create_ack_mesh_packet(2000, 2000, 0, 789);
+        router.handle_a_mesh_packet(&packet).await;
+
+        let event = receiver.try_next().unwrap();
+        match event {
+            Some(MessageACK(channel_id, request_id)) => {
+                assert_eq!(channel_id, ChannelId::Channel(0));
+                assert_eq!(request_id, 789);
+            }
+            _ => panic!("Expected MessageACK event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_ack_dm() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        // ACK for DM (from != to)
+        let packet = create_ack_mesh_packet(2000, 1000, 0, 789);
+        router.handle_a_mesh_packet(&packet).await;
+
+        let event = receiver.try_next().unwrap();
+        match event {
+            Some(MessageACK(channel_id, request_id)) => {
+                assert_eq!(channel_id, Node(2000));
+                assert_eq!(request_id, 789);
+            }
+            _ => panic!("Expected MessageACK event"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_packet_no_payload() {
+        let (mut sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender.clone());
+
+        let packet = create_mesh_packet(2000, u32::MAX, 0, 1);
+        router.handle_a_mesh_packet(&packet).await;
+
+        // Close sender to allow try_next to return None
+        sender.close_channel();
+
+        // No event should be sent for a packet without a decoded payload
+        assert!(receiver.try_next().unwrap().is_none());
+    }
+
+    // Test PacketRouter trait implementation
+    #[test]
+    fn test_packet_router_handle_packet_from_radio() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+
+        let from_radio = FromRadio {
+            id: 1,
+            payload_variant: Some(MyInfo(MyNodeInfo {
+                my_node_num: 99999,
+                reboot_count: 0,
+                min_app_version: 0,
+                pio_env: String::new(),
+                device_id: vec![],
+                firmware_edition: 0,
+                nodedb_count: 0,
+            })),
+        };
+
+        let result = router.handle_packet_from_radio(from_radio);
+        assert!(result.is_ok());
+        assert_eq!(router.my_node_num, Some(99999));
+
+        // Check event was sent
+        let event = receiver.try_next().unwrap();
+        assert!(matches!(event, Some(MyNodeNum(99999))));
+    }
+
+    #[test]
+    fn test_packet_router_handle_mesh_packet() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Test", 0, 0);
+        let result = router.handle_mesh_packet(packet);
+        assert!(result.is_ok());
+
+        let event = receiver.try_next().unwrap();
+        assert!(matches!(event, Some(MCMessageReceived(_, _, _, _, _))));
+    }
+}
