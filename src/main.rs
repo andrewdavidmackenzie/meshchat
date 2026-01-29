@@ -281,7 +281,10 @@ impl MeshChat {
     /// Return the title of the app, which is used in the window title bar.
     /// Include the version number of the app and the number of unread messages, if any
     fn title(&self) -> String {
-        let unread_count = self.device_view.unread_count();
+        let unread_count = self.device_view.unread_count(
+            self.config.show_position_updates,
+            self.config.show_user_updates,
+        );
         if unread_count > 0 {
             format!("MeshChat {} ({} unread)", VERSION, unread_count)
         } else {
@@ -337,7 +340,7 @@ impl MeshChat {
                 // optionally on a specific Node/Channel also
                 let connect_task = {
                     if let Some(ble_device) = &self.config.ble_device
-                        && !self.config.disable_auto_reconnect
+                        && self.config.auto_reconnect
                     {
                         self.device_view.update(DeviceViewMessage::ConnectRequest(
                             ble_device.clone(),
@@ -446,7 +449,7 @@ impl MeshChat {
                 self.config.save_config()
             }
             ToggleAutoReconnect => {
-                self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
+                self.config.auto_reconnect = !self.config.auto_reconnect;
                 self.config.save_config()
             }
             ToggleAutoUpdate => {

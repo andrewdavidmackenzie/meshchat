@@ -62,7 +62,7 @@ impl std::fmt::Display for HistoryLength {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
     pub ble_device: Option<String>,
@@ -85,11 +85,30 @@ pub struct Config {
     /// Whether node User updates sent are shown in the chat view or just update node User
     #[serde(default = "default_show_user")]
     pub show_user_updates: bool,
-    #[serde(default)]
-    pub disable_auto_reconnect: bool,
+    #[serde(default = "default_auto_reconnect")]
+    pub auto_reconnect: bool,
     /// Whether we should attempt an auto-update on start-up
     #[serde(default = "default_auto_update_startup")]
     pub auto_update_startup: bool,
+}
+
+/// Some of the values have non-false (true) defaults, so implement using default functions
+/// to make sure it matches what a deserialized empty config would give.
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            ble_device: None,
+            channel_id: None,
+            fav_nodes: HashSet::new(),
+            aliases: HashMap::new(),
+            device_aliases: HashMap::new(),
+            history_length: HistoryLength::default(),
+            show_position_updates: default_show_position(),
+            show_user_updates: default_show_user(),
+            auto_reconnect: default_auto_reconnect(),
+            auto_update_startup: default_auto_update_startup(),
+        }
+    }
 }
 
 impl Config {
@@ -122,8 +141,8 @@ impl Config {
             .padding(8)
             .spacing(8)
             .push(self.show_position_in_chat_setting())
-            .push(self.disable_auto_reconnect())
             .push(self.show_user_updates())
+            .push(self.auto_reconnect())
             .push(self.history_length())
             .push(self.auto_update());
 
@@ -181,9 +200,9 @@ impl Config {
         .into()
     }
 
-    fn disable_auto_reconnect<'a>(&self) -> Element<'a, Message> {
-        toggler(self.disable_auto_reconnect)
-            .label("Disable auto-reconnect at startup")
+    fn auto_reconnect<'a>(&self) -> Element<'a, Message> {
+        toggler(self.auto_reconnect)
+            .label("Auto-reconnect at startup")
             .on_toggle(Self::toggle_auto_reconnects)
             .into()
     }
@@ -219,6 +238,12 @@ fn default_show_user() -> bool {
 /// If the auto_update_startup setting is missing in the config file, then default to true, so
 /// they are shown.
 fn default_auto_update_startup() -> bool {
+    true
+}
+
+/// If the auto_reconnect setting is missing in the config file, then default to true, so
+/// it's done always unless disabled
+fn default_auto_reconnect() -> bool {
     true
 }
 
@@ -289,6 +314,8 @@ mod tests {
     use btleplug::api::BDAddr;
     use std::io;
     use std::time::Duration;
+    use tokio::fs::File;
+    use tokio::io::AsyncWriteExt;
 
     fn assert_default(config: Config) {
         assert!(config.ble_device.is_none());
@@ -438,7 +465,34 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(!config.disable_auto_reconnect);
+        assert!(config.auto_reconnect);
+    }
+
+    #[tokio::test]
+    async fn empty_config_desers_to_default() {
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        let config_file_path = &tempfile.path().join("config.toml");
+        let mut config_file = File::create(config_file_path)
+            .await
+            .expect("Could not create temporary config file");
+        let config_str = "";
+        config_file
+            .write_all(config_str.as_bytes())
+            .await
+            .expect("Could not write to temporary config file");
+        config_file
+            .sync_all()
+            .await
+            .expect("Could not sync temporary config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+        assert_eq!(returned, Config::default());
     }
 
     #[tokio::test]
@@ -459,6 +513,6 @@ mod tests {
         let returned = load(tempfile.path().join("config.toml"))
             .await
             .expect("Could not load config file");
-        assert!(!returned.disable_auto_reconnect);
+        assert!(returned.auto_reconnect);
     }
 }
