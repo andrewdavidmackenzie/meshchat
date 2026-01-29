@@ -122,8 +122,8 @@ impl Config {
             .padding(8)
             .spacing(8)
             .push(self.show_position_in_chat_setting())
-            .push(self.disable_auto_reconnect())
             .push(self.show_user_updates())
+            .push(self.disable_auto_reconnect())
             .push(self.history_length())
             .push(self.auto_update());
 
