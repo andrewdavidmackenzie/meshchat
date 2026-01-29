@@ -340,7 +340,7 @@ impl MeshChat {
                 // optionally on a specific Node/Channel also
                 let connect_task = {
                     if let Some(ble_device) = &self.config.ble_device
-                        && !self.config.disable_auto_reconnect
+                        && self.config.auto_reconnect
                     {
                         self.device_view.update(DeviceViewMessage::ConnectRequest(
                             ble_device.clone(),
@@ -449,7 +449,7 @@ impl MeshChat {
                 self.config.save_config()
             }
             ToggleAutoReconnect => {
-                self.config.disable_auto_reconnect = !self.config.disable_auto_reconnect;
+                self.config.auto_reconnect = !self.config.auto_reconnect;
                 self.config.save_config()
             }
             ToggleAutoUpdate => {
