@@ -461,4 +461,226 @@ mod tests {
             .expect("Could not load config file");
         assert!(!returned.disable_auto_reconnect);
     }
+
+    #[test]
+    fn test_history_length_is_all() {
+        assert!(HistoryLength::All.is_all());
+        assert!(!HistoryLength::NumberOfMessages(10).is_all());
+        assert!(!HistoryLength::Duration(Duration::from_secs(3600)).is_all());
+    }
+
+    #[test]
+    fn test_history_length_display_all() {
+        let display = format!("{}", HistoryLength::All);
+        assert_eq!(display, "Store all messages");
+    }
+
+    #[test]
+    fn test_history_length_display_messages() {
+        let display = format!("{}", HistoryLength::NumberOfMessages(50));
+        assert_eq!(display, "Store last 50 messages");
+    }
+
+    #[test]
+    fn test_history_length_display_duration() {
+        let display = format!("{}", HistoryLength::Duration(Duration::from_secs(3600)));
+        assert_eq!(display, "Store all messages in last 1 hours");
+    }
+
+    #[test]
+    fn test_history_length_display_duration_eight_hours() {
+        let display = format!(
+            "{}",
+            HistoryLength::Duration(Duration::from_secs(60 * 60 * 8))
+        );
+        assert_eq!(display, "Store all messages in last 8 hours");
+    }
+
+    #[test]
+    fn test_history_length_display_duration_one_day() {
+        let display = format!(
+            "{}",
+            HistoryLength::Duration(Duration::from_secs(ONE_DAY_IN_SECONDS))
+        );
+        assert_eq!(display, "Store all messages in last 24 hours");
+    }
+
+    #[test]
+    fn test_history_length_all_variants() {
+        // Test that ALL constant has correct number of variants
+        assert_eq!(HistoryLength::ALL.len(), 5);
+        assert_eq!(HistoryLength::ALL[0], HistoryLength::All);
+        assert_eq!(HistoryLength::ALL[1], HistoryLength::NumberOfMessages(10));
+        assert_eq!(HistoryLength::ALL[2], HistoryLength::NumberOfMessages(100));
+    }
+
+    #[test]
+    fn test_config_default_show_position() {
+        let config = Config::default();
+        // Default for show_position_updates should be false (from Default trait)
+        // But the serde default is true
+        assert!(!config.show_position_updates);
+    }
+
+    #[test]
+    fn test_config_default_auto_update() {
+        let config = Config::default();
+        // Default for auto_update_startup from Default trait is false
+        assert!(!config.auto_update_startup);
+    }
+
+    #[tokio::test]
+    async fn test_fav_nodes_saved() {
+        let mut fav_nodes = std::collections::HashSet::new();
+        fav_nodes.insert(123);
+        fav_nodes.insert(456);
+
+        let config = Config {
+            fav_nodes,
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert_eq!(returned.fav_nodes.len(), 2);
+        assert!(returned.fav_nodes.contains(&123));
+        assert!(returned.fav_nodes.contains(&456));
+    }
+
+    #[tokio::test]
+    async fn test_aliases_saved() {
+        let mut aliases = std::collections::HashMap::new();
+        aliases.insert(123, "My Friend".to_string());
+
+        let config = Config {
+            aliases,
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert_eq!(returned.aliases.len(), 1);
+        assert_eq!(returned.aliases.get(&123), Some(&"My Friend".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_device_aliases_saved() {
+        let mut device_aliases = std::collections::HashMap::new();
+        device_aliases.insert("AA:BB:CC:DD:EE:FF".to_string(), "My Radio".to_string());
+
+        let config = Config {
+            device_aliases,
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert_eq!(returned.device_aliases.len(), 1);
+        assert_eq!(
+            returned.device_aliases.get("AA:BB:CC:DD:EE:FF"),
+            Some(&"My Radio".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn test_show_position_updates_saved() {
+        let config = Config {
+            show_position_updates: false,
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert!(!returned.show_position_updates);
+    }
+
+    #[tokio::test]
+    async fn test_show_user_updates_saved() {
+        let config = Config {
+            show_user_updates: false,
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert!(!returned.show_user_updates);
+    }
+
+    #[tokio::test]
+    async fn test_disable_auto_reconnect_saved() {
+        let config = Config {
+            disable_auto_reconnect: true,
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert!(returned.disable_auto_reconnect);
+    }
 }

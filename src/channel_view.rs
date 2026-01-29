@@ -552,12 +552,21 @@ impl ChannelView {
 
 #[cfg(test)]
 mod test {
-    use crate::channel_view::ChannelViewMessage::PrepareReply;
+    use crate::channel_view::ChannelViewMessage::{
+        CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PrepareReply, SendMessage,
+    };
     use crate::channel_view::{ChannelId, ChannelView};
     use crate::channel_view_entry::ChannelViewEntry;
-    use crate::channel_view_entry::MCMessage::NewTextMessage;
+    use crate::channel_view_entry::MCMessage::{EmojiReply, NewTextMessage};
     use crate::config::HistoryLength;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    fn now_secs() -> u32 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32
+    }
 
     #[tokio::test]
     async fn message_ordering_test() {
@@ -693,5 +702,231 @@ mod test {
         let _ = channel_view.update(PrepareReply(1));
 
         assert!(channel_view.preparing_reply.is_none());
+    }
+
+    #[test]
+    fn test_cancel_prepare_reply() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+        let _ = channel_view.update(PrepareReply(0));
+        assert!(channel_view.preparing_reply.is_some());
+
+        let _ = channel_view.update(CancelPrepareReply);
+        assert!(channel_view.preparing_reply.is_none());
+    }
+
+    #[test]
+    fn test_cancel_interactive() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+        let _ = channel_view.update(PrepareReply(0));
+        assert!(channel_view.preparing_reply.is_some());
+
+        channel_view.cancel_interactive();
+        assert!(channel_view.preparing_reply.is_none());
+    }
+
+    #[test]
+    fn test_message_input() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        assert!(channel_view.message.is_empty());
+
+        let _ = channel_view.update(MessageInput("Hello".into()));
+        assert_eq!(channel_view.message, "Hello");
+    }
+
+    #[test]
+    fn test_message_input_max_length() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Message longer than 200 chars should be rejected
+        let long_message = "a".repeat(250);
+        let _ = channel_view.update(MessageInput(long_message));
+        assert!(channel_view.message.is_empty());
+
+        // Message of 199 chars should be accepted
+        let valid_message = "b".repeat(199);
+        let _ = channel_view.update(MessageInput(valid_message.clone()));
+        assert_eq!(channel_view.message, valid_message);
+    }
+
+    #[test]
+    fn test_clear_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let _ = channel_view.update(MessageInput("Hello".into()));
+        assert!(!channel_view.message.is_empty());
+
+        let _ = channel_view.update(ClearMessage);
+        assert!(channel_view.message.is_empty());
+    }
+
+    #[test]
+    fn test_send_message_empty() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        // Empty message should not trigger a send task
+        let _ = channel_view.update(SendMessage(None));
+        // No crash, message still empty
+        assert!(channel_view.message.is_empty());
+    }
+
+    #[test]
+    fn test_send_message_clears_text() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let _ = channel_view.update(MessageInput("Hello world".into()));
+        assert!(!channel_view.message.is_empty());
+
+        let _ = channel_view.update(SendMessage(None));
+        assert!(channel_view.message.is_empty());
+    }
+
+    #[test]
+    fn test_send_message_clears_preparing_reply() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+        let _ = channel_view.update(PrepareReply(0));
+        let _ = channel_view.update(MessageInput("Reply text".into()));
+
+        let _ = channel_view.update(SendMessage(Some(1)));
+        assert!(channel_view.preparing_reply.is_none());
+    }
+
+    #[test]
+    fn test_ack_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(42, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+
+        assert!(!channel_view.entries.get(&42).unwrap().acked());
+
+        channel_view.ack(42);
+        assert!(channel_view.entries.get(&42).unwrap().acked());
+    }
+
+    #[test]
+    fn test_ack_nonexistent_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        // Should not panic
+        channel_view.ack(999);
+    }
+
+    #[test]
+    fn test_message_seen() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(42, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+
+        assert!(!channel_view.entries.get(&42).unwrap().seen());
+        assert_eq!(channel_view.unread_count(), 1);
+
+        let _ = channel_view.update(MessageSeen(42));
+        assert!(channel_view.entries.get(&42).unwrap().seen());
+        assert_eq!(channel_view.unread_count(), 0);
+    }
+
+    #[test]
+    fn test_trim_history_by_number() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Add 5 messages
+        for i in 0..5 {
+            let message = ChannelViewEntry::new(i, 1, NewTextMessage(format!("msg {}", i)), i);
+            let _ = channel_view.new_message(message, &HistoryLength::All);
+        }
+        assert_eq!(channel_view.entries.len(), 5);
+
+        // Adding 6th message with limit of 3 should trim to 3
+        let message = ChannelViewEntry::new(5, 1, NewTextMessage("msg 5".into()), 5);
+        let _ = channel_view.new_message(message, &HistoryLength::NumberOfMessages(3));
+        assert_eq!(channel_view.entries.len(), 3);
+
+        // The oldest messages should have been removed
+        assert!(!channel_view.entries.contains_key(&0));
+        assert!(!channel_view.entries.contains_key(&1));
+        assert!(!channel_view.entries.contains_key(&2));
+        assert!(channel_view.entries.contains_key(&3));
+        assert!(channel_view.entries.contains_key(&4));
+        assert!(channel_view.entries.contains_key(&5));
+    }
+
+    #[test]
+    fn test_trim_history_by_duration() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let now = now_secs();
+
+        // Add an old message (2 hours ago)
+        let old_time = now - 7200;
+        let old_message = ChannelViewEntry::new(1, 1, NewTextMessage("old".into()), old_time);
+        let _ = channel_view.new_message(old_message, &HistoryLength::All);
+
+        // Add a recent message (now)
+        let new_message = ChannelViewEntry::new(2, 1, NewTextMessage("new".into()), now);
+        // Trim history to 1 hour (3600 seconds)
+        let _ = channel_view.new_message(
+            new_message,
+            &HistoryLength::Duration(Duration::from_secs(3600)),
+        );
+
+        // Old message should be trimmed
+        assert_eq!(channel_view.entries.len(), 1);
+        assert!(channel_view.entries.contains_key(&2));
+    }
+
+    #[test]
+    fn test_emoji_reply_adds_to_existing_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Add original message
+        let original = ChannelViewEntry::new(1, 100, NewTextMessage("Hello".into()), now_secs());
+        let _ = channel_view.new_message(original, &HistoryLength::All);
+        assert_eq!(channel_view.entries.len(), 1);
+
+        // Add emoji reply to message 1
+        let emoji_reply = ChannelViewEntry::new(2, 200, EmojiReply(1, "👍".into()), now_secs());
+        let _ = channel_view.new_message(emoji_reply, &HistoryLength::All);
+
+        // Should still only have 1 entry (the original)
+        assert_eq!(channel_view.entries.len(), 1);
+        // But the original should now have the emoji
+        let original_entry = channel_view.entries.get(&1).unwrap();
+        assert!(original_entry.emojis().contains_key("👍"));
+    }
+
+    #[test]
+    fn test_new_default() {
+        let channel_view = ChannelView::default();
+        assert_eq!(channel_view.channel_id, ChannelId::default());
+        assert!(channel_view.message.is_empty());
+        assert!(channel_view.entries.is_empty());
+        assert!(channel_view.preparing_reply.is_none());
+    }
+
+    #[test]
+    fn test_my_message_scrolls() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+
+        // Message from me (node 100)
+        let my_message = ChannelViewEntry::new(1, 100, NewTextMessage("my msg".into()), now_secs());
+        let task = channel_view.new_message(my_message, &HistoryLength::All);
+
+        // Should return a scroll task (not Task::none)
+        // We can't easily check the task type, but we can verify the message was added
+        assert_eq!(channel_view.entries.len(), 1);
+        // The task should not be none - it should be a snap_to operation
+        drop(task); // Just verify it doesn't panic
+    }
+
+    #[test]
+    fn test_others_message_no_scroll() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+
+        // Message from someone else (node 200)
+        let other_message =
+            ChannelViewEntry::new(1, 200, NewTextMessage("other msg".into()), now_secs());
+        let _task = channel_view.new_message(other_message, &HistoryLength::All);
+
+        assert_eq!(channel_view.entries.len(), 1);
     }
 }

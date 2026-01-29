@@ -5,7 +5,10 @@ use crate::config::HistoryLength;
 use crate::device_view::DeviceView;
 use crate::device_view::DeviceViewMessage::SubscriptionMessage;
 use crate::{MCChannel, MeshChat, channel_view_entry};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+static MESSAGE_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 pub fn test_app() -> MeshChat {
     let mut meshchat = MeshChat::default();
@@ -23,8 +26,9 @@ pub fn test_app() -> MeshChat {
 
 impl MeshChat {
     pub fn new_message(&mut self, msg: MCMessage) {
+        let message_id = MESSAGE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
         let channel_view_entry = channel_view_entry::ChannelViewEntry::new(
-            0,
+            message_id,
             1,
             msg,
             SystemTime::now()

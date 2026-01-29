@@ -103,3 +103,115 @@ impl Default for Builder {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_builder_default() {
+        let builder = Builder::default();
+        let easing = builder.build();
+        // Should be able to query the easing curve
+        let y = easing.y_at_x(0.5);
+        assert!(y >= 0.0 && y <= 1.0);
+    }
+
+    #[test]
+    fn test_linear_easing() {
+        // Build a linear easing (straight line from 0,0 to 1,1)
+        let easing = Easing::builder().line_to([1.0, 1.0]).build();
+
+        // At x=0, y should be close to 0
+        let y_start = easing.y_at_x(0.0);
+        assert!(y_start < 0.1, "y at x=0 should be near 0, got {}", y_start);
+
+        // At x=1, y should be close to 1
+        let y_end = easing.y_at_x(1.0);
+        assert!(y_end > 0.9, "y at x=1 should be near 1, got {}", y_end);
+
+        // At x=0.5, y should be around 0.5 for a linear curve
+        let y_mid = easing.y_at_x(0.5);
+        assert!(
+            y_mid > 0.4 && y_mid < 0.6,
+            "y at x=0.5 should be near 0.5, got {}",
+            y_mid
+        );
+    }
+
+    #[test]
+    fn test_standard_easing() {
+        let easing = standard();
+        // Standard easing should return values in valid range
+        for x in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let y = easing.y_at_x(x);
+            assert!(
+                y >= 0.0 && y <= 1.0,
+                "y should be between 0 and 1 at x={}, got {}",
+                x,
+                y
+            );
+        }
+    }
+
+    #[test]
+    fn test_emphasized_accelerate_easing() {
+        let easing = emphasized_accelerate();
+        // Should return values in valid range
+        for x in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let y = easing.y_at_x(x);
+            assert!(
+                y >= 0.0 && y <= 1.0,
+                "y should be between 0 and 1 at x={}, got {}",
+                x,
+                y
+            );
+        }
+    }
+
+    #[test]
+    fn test_quadratic_bezier() {
+        let easing = Easing::builder()
+            .quadratic_bezier_to([0.5, 0.5], [1.0, 1.0])
+            .build();
+
+        let y = easing.y_at_x(0.5);
+        assert!(y >= 0.0 && y <= 1.0);
+    }
+
+    #[test]
+    fn test_cubic_bezier() {
+        let easing = Easing::builder()
+            .cubic_bezier_to([0.25, 0.1], [0.25, 1.0], [1.0, 1.0])
+            .build();
+
+        let y = easing.y_at_x(0.5);
+        assert!(y >= 0.0 && y <= 1.0);
+    }
+
+    #[test]
+    fn test_points_clamped_to_unit_square() {
+        // Points outside 0-1 range should be clamped
+        let easing = Easing::builder()
+            .line_to([2.0, 2.0]) // Should be clamped to 1.0, 1.0
+            .build();
+
+        let y = easing.y_at_x(0.5);
+        assert!(y >= 0.0 && y <= 1.0);
+    }
+
+    #[test]
+    fn test_static_once_lock_standard() {
+        // Test that the OnceLock works correctly - calling twice should return same reference
+        let first = standard();
+        let second = standard();
+        assert!(std::ptr::eq(first, second));
+    }
+
+    #[test]
+    fn test_static_once_lock_emphasized() {
+        let first = emphasized_accelerate();
+        let second = emphasized_accelerate();
+        assert!(std::ptr::eq(first, second));
+    }
+}
