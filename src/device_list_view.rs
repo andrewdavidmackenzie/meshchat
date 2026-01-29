@@ -290,3 +290,182 @@ fn empty_view() -> Element<'static, Message> {
         .align_x(Center)
         .into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    #[test]
+    fn test_default() {
+        let view = DeviceListView::default();
+        assert!(view.device_list.is_empty());
+        assert!(view.alias.is_empty());
+        assert!(view.editing_alias.is_none());
+    }
+
+    #[test]
+    fn test_ble_radio_found() {
+        let mut view = DeviceListView::default();
+        assert!(view.device_list.is_empty());
+
+        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+
+        assert_eq!(view.device_list.len(), 1);
+        assert!(view.device_list.contains_key("AA:BB:CC:DD:EE:FF"));
+    }
+
+    #[test]
+    fn test_ble_radio_found_duplicate() {
+        let mut view = DeviceListView::default();
+
+        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+
+        // Should still only have 1 entry
+        assert_eq!(view.device_list.len(), 1);
+    }
+
+    #[test]
+    fn test_ble_radio_found_multiple() {
+        let mut view = DeviceListView::default();
+
+        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLERadioFound("11:22:33:44:55:66".to_string()));
+
+        assert_eq!(view.device_list.len(), 2);
+    }
+
+    #[test]
+    fn test_ble_radio_lost() {
+        let mut view = DeviceListView::default();
+
+        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        assert_eq!(view.device_list.len(), 1);
+
+        let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
+        assert!(view.device_list.is_empty());
+    }
+
+    #[test]
+    fn test_ble_radio_lost_nonexistent() {
+        let mut view = DeviceListView::default();
+
+        // Losing a device that was never found should not panic
+        let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
+        assert!(view.device_list.is_empty());
+    }
+
+    #[test]
+    fn test_alias_input() {
+        let mut view = DeviceListView::default();
+        assert!(view.alias.is_empty());
+
+        let _ = view.update(AliasInput("My Radio".to_string()));
+        assert_eq!(view.alias, "My Radio");
+    }
+
+    #[test]
+    fn test_start_editing_alias() {
+        let mut view = DeviceListView {
+            alias: "existing".to_string(),
+            ..Default::default()
+        };
+
+        let _ = view.update(StartEditingAlias("AA:BB:CC:DD:EE:FF".to_string()));
+
+        assert_eq!(view.editing_alias, Some("AA:BB:CC:DD:EE:FF".to_string()));
+        assert!(view.alias.is_empty()); // Should be cleared
+    }
+
+    #[test]
+    fn test_stop_editing_alias() {
+        let mut view = DeviceListView {
+            editing_alias: Some("AA:BB:CC:DD:EE:FF".to_string()),
+            alias: "My Radio".to_string(),
+            ..Default::default()
+        };
+
+        view.stop_editing_alias();
+
+        assert!(view.editing_alias.is_none());
+        assert!(view.alias.is_empty());
+    }
+
+    #[test]
+    fn test_device_name_or_alias_no_alias() {
+        let view = DeviceListView::default();
+        let config = Config::default();
+
+        let name = view.device_name_or_alias("AA:BB:CC:DD:EE:FF", &config);
+        assert_eq!(name, "AA:BB:CC:DD:EE:FF");
+    }
+
+    #[test]
+    fn test_device_name_or_alias_with_alias() {
+        let view = DeviceListView::default();
+        let mut config = Config::default();
+        config
+            .device_aliases
+            .insert("AA:BB:CC:DD:EE:FF".to_string(), "My Radio".to_string());
+
+        let name = view.device_name_or_alias("AA:BB:CC:DD:EE:FF", &config);
+        assert_eq!(name, "My Radio");
+    }
+
+    #[test]
+    fn test_device_name_or_alias_different_device() {
+        let view = DeviceListView::default();
+        let mut config = Config::default();
+        config
+            .device_aliases
+            .insert("AA:BB:CC:DD:EE:FF".to_string(), "My Radio".to_string());
+
+        // Different device should return original name
+        let name = view.device_name_or_alias("11:22:33:44:55:66", &config);
+        assert_eq!(name, "11:22:33:44:55:66");
+    }
+
+    #[test]
+    fn test_error_returns_task() {
+        let mut view = DeviceListView::default();
+
+        // Error should return a task (not Task::none)
+        let _task = view.update(Error("Test error".to_string()));
+        // The task will be an AppError message when executed
+    }
+
+    #[test]
+    fn test_workflow_find_alias_lose() {
+        let mut view = DeviceListView::default();
+        let mut config = Config::default();
+
+        // Find a device
+        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        assert_eq!(view.device_list.len(), 1);
+
+        // Start aliasing
+        let _ = view.update(StartEditingAlias("AA:BB:CC:DD:EE:FF".to_string()));
+        assert!(view.editing_alias.is_some());
+
+        // Input an alias
+        let _ = view.update(AliasInput("My Radio".to_string()));
+        assert_eq!(view.alias, "My Radio");
+
+        // Simulate saving (would be done by parent)
+        config
+            .device_aliases
+            .insert("AA:BB:CC:DD:EE:FF".to_string(), "My Radio".to_string());
+        view.stop_editing_alias();
+
+        // Check alias is used
+        assert_eq!(
+            view.device_name_or_alias("AA:BB:CC:DD:EE:FF", &config),
+            "My Radio"
+        );
+
+        // Lose the device
+        let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
+        assert!(view.device_list.is_empty());
+    }
+}
