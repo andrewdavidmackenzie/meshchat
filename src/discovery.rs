@@ -36,80 +36,24 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                                     })
                                     .await
                                 {
-                                    Ok(()) => {
-                                        match central.peripherals().await {
-                                            Ok(peripherals) => {
-                                                let mut ble_devices_now: HashSet<String> =
-                                                    HashSet::new();
-
-                                                for peripheral in peripherals {
-                                                    ble_devices_now.insert(
-                                                        peripheral
-                                                            .properties()
-                                                            .await
-                                                            .unwrap()
-                                                            .unwrap()
-                                                            .local_name
-                                                            .unwrap(),
-                                                    );
-                                                }
-
-                                                println!("Found: {:?}", ble_devices_now);
-
-                                                // detect lost radios
-                                                for (ble_device, unseen_count) in
-                                                    &mut mesh_radio_devices
-                                                {
-                                                    if !ble_devices_now.contains(ble_device) {
-                                                        *unseen_count += 1;
-                                                        println!("'{}' Unseen once", ble_device);
-                                                    }
-
-                                                    // if unseen 3 times, then notify
-                                                    if *unseen_count >= 3 {
-                                                        println!("'{}' Unseen 3 times", ble_device);
-                                                        gui_sender
-                                                            .send(BLERadioLost(ble_device.clone()))
-                                                            .await
-                                                            .unwrap_or_else(|e| {
-                                                                eprintln!(
-                                                                    "Discovery could not send BLERadioLost: {e}"
-                                                                )
-                                                            });
-                                                    }
-                                                }
-                                                // Clean up the list of devices, removing ones not seen for 3 cycles
-                                                mesh_radio_devices
-                                                    .retain(|_device, count| *count >= 3);
-
-                                                // detect new radios found
-                                                for device in &ble_devices_now {
-                                                    if !mesh_radio_devices.contains_key(device) {
-                                                        // track it for the future - starting with an unseen count of 0
-                                                        mesh_radio_devices
-                                                            .insert(device.clone(), 0);
-                                                        // inform GUI of a new device found
-                                                        gui_sender
-                                                            .send(BLERadioFound(device.clone()))
-                                                            .await
-                                                            .unwrap_or_else(|e| {
-                                                                eprintln!(
-                                                                    "Discovery could not send BLERadioFound: {e}"
-                                                                )
-                                                            });
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                gui_sender
+                                    Ok(()) => match central.peripherals().await {
+                                        Ok(peripherals) => {
+                                            announce_device_changes(
+                                                &mut gui_sender,
+                                                &peripherals,
+                                                &mut mesh_radio_devices,
+                                            )
+                                            .await;
+                                        }
+                                        Err(e) => {
+                                            gui_sender
                                                     .send(Error(e.to_string()))
                                                     .await
                                                     .unwrap_or_else(|e| {
                                                         eprintln!("Discovery could not get BT peripherals: {e}")
                                                     });
-                                            }
                                         }
-                                    }
+                                    },
                                     Err(e) => {
                                         gui_sender.send(Error(e.to_string())).await.unwrap_or_else(
                                             |e| eprintln!("Discovery gui send error: {e}"),
@@ -138,4 +82,58 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
             }
         },
     )
+}
+
+async fn announce_device_changes(
+    gui_sender: &mut Sender<DeviceListEvent>,
+    peripherals: &Vec<impl Peripheral>,
+    mesh_radio_devices: &mut HashMap<String, i32>,
+) {
+    let mut ble_devices_now: HashSet<String> = HashSet::new();
+
+    for peripheral in peripherals {
+        ble_devices_now.insert(
+            peripheral
+                .properties()
+                .await
+                .unwrap()
+                .unwrap()
+                .local_name
+                .unwrap(),
+        );
+    }
+
+    println!("Found: {:?}", ble_devices_now);
+
+    // detect lost radios
+    for (ble_device, unseen_count) in mesh_radio_devices.iter_mut() {
+        if !ble_devices_now.contains(ble_device) {
+            *unseen_count += 1;
+            println!("'{}' Unseen once", ble_device);
+        }
+
+        // if unseen 3 times, then notify
+        if *unseen_count >= 3 {
+            println!("'{}' Unseen 3 times", ble_device);
+            gui_sender
+                .send(BLERadioLost(ble_device.clone()))
+                .await
+                .unwrap_or_else(|e| eprintln!("Discovery could not send BLERadioLost: {e}"));
+        }
+    }
+    // Clean up the list of devices, removing ones not seen for 3 cycles
+    mesh_radio_devices.retain(|_device, unseen_count| *unseen_count < 3);
+
+    // detect new radios found
+    for device in &ble_devices_now {
+        if !mesh_radio_devices.contains_key(device) {
+            // track it for the future - starting with an unseen count of 0
+            mesh_radio_devices.insert(device.clone(), 0);
+            // inform GUI of a new device found
+            gui_sender
+                .send(BLERadioFound(device.clone()))
+                .await
+                .unwrap_or_else(|e| eprintln!("Discovery could not send BLERadioFound: {e}"));
+        }
+    }
 }
