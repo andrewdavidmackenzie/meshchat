@@ -484,4 +484,125 @@ mod tests {
         assert!(lost.contains(&"Device3".to_string()));
         assert!(tracked.is_empty());
     }
+
+    // Test MSH_SERVICE constant
+    #[test]
+    fn test_msh_service_uuid() {
+        assert_eq!(
+            MSH_SERVICE,
+            Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd)
+        );
+    }
+
+    // Async tests for announce_device_changes
+    use futures_channel::mpsc;
+
+    // Mock peripheral for testing - we can't easily implement Peripheral trait,
+    // but we can test with empty vectors
+    #[tokio::test]
+    async fn test_announce_device_changes_empty_peripherals_empty_tracked() {
+        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+        let mut tracked: HashMap<String, i32> = HashMap::new();
+        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+        // Close the sender to signal no more messages
+        sender.close_channel();
+
+        // No events should be sent
+        assert!(receiver.try_next().unwrap().is_none());
+        assert!(tracked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_announce_device_changes_empty_peripherals_with_tracked_unseen_once() {
+        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+        let mut tracked: HashMap<String, i32> = HashMap::new();
+        tracked.insert("Device1".to_string(), 0);
+        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+        sender.close_channel();
+
+        // No events should be sent (device only unseen once)
+        assert!(receiver.try_next().unwrap().is_none());
+        // Device should still be tracked with incremented count
+        assert_eq!(tracked.get("Device1"), Some(&1));
+    }
+
+    #[tokio::test]
+    async fn test_announce_device_changes_empty_peripherals_device_lost() {
+        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+        let mut tracked: HashMap<String, i32> = HashMap::new();
+        tracked.insert("Device1".to_string(), 2); // Will be lost
+        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+        sender.close_channel();
+
+        // Should receive BLERadioLost event
+        let event = receiver.try_next().unwrap();
+        assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device1"));
+
+        // No more events
+        assert!(receiver.try_next().unwrap().is_none());
+
+        // Device should be removed from tracking
+        assert!(!tracked.contains_key("Device1"));
+    }
+
+    #[tokio::test]
+    async fn test_announce_device_changes_multiple_devices_lost() {
+        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+        let mut tracked: HashMap<String, i32> = HashMap::new();
+        tracked.insert("Device1".to_string(), 2);
+        tracked.insert("Device2".to_string(), 2);
+        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+        sender.close_channel();
+
+        // Should receive 2 BLERadioLost events
+        let mut lost_devices = Vec::new();
+        while let Ok(Some(event)) = receiver.try_next() {
+            if let BLERadioLost(name) = event {
+                lost_devices.push(name);
+            }
+        }
+
+        assert_eq!(lost_devices.len(), 2);
+        assert!(lost_devices.contains(&"Device1".to_string()));
+        assert!(lost_devices.contains(&"Device2".to_string()));
+        assert!(tracked.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_announce_device_changes_mixed_tracked_states() {
+        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+        let mut tracked: HashMap<String, i32> = HashMap::new();
+        tracked.insert("Device1".to_string(), 0); // Will be unseen once
+        tracked.insert("Device2".to_string(), 1); // Will be unseen twice
+        tracked.insert("Device3".to_string(), 2); // Will be lost
+        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+        sender.close_channel();
+
+        // Should receive only 1 BLERadioLost event for Device3
+        let event = receiver.try_next().unwrap();
+        assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device3"));
+
+        // No more events
+        assert!(receiver.try_next().unwrap().is_none());
+
+        // Device1 and Device2 should still be tracked
+        assert_eq!(tracked.get("Device1"), Some(&1));
+        assert_eq!(tracked.get("Device2"), Some(&2));
+        assert!(!tracked.contains_key("Device3"));
+    }
 }
