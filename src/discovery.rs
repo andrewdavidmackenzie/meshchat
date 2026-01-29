@@ -1,7 +1,7 @@
 use crate::device_list_view::DeviceListEvent;
 use crate::device_list_view::DeviceListEvent::{BLERadioFound, BLERadioLost, Error};
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
-use btleplug::platform::Manager;
+use btleplug::platform::{Adapter, Manager};
 use futures::SinkExt;
 use futures_channel::mpsc::Sender;
 use iced::futures::Stream;
@@ -24,45 +24,20 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                 Ok(manager) => {
                     // get the first bluetooth adapter
                     match manager.adapters().await {
-                        Ok(adapters) => {
-                            let central = adapters.into_iter().next().unwrap();
-
-                            // loop scanning for devices
-                            loop {
-                                // start scanning for MeshTastic radios
-                                match central
-                                    .start_scan(ScanFilter {
-                                        services: vec![MSH_SERVICE],
-                                    })
+                        Ok(adapters) => match adapters.into_iter().next() {
+                            Some(adapter) => {
+                                scan_for_devices(&mut gui_sender, &adapter, &mut mesh_radio_devices)
                                     .await
-                                {
-                                    Ok(()) => match central.peripherals().await {
-                                        Ok(peripherals) => {
-                                            announce_device_changes(
-                                                &mut gui_sender,
-                                                &peripherals,
-                                                &mut mesh_radio_devices,
-                                            )
-                                            .await;
-                                        }
-                                        Err(e) => {
-                                            gui_sender
-                                                    .send(Error(e.to_string()))
-                                                    .await
-                                                    .unwrap_or_else(|e| {
-                                                        eprintln!("Discovery could not get BT peripherals: {e}")
-                                                    });
-                                        }
-                                    },
-                                    Err(e) => {
-                                        gui_sender.send(Error(e.to_string())).await.unwrap_or_else(
-                                            |e| eprintln!("Discovery gui send error: {e}"),
-                                        );
-                                    }
-                                }
-                                tokio::time::sleep(Duration::from_secs(4)).await;
                             }
-                        }
+                            None => {
+                                gui_sender
+                                    .send(Error("Could not get a tlLePlug Adapter".into()))
+                                    .await
+                                    .unwrap_or_else(|e| {
+                                        eprintln!("Discovery could not find a BT adapters: {e}")
+                                    });
+                            }
+                        },
                         Err(e) => {
                             gui_sender
                                 .send(Error(e.to_string()))
@@ -82,6 +57,44 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
             }
         },
     )
+}
+
+async fn scan_for_devices(
+    gui_sender: &mut Sender<DeviceListEvent>,
+    adapter: &Adapter,
+    mesh_radio_devices: &mut HashMap<String, i32>,
+) {
+    // loop scanning for devices
+    loop {
+        // start scanning for MeshTastic radios
+        match adapter
+            .start_scan(ScanFilter {
+                services: vec![MSH_SERVICE],
+            })
+            .await
+        {
+            Ok(()) => match adapter.peripherals().await {
+                Ok(peripherals) => {
+                    announce_device_changes(gui_sender, &peripherals, mesh_radio_devices).await;
+                }
+                Err(e) => {
+                    gui_sender
+                        .send(Error(e.to_string()))
+                        .await
+                        .unwrap_or_else(|e| {
+                            eprintln!("Discovery could not get BT peripherals: {e}")
+                        });
+                }
+            },
+            Err(e) => {
+                gui_sender
+                    .send(Error(e.to_string()))
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(4)).await;
+    }
 }
 
 /// Process device changes and return events to send.
