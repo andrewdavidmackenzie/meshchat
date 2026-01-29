@@ -31,7 +31,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                             }
                             None => {
                                 gui_sender
-                                    .send(Error("Could not get a tlLePlug Adapter".into()))
+                                    .send(Error("Discovery could not get a BT Adapter".into()))
                                     .await
                                     .unwrap_or_else(|e| {
                                         eprintln!("Discovery could not find a BT adapters: {e}")
@@ -43,7 +43,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                                 .send(Error(e.to_string()))
                                 .await
                                 .unwrap_or_else(|e| {
-                                    eprintln!("Discovery could not BT adapters: {e}")
+                                    eprintln!("Discovery could not get first BT adapter: {e}")
                                 });
                         }
                     }
