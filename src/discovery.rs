@@ -149,7 +149,8 @@ async fn announce_device_changes(
     let mut ble_devices_now: HashSet<String> = HashSet::new();
 
     for peripheral in peripherals {
-        if let Some(local_name) = peripheral.properties().await.unwrap().unwrap().local_name {
+        if let Ok(Some(properties)) = peripheral.properties().await
+        && let Some(local_name) = properties.local_name {
             ble_devices_now.insert(local_name);
         }
     }
@@ -508,7 +509,7 @@ mod tests {
         sender.close_channel();
 
         // No events should be sent
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(receiver.try_next().expect("Could not get message back").is_none());
         assert!(tracked.is_empty());
     }
 
@@ -524,7 +525,7 @@ mod tests {
         sender.close_channel();
 
         // No events should be sent (the device has only been unseen once)
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(receiver.try_next().expect("Could not get message back").is_none());
         // Device should still be tracked with incremented count
         assert_eq!(tracked.get("Device1"), Some(&1));
     }
@@ -541,11 +542,11 @@ mod tests {
         sender.close_channel();
 
         // Should receive BLERadioLost event
-        let event = receiver.try_next().unwrap();
+        let event = receiver.try_next().expect("Could not get message back");
         assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device1"));
 
         // No more events
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(receiver.try_next().expect("Could not get message back").is_none());
 
         // Device should be removed from tracking
         assert!(!tracked.contains_key("Device1"));
@@ -591,11 +592,11 @@ mod tests {
         sender.close_channel();
 
         // Should receive only 1 BLERadioLost event for Device3
-        let event = receiver.try_next().unwrap();
+        let event = receiver.try_next().expect("Could not get message back");
         assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device3"));
 
         // No more events
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(receiver.try_next().expect("Could not get message back").is_none());
 
         // Device1 and Device2 should still be tracked
         assert_eq!(tracked.get("Device1"), Some(&1));
