@@ -149,15 +149,9 @@ async fn announce_device_changes(
     let mut ble_devices_now: HashSet<String> = HashSet::new();
 
     for peripheral in peripherals {
-        ble_devices_now.insert(
-            peripheral
-                .properties()
-                .await
-                .unwrap()
-                .unwrap()
-                .local_name
-                .unwrap(),
-        );
+        if let Some(local_name) = peripheral.properties().await.unwrap().unwrap().local_name {
+            ble_devices_now.insert(local_name);
+        }
     }
 
     println!("Found: {:?}", ble_devices_now);
