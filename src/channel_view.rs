@@ -196,7 +196,7 @@ impl ChannelView {
                 }
             }
             PrepareReply(entry_id) => {
-                if entry_id < self.entries.len() as u32 {
+                if self.entries.contains_key(&entry_id) {
                     self.preparing_reply = Some(entry_id);
                 }
                 Task::none()
@@ -689,9 +689,10 @@ mod test {
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
-        let _ = channel_view.update(PrepareReply(0));
+        // Use the actual message ID (1), not an index
+        let _ = channel_view.update(PrepareReply(1));
 
-        assert_eq!(channel_view.preparing_reply, Some(0));
+        assert_eq!(channel_view.preparing_reply, Some(1));
     }
 
     #[test]
@@ -708,7 +709,8 @@ mod test {
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
-        let _ = channel_view.update(PrepareReply(1));
+        // Use a non-existent message ID (999) - should not set preparing_reply
+        let _ = channel_view.update(PrepareReply(999));
 
         assert!(channel_view.preparing_reply.is_none());
     }
@@ -718,7 +720,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
         let _ = channel_view.new_message(message, &HistoryLength::All);
-        let _ = channel_view.update(PrepareReply(0));
+        let _ = channel_view.update(PrepareReply(1)); // Use actual message ID
         assert!(channel_view.preparing_reply.is_some());
 
         let _ = channel_view.update(CancelPrepareReply);
@@ -730,7 +732,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
         let _ = channel_view.new_message(message, &HistoryLength::All);
-        let _ = channel_view.update(PrepareReply(0));
+        let _ = channel_view.update(PrepareReply(1)); // Use actual message ID
         assert!(channel_view.preparing_reply.is_some());
 
         channel_view.cancel_interactive();
@@ -795,7 +797,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
         let _ = channel_view.new_message(message, &HistoryLength::All);
-        let _ = channel_view.update(PrepareReply(0));
+        let _ = channel_view.update(PrepareReply(1)); // Use actual message ID
         let _ = channel_view.update(MessageInput("Reply text".into()));
 
         let _ = channel_view.update(SendMessage(Some(1)));
