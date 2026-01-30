@@ -292,6 +292,7 @@ fn empty_view() -> Element<'static, Message> {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
     use crate::config::Config;
@@ -467,5 +468,197 @@ mod tests {
         // Lose the device
         let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
         assert!(view.device_list.is_empty());
+    }
+
+    // Test DeviceListEvent enum
+    #[test]
+    fn test_device_list_event_debug() {
+        let event = BLERadioFound("device1".into());
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("BLERadioFound"));
+        assert!(debug_str.contains("device1"));
+    }
+
+    #[test]
+    fn test_device_list_event_clone() {
+        let event = BLERadioLost("device1".into());
+        let cloned = event.clone();
+        assert!(matches!(cloned, BLERadioLost(name) if name == "device1"));
+    }
+
+    #[test]
+    fn test_device_list_event_error_debug() {
+        let event = Error("test error".into());
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("Error"));
+        assert!(debug_str.contains("test error"));
+    }
+
+    #[test]
+    fn test_device_list_event_start_editing_alias_debug() {
+        let event = StartEditingAlias("device1".into());
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("StartEditingAlias"));
+    }
+
+    #[test]
+    fn test_device_list_event_alias_input_debug() {
+        let event = AliasInput("my alias".into());
+        let debug_str = format!("{:?}", event);
+        assert!(debug_str.contains("AliasInput"));
+        assert!(debug_str.contains("my alias"));
+    }
+
+    // Additional update tests
+    #[test]
+    fn test_update_alias_input_empty() {
+        let mut view = DeviceListView::default();
+        view.alias = "existing".into();
+
+        let _ = view.update(AliasInput("".into()));
+        assert!(view.alias.is_empty());
+    }
+
+    #[test]
+    fn test_update_alias_input_special_chars() {
+        let mut view = DeviceListView::default();
+
+        let _ = view.update(AliasInput("My Radio 🔊 #1".into()));
+        assert_eq!(view.alias, "My Radio 🔊 #1");
+    }
+
+    #[test]
+    fn test_multiple_devices_found_and_lost() {
+        let mut view = DeviceListView::default();
+
+        // Add multiple devices
+        let _ = view.update(BLERadioFound("device1".into()));
+        let _ = view.update(BLERadioFound("device2".into()));
+        let _ = view.update(BLERadioFound("device3".into()));
+        assert_eq!(view.device_list.len(), 3);
+
+        // Remove one
+        let _ = view.update(BLERadioLost("device2".into()));
+        assert_eq!(view.device_list.len(), 2);
+        assert!(view.device_list.contains_key("device1"));
+        assert!(!view.device_list.contains_key("device2"));
+        assert!(view.device_list.contains_key("device3"));
+
+        // Remove another
+        let _ = view.update(BLERadioLost("device1".into()));
+        assert_eq!(view.device_list.len(), 1);
+
+        // Remove last
+        let _ = view.update(BLERadioLost("device3".into()));
+        assert!(view.device_list.is_empty());
+    }
+
+    #[test]
+    fn test_start_editing_alias_clears_previous() {
+        let mut view = DeviceListView::default();
+
+        // Start editing for device1
+        let _ = view.update(StartEditingAlias("device1".into()));
+        let _ = view.update(AliasInput("alias1".into()));
+        assert_eq!(view.editing_alias, Some("device1".into()));
+        assert_eq!(view.alias, "alias1");
+
+        // Start editing for device2 - should clear previous state
+        let _ = view.update(StartEditingAlias("device2".into()));
+        assert_eq!(view.editing_alias, Some("device2".into()));
+        assert!(view.alias.is_empty()); // Should be cleared
+    }
+
+    #[test]
+    fn test_device_name_or_alias_empty_string() {
+        let view = DeviceListView::default();
+        let config = Config::default();
+
+        let name = view.device_name_or_alias("", &config);
+        assert_eq!(name, "");
+    }
+
+    #[test]
+    fn test_device_name_or_alias_with_multiple_aliases() {
+        let view = DeviceListView::default();
+        let mut config = Config::default();
+        config
+            .device_aliases
+            .insert("device1".into(), "Radio 1".into());
+        config
+            .device_aliases
+            .insert("device2".into(), "Radio 2".into());
+        config
+            .device_aliases
+            .insert("device3".into(), "Radio 3".into());
+
+        assert_eq!(view.device_name_or_alias("device1", &config), "Radio 1");
+        assert_eq!(view.device_name_or_alias("device2", &config), "Radio 2");
+        assert_eq!(view.device_name_or_alias("device3", &config), "Radio 3");
+        assert_eq!(view.device_name_or_alias("device4", &config), "device4");
+    }
+
+    #[test]
+    fn test_editing_alias_while_device_lost() {
+        let mut view = DeviceListView::default();
+
+        // Find device
+        let _ = view.update(BLERadioFound("device1".into()));
+
+        // Start editing alias
+        let _ = view.update(StartEditingAlias("device1".into()));
+        let _ = view.update(AliasInput("My Alias".into()));
+        assert_eq!(view.editing_alias, Some("device1".into()));
+
+        // Device is lost while editing
+        let _ = view.update(BLERadioLost("device1".into()));
+        assert!(view.device_list.is_empty());
+
+        // Editing state is still preserved (caller needs to handle this)
+        assert_eq!(view.editing_alias, Some("device1".into()));
+        assert_eq!(view.alias, "My Alias");
+    }
+
+    #[test]
+    fn test_stop_editing_alias_when_not_editing() {
+        let mut view = DeviceListView::default();
+        assert!(view.editing_alias.is_none());
+
+        // Should not panic when not editing
+        view.stop_editing_alias();
+        assert!(view.editing_alias.is_none());
+        assert!(view.alias.is_empty());
+    }
+
+    #[test]
+    fn test_error_with_empty_message() {
+        let mut view = DeviceListView::default();
+        let _task = view.update(Error("".into()));
+        // Should not panic
+    }
+
+    #[test]
+    fn test_error_with_long_message() {
+        let mut view = DeviceListView::default();
+        let long_error = "A".repeat(1000);
+        let _task = view.update(Error(long_error));
+        // Should not panic
+    }
+
+    #[test]
+    fn test_ble_radio_found_with_long_name() {
+        let mut view = DeviceListView::default();
+        let long_name = "B".repeat(100);
+
+        let _ = view.update(BLERadioFound(long_name.clone()));
+        assert!(view.device_list.contains_key(&long_name));
+    }
+
+    #[test]
+    fn test_device_list_view_default_values() {
+        let view = DeviceListView::default();
+        assert!(view.device_list.is_empty());
+        assert!(view.alias.is_empty());
+        assert!(view.editing_alias.is_none());
     }
 }
