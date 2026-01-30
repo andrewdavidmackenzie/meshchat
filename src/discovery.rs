@@ -26,8 +26,27 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                     match manager.adapters().await {
                         Ok(adapters) => match adapters.into_iter().next() {
                             Some(adapter) => {
-                                scan_for_devices(&mut gui_sender, &adapter, &mut mesh_radio_devices)
+                                // start scanning for MeshTastic radios
+                                match adapter
+                                    .start_scan(ScanFilter {
+                                        services: vec![MSH_SERVICE],
+                                    })
                                     .await
+                                {
+                                    Ok(()) => {
+                                        scan_for_devices(
+                                            &mut gui_sender,
+                                            &adapter,
+                                            &mut mesh_radio_devices,
+                                        )
+                                        .await
+                                    }
+                                    Err(e) => {
+                                        gui_sender.send(Error(e.to_string())).await.unwrap_or_else(
+                                            |e| eprintln!("Discovery gui send error: {e}"),
+                                        );
+                                    }
+                                }
                             }
                             None => {
                                 gui_sender
@@ -66,31 +85,15 @@ async fn scan_for_devices(
 ) {
     // loop scanning for devices
     loop {
-        // start scanning for MeshTastic radios
-        match adapter
-            .start_scan(ScanFilter {
-                services: vec![MSH_SERVICE],
-            })
-            .await
-        {
-            Ok(()) => match adapter.peripherals().await {
-                Ok(peripherals) => {
-                    announce_device_changes(gui_sender, &peripherals, mesh_radio_devices).await;
-                }
-                Err(e) => {
-                    gui_sender
-                        .send(Error(e.to_string()))
-                        .await
-                        .unwrap_or_else(|e| {
-                            eprintln!("Discovery could not get BT peripherals: {e}")
-                        });
-                }
-            },
+        match adapter.peripherals().await {
+            Ok(peripherals) => {
+                announce_device_changes(gui_sender, &peripherals, mesh_radio_devices).await;
+            }
             Err(e) => {
                 gui_sender
                     .send(Error(e.to_string()))
                     .await
-                    .unwrap_or_else(|e| eprintln!("Discovery gui send error: {e}"));
+                    .unwrap_or_else(|e| eprintln!("Discovery could not get BT peripherals: {e}"));
             }
         }
         tokio::time::sleep(Duration::from_secs(4)).await;
@@ -526,7 +529,7 @@ mod tests {
 
         sender.close_channel();
 
-        // No events should be sent (device only unseen once)
+        // No events should be sent (the device has only been unseen once)
         assert!(receiver.try_next().unwrap().is_none());
         // Device should still be tracked with incremented count
         assert_eq!(tracked.get("Device1"), Some(&1));
