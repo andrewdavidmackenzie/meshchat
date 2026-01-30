@@ -100,47 +100,6 @@ async fn scan_for_devices(
     }
 }
 
-/// Process device changes and return events to send.
-/// Returns (devices_found, devices_lost)
-fn process_device_changes(
-    current_devices: &HashSet<String>,
-    tracked_devices: &mut HashMap<String, i32>,
-) -> (Vec<String>, Vec<String>) {
-    let mut found = Vec::new();
-    let mut lost = Vec::new();
-
-    // detect lost radios
-    for (device_name, unseen_count) in tracked_devices.iter_mut() {
-        if !current_devices.contains(device_name) {
-            *unseen_count += 1;
-            println!("'{}' Unseen once", device_name);
-        } else {
-            // Reset count if the device is seen again
-            *unseen_count = 0;
-        }
-
-        // if unseen 3 times, then notify
-        if *unseen_count >= 3 {
-            println!("'{}' Unseen 3 times", device_name);
-            lost.push(device_name.clone());
-        }
-    }
-
-    // Clean up the list of devices, removing ones not seen for 3 cycles
-    tracked_devices.retain(|_device, unseen_count| *unseen_count < 3);
-
-    // detect new radios found
-    for device in current_devices {
-        if !tracked_devices.contains_key(device) {
-            // track it for the future - starting with an unseen count of 0
-            tracked_devices.insert(device.clone(), 0);
-            found.push(device.clone());
-        }
-    }
-
-    (found, lost)
-}
-
 async fn announce_device_changes(
     gui_sender: &mut Sender<DeviceListEvent>,
     peripherals: &Vec<impl Peripheral>,
@@ -149,8 +108,11 @@ async fn announce_device_changes(
     let mut ble_devices_now: HashSet<String> = HashSet::new();
 
     for peripheral in peripherals {
-        if let Some(local_name) = peripheral.properties().await.unwrap().unwrap().local_name {
-            ble_devices_now.insert(local_name);
+        #[allow(clippy::collapsible_if)]
+        if let Ok(Some(properties)) = peripheral.properties().await {
+            if let Some(local_name) = properties.local_name {
+                ble_devices_now.insert(local_name);
+            }
         }
     }
 
@@ -173,6 +135,45 @@ async fn announce_device_changes(
             .await
             .unwrap_or_else(|e| eprintln!("Discovery could not send BLERadioFound: {e}"));
     }
+}
+
+/// Process device changes and return events to send.
+/// Returns (devices_found, devices_lost)
+fn process_device_changes(
+    current_devices: &HashSet<String>,
+    tracked_devices: &mut HashMap<String, i32>,
+) -> (Vec<String>, Vec<String>) {
+    let mut found = Vec::new();
+    let mut lost = Vec::new();
+
+    // detect lost radios
+    for (device_name, unseen_count) in tracked_devices.iter_mut() {
+        if current_devices.contains(device_name) {
+            // Reset count if the device is seen again
+            *unseen_count = 0;
+        } else {
+            *unseen_count += 1;
+        }
+
+        // if unseen 3 times, then consider lost
+        if *unseen_count >= 3 {
+            lost.push(device_name.clone());
+        }
+    }
+
+    // Clean up the list of devices, removing ones not seen for 3 cycles
+    tracked_devices.retain(|_device, unseen_count| *unseen_count < 3);
+
+    // detect new radios found
+    for device in current_devices {
+        if !tracked_devices.contains_key(device) {
+            // track it for the future - starting with an unseen count of 0
+            tracked_devices.insert(device.clone(), 0);
+            found.push(device.clone());
+        }
+    }
+
+    (found, lost)
 }
 
 #[cfg(test)]
@@ -508,7 +509,12 @@ mod tests {
         sender.close_channel();
 
         // No events should be sent
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(
+            receiver
+                .try_next()
+                .expect("Could not get message back")
+                .is_none()
+        );
         assert!(tracked.is_empty());
     }
 
@@ -524,7 +530,12 @@ mod tests {
         sender.close_channel();
 
         // No events should be sent (the device has only been unseen once)
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(
+            receiver
+                .try_next()
+                .expect("Could not get message back")
+                .is_none()
+        );
         // Device should still be tracked with incremented count
         assert_eq!(tracked.get("Device1"), Some(&1));
     }
@@ -541,11 +552,16 @@ mod tests {
         sender.close_channel();
 
         // Should receive BLERadioLost event
-        let event = receiver.try_next().unwrap();
+        let event = receiver.try_next().expect("Could not get message back");
         assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device1"));
 
         // No more events
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(
+            receiver
+                .try_next()
+                .expect("Could not get message back")
+                .is_none()
+        );
 
         // Device should be removed from tracking
         assert!(!tracked.contains_key("Device1"));
@@ -591,11 +607,16 @@ mod tests {
         sender.close_channel();
 
         // Should receive only 1 BLERadioLost event for Device3
-        let event = receiver.try_next().unwrap();
+        let event = receiver.try_next().expect("Could not get message back");
         assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device3"));
 
         // No more events
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(
+            receiver
+                .try_next()
+                .expect("Could not get message back")
+                .is_none()
+        );
 
         // Device1 and Device2 should still be tracked
         assert_eq!(tracked.get("Device1"), Some(&1));
