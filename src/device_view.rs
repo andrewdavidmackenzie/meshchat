@@ -1046,6 +1046,7 @@ pub fn long_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
     use crate::Message::Navigation;
@@ -1055,6 +1056,34 @@ mod tests {
     use crate::device_view::DeviceViewMessage::{ClearFilter, SearchInput};
     use crate::test_helper;
     use btleplug::api::BDAddr;
+
+    fn test_position(lat: f64, lon: f64) -> MCPosition {
+        MCPosition {
+            latitude: lat,
+            longitude: lon,
+            altitude: None,
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        }
+    }
 
     #[tokio::test]
     async fn test_connect_request_fail() {
@@ -1336,5 +1365,453 @@ mod tests {
     fn test_unread_count_empty() {
         let device_view = DeviceView::default();
         assert_eq!(device_view.unread_count(true, true), 0);
+    }
+
+    // Tests for process_subscription_event
+
+    #[test]
+    fn test_subscription_connecting_event() {
+        let mut device_view = DeviceView::default();
+        let _ = device_view.update(SubscriptionMessage(ConnectingEvent("device1".into())));
+        assert_eq!(device_view.connection_state, Connecting("device1".into()));
+    }
+
+    #[test]
+    fn test_subscription_connected_event() {
+        let mut device_view = DeviceView::default();
+        let _ = device_view.update(SubscriptionMessage(ConnectedEvent("device1".into())));
+        assert_eq!(device_view.connection_state, Connected("device1".into()));
+    }
+
+    #[test]
+    fn test_subscription_disconnecting_event() {
+        let mut device_view = DeviceView::default();
+        device_view.connection_state = Connected("device1".into());
+        let _ = device_view.update(SubscriptionMessage(DisconnectingEvent("device1".into())));
+        assert_eq!(
+            device_view.connection_state,
+            Disconnecting("device1".into())
+        );
+    }
+
+    #[test]
+    fn test_subscription_my_node_num() {
+        let mut device_view = DeviceView::default();
+        assert!(device_view.my_node_num.is_none());
+
+        let _ = device_view.update(SubscriptionMessage(MyNodeNum(12345)));
+        assert_eq!(device_view.my_node_num, Some(12345));
+    }
+
+    #[test]
+    fn test_subscription_ready() {
+        let mut device_view = DeviceView::default();
+        assert!(device_view.subscription_sender.is_none());
+
+        let (sender, _receiver) = tokio::sync::mpsc::channel::<SubscriberMessage>(10);
+        let _ = device_view.update(SubscriptionMessage(Ready(sender)));
+        assert!(device_view.subscription_sender.is_some());
+    }
+
+    #[test]
+    fn test_subscription_device_battery_level() {
+        let mut device_view = DeviceView::default();
+        assert!(device_view.battery_level.is_none());
+
+        let _ = device_view.update(SubscriptionMessage(DeviceBatteryLevel(Some(75))));
+        assert_eq!(device_view.battery_level, Some(75));
+    }
+
+    #[test]
+    fn test_subscription_device_battery_level_none() {
+        let mut device_view = DeviceView::default();
+        let _ = device_view.update(SubscriptionMessage(DeviceBatteryLevel(None)));
+        assert!(device_view.battery_level.is_none());
+    }
+
+    #[test]
+    fn test_subscription_new_channel() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+        assert!(device_view.channels.is_empty());
+
+        let channel = MCChannel {
+            index: 0,
+            name: "TestChannel".into(),
+        };
+        let _ = device_view.update(SubscriptionMessage(NewChannel(channel)));
+
+        assert_eq!(device_view.channels.len(), 1);
+        assert_eq!(device_view.channels[0].name, "TestChannel");
+        assert!(
+            device_view
+                .channel_views
+                .contains_key(&ChannelId::Channel(0))
+        );
+    }
+
+    #[test]
+    fn test_subscription_new_node() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: Some(MCUser {
+                id: "test".into(),
+                long_name: "Test User".into(),
+                short_name: "TEST".into(),
+                hw_model_str: "TBEAM".into(),
+                hw_model: 0,
+                is_licensed: false,
+                role_str: "CLIENT".into(),
+                role: 0,
+                public_key: vec![],
+                is_unmessagable: false,
+            }),
+            position: None,
+            channel: 0,
+            is_ignored: false,
+        };
+
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        assert!(device_view.nodes.contains_key(&12345));
+        assert!(device_view.channel_views.contains_key(&Node(12345)));
+    }
+
+    #[test]
+    fn test_subscription_new_node_ignored() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: None,
+            position: None,
+            channel: 0,
+            is_ignored: true, // Should be ignored
+        };
+
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        // Node should not be added because is_ignored is true
+        assert!(!device_view.nodes.contains_key(&12345));
+    }
+
+    #[test]
+    fn test_subscription_new_node_is_my_node() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(12345);
+
+        let position = test_position(37.7749, -122.4194);
+
+        let user = MCUser {
+            id: "me".into(),
+            long_name: "My Name".into(),
+            short_name: "ME".into(),
+            hw_model_str: "TBEAM".into(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "CLIENT".into(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: Some(user.clone()),
+            position: Some(position.clone()),
+            channel: 0,
+            is_ignored: false,
+        };
+
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        // my_position and my_user should be set
+        assert!(device_view.my_position.is_some());
+        assert!(device_view.my_user.is_some());
+        assert_eq!(device_view.my_user.as_ref().unwrap().long_name, "My Name");
+    }
+
+    #[test]
+    fn test_update_node_position() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        // Add a node first
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: Some(MCUser {
+                id: "test".into(),
+                long_name: "Test".into(),
+                short_name: "T".into(),
+                hw_model_str: "".into(),
+                hw_model: 0,
+                is_licensed: false,
+                role_str: "".into(),
+                role: 0,
+                public_key: vec![],
+                is_unmessagable: false,
+            }),
+            position: None,
+            channel: 0,
+            is_ignored: false,
+        };
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        // Update position
+        let position = test_position(40.7128, -74.0060);
+        device_view.update_node_position(12345, &position);
+
+        assert!(device_view.nodes.get(&12345).unwrap().position.is_some());
+    }
+
+    #[test]
+    fn test_update_node_position_my_node() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(12345);
+
+        // Add my node first
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: None,
+            position: None,
+            channel: 0,
+            is_ignored: false,
+        };
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        // Update my position
+        let position = test_position(40.7128, -74.0060);
+        device_view.update_node_position(12345, &position);
+
+        // my_position should also be updated
+        assert!(device_view.my_position.is_some());
+        assert_eq!(device_view.my_position.as_ref().unwrap().latitude, 40.7128);
+    }
+
+    #[test]
+    fn test_update_node_user() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        // Add a node first
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: None,
+            position: None,
+            channel: 0,
+            is_ignored: false,
+        };
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        // Update user
+        let user = MCUser {
+            id: "updated".into(),
+            long_name: "Updated Name".into(),
+            short_name: "UPD".into(),
+            hw_model_str: "".into(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "".into(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+        device_view.update_node_user(12345, &user);
+
+        assert!(device_view.nodes.get(&12345).unwrap().user.is_some());
+        assert_eq!(
+            device_view
+                .nodes
+                .get(&12345)
+                .unwrap()
+                .user
+                .as_ref()
+                .unwrap()
+                .long_name,
+            "Updated Name"
+        );
+    }
+
+    #[test]
+    fn test_aliased_long_name_no_node() {
+        let device_view = DeviceView::default();
+        let config = Config::default();
+        assert!(device_view.aliased_long_name(&config, 12345).is_none());
+    }
+
+    #[test]
+    fn test_aliased_long_name_with_alias() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: Some(MCUser {
+                id: "test".into(),
+                long_name: "Original Name".into(),
+                short_name: "ON".into(),
+                hw_model_str: "".into(),
+                hw_model: 0,
+                is_licensed: false,
+                role_str: "".into(),
+                role: 0,
+                public_key: vec![],
+                is_unmessagable: false,
+            }),
+            position: None,
+            channel: 0,
+            is_ignored: false,
+        };
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        let mut config = Config::default();
+        config.aliases.insert(12345, "My Alias".into());
+
+        assert_eq!(
+            device_view.aliased_long_name(&config, 12345),
+            Some("My Alias")
+        );
+    }
+
+    #[test]
+    fn test_aliased_long_name_without_alias() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: Some(MCUser {
+                id: "test".into(),
+                long_name: "Original Name".into(),
+                short_name: "ON".into(),
+                hw_model_str: "".into(),
+                hw_model: 0,
+                is_licensed: false,
+                role_str: "".into(),
+                role: 0,
+                public_key: vec![],
+                is_unmessagable: false,
+            }),
+            position: None,
+            channel: 0,
+            is_ignored: false,
+        };
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        let config = Config::default();
+
+        assert_eq!(
+            device_view.aliased_long_name(&config, 12345),
+            Some("Original Name")
+        );
+    }
+
+    #[test]
+    fn test_aliased_long_name_node_without_user() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        let node_info = MCNodeInfo {
+            num: 12345,
+            user: None,
+            position: None,
+            channel: 0,
+            is_ignored: false,
+        };
+        let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
+
+        let config = Config::default();
+
+        // No user, so should return None
+        assert!(device_view.aliased_long_name(&config, 12345).is_none());
+    }
+
+    #[test]
+    fn test_connection_state_accessor() {
+        let device_view = DeviceView::default();
+        assert_eq!(device_view.connection_state(), &Disconnected(None, None));
+    }
+
+    #[test]
+    fn test_show_channel() {
+        let mut device_view = DeviceView::default();
+        assert!(device_view.viewing_channel.is_none());
+
+        let _ = device_view.update(ShowChannel(Some(ChannelId::Channel(0))));
+        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+    }
+
+    #[test]
+    fn test_show_channel_none() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        let _ = device_view.update(ShowChannel(None));
+        assert!(device_view.viewing_channel.is_none());
+    }
+
+    #[test]
+    fn test_subscription_connection_error() {
+        let mut device_view = DeviceView::default();
+        device_view.connection_state = Connecting("device1".into());
+
+        let _ = device_view.update(SubscriptionMessage(ConnectionError(
+            "device1".into(),
+            "Connection failed".into(),
+            "Timeout".into(),
+        )));
+
+        assert!(matches!(
+            device_view.connection_state,
+            Disconnected(Some(_), Some(_))
+        ));
+    }
+
+    #[test]
+    fn test_add_multiple_channels() {
+        let mut device_view = DeviceView::default();
+        device_view.my_node_num = Some(999);
+
+        let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
+            index: 0,
+            name: "Channel1".into(),
+        })));
+        let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
+            index: 1,
+            name: "Channel2".into(),
+        })));
+
+        assert_eq!(device_view.channels.len(), 2);
+        assert!(
+            device_view
+                .channel_views
+                .contains_key(&ChannelId::Channel(0))
+        );
+        assert!(
+            device_view
+                .channel_views
+                .contains_key(&ChannelId::Channel(1))
+        );
+    }
+
+    #[test]
+    fn test_message_ack_no_channel() {
+        let mut device_view = DeviceView::default();
+        // No channel exists, should not panic
+        let _ = device_view.update(SubscriptionMessage(MessageACK(ChannelId::Channel(0), 123)));
+    }
+
+    #[test]
+    fn test_channel_msg_no_channel() {
+        let mut device_view = DeviceView::default();
+        // No channel exists, should not panic
+        let _ = device_view.update(ChannelMsg(
+            ChannelId::Channel(0),
+            ChannelViewMessage::MessageInput("test".into()),
+        ));
     }
 }
