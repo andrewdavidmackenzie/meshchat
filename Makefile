@@ -1,4 +1,4 @@
-all: clippy udeps debug
+all: clippy udeps test debug
 
 pr: checks tests
 
