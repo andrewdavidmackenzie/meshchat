@@ -12,7 +12,7 @@ use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
 use crate::mesht::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, SubscriberMessage, SubscriptionEvent};
+use crate::{MCChannel, MCNodeInfo, MCPosition, SubscriberMessage, SubscriptionEvent};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -143,66 +143,63 @@ impl MyRouter {
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
                 Ok(PortNum::AlertApp) => {
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let message = AlertMessage(String::from_utf8(data.payload.clone()).unwrap());
+                    if let Ok(message) = String::from_utf8(data.payload.clone()) {
+                        let channel_id = self.channel_id_from_packet(mesh_packet);
 
-                    self.gui_sender
-                        .send(MCMessageReceived(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            message,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                        self.gui_sender
+                            .send(MCMessageReceived(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                AlertMessage(message),
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(PortNum::TextMessageApp) => {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-
-                    let message = if data.reply_id == 0 {
-                        NewTextMessage(String::from_utf8(data.payload.clone()).unwrap())
-                    } else {
-                        // Emoji reply to an earlier message
-                        if data.emoji == 0 {
-                            // Text reply to an earlier message
-                            TextMessageReply(
-                                data.reply_id,
-                                String::from_utf8(data.payload.clone()).unwrap(),
-                            )
+                    if let Ok(message) = String::from_utf8(data.payload.clone()) {
+                        let mcmessage = if data.reply_id == 0 {
+                            NewTextMessage(message)
                         } else {
-                            EmojiReply(
-                                data.reply_id,
-                                String::from_utf8(data.payload.clone()).unwrap(),
-                            )
-                        }
-                    };
-                    self.gui_sender
-                        .send(MCMessageReceived(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            message,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                            // Emoji reply to an earlier message
+                            if data.emoji == 0 {
+                                // Text reply to an earlier message
+                                TextMessageReply(data.reply_id, message)
+                            } else {
+                                EmojiReply(data.reply_id, message)
+                            }
+                        };
+                        self.gui_sender
+                            .send(MCMessageReceived(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                mcmessage,
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(PortNum::PositionApp) => {
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let position: MCPosition =
-                        (&Position::decode(&data.payload as &[u8]).unwrap()).into();
+                    if let Ok(position) = Position::decode(&data.payload as &[u8]) {
+                        let channel_id = self.channel_id_from_packet(mesh_packet);
+                        let mcposition: MCPosition = (&position).into();
 
-                    self.gui_sender
-                        .send(NewNodePosition(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            position,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                        self.gui_sender
+                            .send(NewNodePosition(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                mcposition,
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(PortNum::TelemetryApp) => {
                     if let Ok(telemetry) = Telemetry::decode(&data.payload as &[u8])
@@ -217,18 +214,19 @@ impl MyRouter {
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
-                    let user: MCUser = (&User::decode(&data.payload as &[u8]).unwrap()).into();
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    self.gui_sender
-                        .send(NewNodeInfo(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            user,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    if let Ok(user) = User::decode(&data.payload as &[u8]) {
+                        let channel_id = self.channel_id_from_packet(mesh_packet);
+                        self.gui_sender
+                            .send(NewNodeInfo(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                (&user).into(),
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(_) => {}
                 _ => eprintln!("Error decoding payload portnum: {}", data.portnum),
@@ -435,14 +433,13 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 
-                        if let Some(mut api) = stream_api.take() {
-                            device_state = Disconnected;
-                            let _ = do_disconnect(api).await;
-                            gui_sender
-                                .send(DisconnectedEvent(ble_device))
-                                .await
-                                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                        }
+                        let api = stream_api.take().unwrap();
+                        device_state = Disconnected;
+                        let _ = do_disconnect(api).await;
+                        gui_sender
+                            .send(DisconnectedEvent(ble_device))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                     }
                 }
             }
