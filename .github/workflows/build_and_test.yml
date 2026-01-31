@@ -50,6 +50,14 @@ jobs:
           sudo apt-get update
           sudo apt install libdbus-1-dev pkg-config
 
+      ########## Testing ###########
+      - name: Install cargo bundle
+        run: cargo install cargo-bundle
+
+      - name: Build bundle
+        run: cargo bundle --release
+      ########## Testing ###########
+
       - name: debug build
         run: cargo build
 
