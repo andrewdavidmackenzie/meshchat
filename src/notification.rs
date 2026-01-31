@@ -7,8 +7,8 @@ use crate::styles::{
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::widget::container::Style;
-use iced::widget::{Column, Container, Row, Text, button, text};
-use iced::{Element, Fill, Renderer, Right, Task, Theme};
+use iced::widget::{Column, Container, Row, Space, Text, button, text};
+use iced::{Bottom, Element, Fill, Renderer, Right, Task, Theme};
 
 /// A [Notification] can be one of two notification types:
 /// - Error(summary, detail)
@@ -28,7 +28,7 @@ pub struct Notifications {
 impl Notifications {
     /// Render any notifications that are active into an element to display at the top of the screen
     pub fn view(&self) -> Element<'_, Message> {
-        let mut notifications = Row::new().padding(10);
+        let mut notifications = Column::new().padding(10);
 
         for (id, notification) in &self.inner {
             notifications = notifications.push(match notification {
@@ -65,7 +65,9 @@ impl Notifications {
 
         let bottom_row = Row::new()
             .push(text(detail).size(14))
-            .push(Self::time_to_text(rx_time));
+            .push(Space::new().width(Fill))
+            .push(Self::time_to_text(rx_time))
+            .align_y(Bottom);
 
         Container::new(Column::new().push(top_row).push(bottom_row))
             .padding([6, 12])
