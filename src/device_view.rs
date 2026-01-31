@@ -420,8 +420,8 @@ impl DeviceView {
     fn add_node(&mut self, node_info: MCNodeInfo) {
         if node_info.is_ignored {
             println!("Node is ignored!: {:?}", node_info);
-        } else {
-            if Some(node_info.num) == self.my_node_num {
+        } else if let Some(my_node_num) = self.my_node_num {
+            if node_info.num == my_node_num {
                 self.my_position = node_info.position.clone();
                 self.my_user = node_info.user.clone();
             }
@@ -430,7 +430,7 @@ impl DeviceView {
             self.nodes.insert(node_info.num, node_info);
             self.channel_views.insert(
                 channel_id.clone(),
-                ChannelView::new(channel_id, self.my_node_num.unwrap()),
+                ChannelView::new(channel_id, my_node_num),
             );
         }
     }
@@ -438,12 +438,14 @@ impl DeviceView {
     /// Add a channel from the radio to the list if it is not disabled and has some Settings
     pub fn add_channel(&mut self, channel: MCChannel) {
         {
-            self.channels.push(channel);
-            let channel_id = ChannelId::Channel((self.channels.len() - 1) as i32);
-            self.channel_views.insert(
-                channel_id.clone(),
-                ChannelView::new(channel_id, self.my_node_num.unwrap()),
-            );
+            if let Some(my_node_num) = self.my_node_num {
+                self.channels.push(channel);
+                let channel_id = ChannelId::Channel((self.channels.len() - 1) as i32);
+                self.channel_views.insert(
+                    channel_id.clone(),
+                    ChannelView::new(channel_id, my_node_num),
+                );
+            }
         }
     }
 
@@ -665,16 +667,16 @@ impl DeviceView {
 
             for (index, channel_name) in filtered_channels {
                 let channel_id = ChannelId::Channel(index as i32);
-                let channel_row = Self::channel_row(
-                    channel_name,
-                    self.channel_views
-                        .get(&channel_id)
-                        .unwrap()
-                        .unread_count(self.show_position_updates, self.show_user_updates),
-                    channel_id,
-                    select,
-                );
-                channels_list = channels_list.push(channel_row);
+                if let Some(channel_view) = self.channel_views.get(&channel_id) {
+                    let channel_row = Self::channel_row(
+                        channel_name,
+                        channel_view
+                            .unread_count(self.show_position_updates, self.show_user_updates),
+                        channel_id,
+                        select,
+                    );
+                    channels_list = channels_list.push(channel_row);
+                }
             }
         }
 
@@ -762,20 +764,19 @@ impl DeviceView {
 
             for node_id in other_nodes_list {
                 let channel_id = Node(*node_id);
-
-                channels_list = channels_list.push(
-                    self.node_row(
-                        self.channel_views
-                            .get(&channel_id)
-                            .unwrap()
-                            .unread_count(self.show_position_updates, self.show_user_updates),
-                        *node_id,
-                        false, // Not a Favourite
-                        config,
-                        add_buttons,
-                        select,
-                    ),
-                );
+                if let Some(channel_view) = self.channel_views.get(&channel_id) {
+                    channels_list = channels_list.push(
+                        self.node_row(
+                            channel_view
+                                .unread_count(self.show_position_updates, self.show_user_updates),
+                            *node_id,
+                            false, // Not a Favourite
+                            config,
+                            add_buttons,
+                            select,
+                        ),
+                    );
+                }
             }
         }
 
@@ -830,14 +831,14 @@ impl DeviceView {
     /// DeviceViewEvent(ShowChannel(Some(channel_id)))
     fn channel_row(
         name: String,
-        num_messages: usize,
+        unread_count: usize,
         channel_id: ChannelId,
         select: fn(ChannelId) -> Message,
     ) -> Element<'static, Message> {
         let name_row = Row::new()
             .push(text(name))
             .push(Space::new().width(4))
-            .push(Self::unread_counter(num_messages));
+            .push(Self::unread_counter(unread_count));
 
         Row::new()
             .push(
@@ -861,16 +862,16 @@ impl DeviceView {
         add_buttons: bool,
         select: fn(ChannelId) -> Message,
     ) -> Element<'a, Message> {
-        let user_name: &str = self
+        let long_name: &str = self
             .nodes
             .get(&node_id)
             .and_then(|node_info| node_info.user.as_ref().map(|user| user.long_name.as_ref()))
-            .unwrap();
+            .unwrap_or("Unknown");
 
         let name_element: Element<'a, Message> = if let Some(alias) = config.aliases.get(&node_id) {
             tooltip(
                 text(alias),
-                text(format!("Original user name: {}", user_name)),
+                text(format!("Original user name: {}", long_name)),
                 tooltip::Position::Right,
             )
             .style(tooltip_style)
@@ -884,7 +885,7 @@ impl DeviceView {
                 .style(text_input_style)
                 .into()
         } else {
-            text(user_name.to_string()).into()
+            text(long_name.to_string()).into()
         };
 
         let name_row = Row::new()
