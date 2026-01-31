@@ -69,10 +69,10 @@ async fn empty() {}
 
 // A view of a single channel and its messages, which maybe a Channel or a Node
 impl ChannelView {
-    pub fn new(channel_id: ChannelId, source: u32) -> Self {
+    pub fn new(channel_id: ChannelId, my_node_num: u32) -> Self {
         Self {
             channel_id,
-            my_node_num: source,
+            my_node_num,
             emoji_picker: crate::emoji_picker::EmojiPicker::new()
                 .height(400)
                 .width(400),
