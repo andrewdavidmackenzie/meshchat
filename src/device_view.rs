@@ -1146,6 +1146,7 @@ mod tests {
         assert_eq!(short_name(&nodes, 12345), "????");
     }
 
+    //noinspection ALL
     #[test]
     fn test_short_name_known_node() {
         let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
