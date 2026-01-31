@@ -1533,7 +1533,14 @@ mod tests {
         // my_position and my_user should be set
         assert!(device_view.my_position.is_some());
         assert!(device_view.my_user.is_some());
-        assert_eq!(device_view.my_user.as_ref().unwrap().long_name, "My Name");
+        assert_eq!(
+            device_view
+                .my_user
+                .as_ref()
+                .expect("my_user should be set after adding my node")
+                .long_name,
+            "My Name"
+        );
     }
 
     #[test]
@@ -1566,7 +1573,14 @@ mod tests {
         let position = test_position(40.7128, -74.0060);
         device_view.update_node_position(12345, &position);
 
-        assert!(device_view.nodes.get(&12345).unwrap().position.is_some());
+        assert!(
+            device_view
+                .nodes
+                .get(&12345)
+                .expect("node 12345 should exist")
+                .position
+                .is_some()
+        );
     }
 
     #[test]
@@ -1590,7 +1604,14 @@ mod tests {
 
         // my_position should also be updated
         assert!(device_view.my_position.is_some());
-        assert_eq!(device_view.my_position.as_ref().unwrap().latitude, 40.7128);
+        assert_eq!(
+            device_view
+                .my_position
+                .as_ref()
+                .expect("my_position should be set after position update")
+                .latitude,
+            40.7128
+        );
     }
 
     #[test]
@@ -1623,15 +1644,22 @@ mod tests {
         };
         device_view.update_node_user(12345, &user);
 
-        assert!(device_view.nodes.get(&12345).unwrap().user.is_some());
+        assert!(
+            device_view
+                .nodes
+                .get(&12345)
+                .expect("node 12345 should exist")
+                .user
+                .is_some()
+        );
         assert_eq!(
             device_view
                 .nodes
                 .get(&12345)
-                .unwrap()
+                .expect("node 12345 should exist")
                 .user
                 .as_ref()
-                .expect("User should be set")
+                .expect("user should be set after update")
                 .long_name,
             "Updated Name"
         );
