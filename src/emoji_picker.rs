@@ -143,6 +143,7 @@ impl Default for EmojiPicker {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
 

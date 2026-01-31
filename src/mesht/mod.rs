@@ -160,6 +160,7 @@ impl ChannelId {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod test {
     use super::*;
     use meshtastic::packet::PacketDestination;
