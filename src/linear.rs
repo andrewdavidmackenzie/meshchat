@@ -297,6 +297,7 @@ impl StyleSheet for iced::Theme {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
 
@@ -481,7 +482,7 @@ mod tests {
         let appearance = theme.appearance(&());
         // bar_color should be CYAN
         assert_eq!(appearance.bar_color, CYAN);
-        // track_color should be from theme palette (not transparent or default)
+        // track_color should be from the theme palette (not transparent or default)
         assert_ne!(appearance.track_color, Color::TRANSPARENT);
     }
 

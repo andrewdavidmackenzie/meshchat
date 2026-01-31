@@ -96,7 +96,7 @@ impl ChannelViewEntry {
 
     /// Get the time now as a [DateTime<Local>]
     pub fn rx_time(rx_time: u32) -> DateTime<Local> {
-        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
     }
 
@@ -518,7 +518,7 @@ mod tests {
     fn now_secs() -> u32 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("Could no tget time")
             .as_secs() as u32
     }
 
@@ -645,7 +645,10 @@ mod tests {
         entry.add_emoji("👍".to_string(), 100);
         assert_eq!(entry.emojis().len(), 1);
         assert!(entry.emojis().contains_key("👍"));
-        assert_eq!(entry.emojis().get("👍").unwrap(), &vec![100]);
+        assert_eq!(
+            entry.emojis().get("👍").expect("Could not get emoji"),
+            &vec![100]
+        );
     }
 
     #[test]
@@ -656,7 +659,10 @@ mod tests {
         entry.add_emoji("👍".to_string(), 200);
 
         assert_eq!(entry.emojis().len(), 1);
-        assert_eq!(entry.emojis().get("👍").unwrap(), &vec![100, 200]);
+        assert_eq!(
+            entry.emojis().get("👍").expect("Could not get emoji"),
+            &vec![100, 200]
+        );
     }
 
     #[test]
@@ -681,8 +687,7 @@ mod tests {
         entries.insert(1, entry);
 
         let quote = ChannelViewEntry::reply_quote(&entries, &1);
-        assert!(quote.is_some());
-        assert!(quote.unwrap().contains("Re:"));
+        assert!(quote.expect("No quote").contains("Re:"));
     }
 
     #[test]
@@ -699,7 +704,8 @@ mod tests {
         let entry = ChannelViewEntry::new(1, 100, NewTextMessage(long_message.into()), now_secs());
         entries.insert(1, entry);
 
-        let quote = ChannelViewEntry::reply_quote(&entries, &1).unwrap();
+        let quote =
+            ChannelViewEntry::reply_quote(&entries, &1).expect("Could not get reply quoted");
         assert!(quote.len() < long_message.len() + 10); // "Re: " prefix + some truncation
         assert!(quote.ends_with("..."));
     }

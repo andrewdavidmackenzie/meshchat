@@ -160,6 +160,7 @@ impl ChannelId {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod test {
     use super::*;
     use meshtastic::packet::PacketDestination;
@@ -392,7 +393,14 @@ mod test {
 
         assert_eq!(mc_node_info.num, 12345);
         assert!(mc_node_info.user.is_some());
-        assert_eq!(mc_node_info.user.as_ref().unwrap().long_name, "Test Node");
+        assert_eq!(
+            mc_node_info
+                .user
+                .as_ref()
+                .expect("Could not get user")
+                .long_name,
+            "Test Node"
+        );
         assert!(mc_node_info.position.is_none());
         assert!(!mc_node_info.is_ignored);
     }

@@ -274,7 +274,7 @@ impl MeshChat {
     pub fn now() -> u32 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs() as u32
     }
 

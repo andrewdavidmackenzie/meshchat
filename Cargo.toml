@@ -76,6 +76,10 @@ panic = "abort"
 incremental = false
 overflow-checks = false
 
+[lints.clippy]
+unwrap_used = "deny"
+panic = "deny"
+
 # For creation of OS bundles
 [package.metadata.bundle]
 identifier = "meshchat.mackenzie-serres.net"

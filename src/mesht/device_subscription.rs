@@ -12,7 +12,7 @@ use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
 use crate::mesht::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, SubscriberMessage, SubscriptionEvent};
+use crate::{MCChannel, MCNodeInfo, MCPosition, SubscriberMessage, SubscriptionEvent};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -143,66 +143,63 @@ impl MyRouter {
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
                 Ok(PortNum::AlertApp) => {
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let message = AlertMessage(String::from_utf8(data.payload.clone()).unwrap());
+                    if let Ok(message) = String::from_utf8(data.payload.clone()) {
+                        let channel_id = self.channel_id_from_packet(mesh_packet);
 
-                    self.gui_sender
-                        .send(MCMessageReceived(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            message,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                        self.gui_sender
+                            .send(MCMessageReceived(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                AlertMessage(message),
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(PortNum::TextMessageApp) => {
                     let channel_id = self.channel_id_from_packet(mesh_packet);
-
-                    let message = if data.reply_id == 0 {
-                        NewTextMessage(String::from_utf8(data.payload.clone()).unwrap())
-                    } else {
-                        // Emoji reply to an earlier message
-                        if data.emoji == 0 {
-                            // Text reply to an earlier message
-                            TextMessageReply(
-                                data.reply_id,
-                                String::from_utf8(data.payload.clone()).unwrap(),
-                            )
+                    if let Ok(message) = String::from_utf8(data.payload.clone()) {
+                        let mcmessage = if data.reply_id == 0 {
+                            NewTextMessage(message)
                         } else {
-                            EmojiReply(
-                                data.reply_id,
-                                String::from_utf8(data.payload.clone()).unwrap(),
-                            )
-                        }
-                    };
-                    self.gui_sender
-                        .send(MCMessageReceived(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            message,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                            // Emoji reply to an earlier message
+                            if data.emoji == 0 {
+                                // Text reply to an earlier message
+                                TextMessageReply(data.reply_id, message)
+                            } else {
+                                EmojiReply(data.reply_id, message)
+                            }
+                        };
+                        self.gui_sender
+                            .send(MCMessageReceived(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                mcmessage,
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(PortNum::PositionApp) => {
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    let position: MCPosition =
-                        (&Position::decode(&data.payload as &[u8]).unwrap()).into();
+                    if let Ok(position) = Position::decode(&data.payload as &[u8]) {
+                        let channel_id = self.channel_id_from_packet(mesh_packet);
+                        let mcposition: MCPosition = (&position).into();
 
-                    self.gui_sender
-                        .send(NewNodePosition(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            position,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                        self.gui_sender
+                            .send(NewNodePosition(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                mcposition,
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(PortNum::TelemetryApp) => {
                     if let Ok(telemetry) = Telemetry::decode(&data.payload as &[u8])
@@ -217,18 +214,19 @@ impl MyRouter {
                 }
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
-                    let user: MCUser = (&User::decode(&data.payload as &[u8]).unwrap()).into();
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
-                    self.gui_sender
-                        .send(NewNodeInfo(
-                            channel_id,
-                            mesh_packet.id,
-                            mesh_packet.from,
-                            user,
-                            mesh_packet.rx_time,
-                        ))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    if let Ok(user) = User::decode(&data.payload as &[u8]) {
+                        let channel_id = self.channel_id_from_packet(mesh_packet);
+                        self.gui_sender
+                            .send(NewNodeInfo(
+                                channel_id,
+                                mesh_packet.id,
+                                mesh_packet.from,
+                                (&user).into(),
+                                mesh_packet.rx_time,
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
                 }
                 Ok(_) => {}
                 _ => eprintln!("Error decoding payload portnum: {}", data.portnum),
@@ -326,58 +324,94 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 }
                                 Disconnect => break,
                                 SendText(text, channel_id, reply_to_id) => {
-                                    let mut api = stream_api.take().unwrap();
-                                    let r = send_text_message(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        reply_to_id,
-                                        text,
-                                    )
-                                    .await;
-                                    let _none = stream_api.replace(api);
-                                    r
+                                    if let Some(mut api) = stream_api.take() {
+                                        let r = send_text_message(
+                                            &mut api,
+                                            &mut my_router,
+                                            channel_id,
+                                            reply_to_id,
+                                            text,
+                                        )
+                                        .await;
+                                        let _none = stream_api.replace(api);
+                                        r
+                                    } else {
+                                        Err(Error::StreamBuildError {
+                                            source: Box::new(std::io::Error::new(
+                                                std::io::ErrorKind::NotConnected,
+                                                "Stream API not available",
+                                            )),
+                                            description: "Subscription".to_string(),
+                                        })
+                                    }
                                 }
                                 SendPosition(channel_id, mcposition) => {
-                                    let mut api = stream_api.take().unwrap();
-                                    let r = send_position(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        mcposition.into(),
-                                    )
-                                    .await;
-                                    let _none = stream_api.replace(api);
-                                    r
+                                    if let Some(mut api) = stream_api.take() {
+                                        let r = send_position(
+                                            &mut api,
+                                            &mut my_router,
+                                            channel_id,
+                                            mcposition.into(),
+                                        )
+                                        .await;
+                                        let _none = stream_api.replace(api);
+                                        r
+                                    } else {
+                                        Err(Error::StreamBuildError {
+                                            source: Box::new(std::io::Error::new(
+                                                std::io::ErrorKind::NotConnected,
+                                                "Stream API not available",
+                                            )),
+                                            description: "Subscription".to_string(),
+                                        })
+                                    }
                                 }
                                 SendUser(channel_id, mcuser) => {
-                                    let mut api = stream_api.take().unwrap();
-                                    let r = send_user(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        mcuser.into(),
-                                    )
-                                    .await;
-                                    let _none = stream_api.replace(api);
-                                    r
+                                    if let Some(mut api) = stream_api.take() {
+                                        let r = send_user(
+                                            &mut api,
+                                            &mut my_router,
+                                            channel_id,
+                                            mcuser.into(),
+                                        )
+                                        .await;
+                                        let _none = stream_api.replace(api);
+                                        r
+                                    } else {
+                                        Err(Error::StreamBuildError {
+                                            source: Box::new(std::io::Error::new(
+                                                std::io::ErrorKind::NotConnected,
+                                                "Stream API not available",
+                                            )),
+                                            description: "Subscription".to_string(),
+                                        })
+                                    }
+                                }
+                                SendEmojiReply(emoji, channel_id, reply_to_id) => {
+                                    if let Some(mut api) = stream_api.take() {
+                                        let r = send_emoji_reply(
+                                            &mut api,
+                                            &mut my_router,
+                                            channel_id,
+                                            reply_to_id,
+                                            emoji,
+                                        )
+                                        .await;
+                                        let _none = stream_api.replace(api);
+                                        r
+                                    } else {
+                                        Err(Error::StreamBuildError {
+                                            source: Box::new(std::io::Error::new(
+                                                std::io::ErrorKind::NotConnected,
+                                                "Stream API not available",
+                                            )),
+                                            description: "Subscription".to_string(),
+                                        })
+                                    }
                                 }
                                 MeshTasticRadioPacket(packet) => {
                                     my_router.handle_a_packet_from_radio(packet).await;
                                     Ok(())
-                                }
-                                SendEmojiReply(emoji, channel_id, reply_to_id) => {
-                                    let mut api = stream_api.take().unwrap();
-                                    let r = send_emoji_reply(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        reply_to_id,
-                                        emoji,
-                                    )
-                                    .await;
-                                    let _none = stream_api.replace(api);
-                                    r
                                 }
                             };
 
@@ -385,7 +419,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 gui_sender
                                     .send(ConnectionError(
                                         ble_device.clone(),
-                                        "Send error".to_string(),
+                                        "Subscription Error".to_string(),
                                         e.to_string(),
                                     ))
                                     .await
@@ -399,6 +433,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 
+                        #[allow(clippy::unwrap_used)]
                         let api = stream_api.take().unwrap();
                         device_state = Disconnected;
                         let _ = do_disconnect(api).await;
@@ -533,6 +568,7 @@ async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Erro
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod tests {
     use super::*;
     use futures_channel::mpsc;
@@ -765,7 +801,9 @@ mod tests {
         assert_eq!(router.my_node_num, Some(12345));
 
         // Check event was sent
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MyNodeNum event");
         assert!(matches!(event, Some(MyNodeNum(12345))));
     }
 
@@ -808,7 +846,9 @@ mod tests {
             .await;
 
         // Check event was sent
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive NewNode event");
         assert!(matches!(event, Some(NewNode(_))));
     }
 
@@ -840,7 +880,9 @@ mod tests {
             .await;
 
         // Check event was sent
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive NewChannel event");
         assert!(matches!(event, Some(NewChannel(_))));
     }
 
@@ -866,7 +908,12 @@ mod tests {
         sender.close_channel();
 
         // No event should be sent for the disabled channel
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(
+            receiver
+                .try_next()
+                .expect("Failed to check channel for disabled channel")
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -892,7 +939,9 @@ mod tests {
             .await;
 
         // Check event was sent
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive RadioNotification event");
         assert!(
             matches!(event, Some(RadioNotification(msg, 1234567890)) if msg == "Test notification")
         );
@@ -916,7 +965,12 @@ mod tests {
         sender.close_channel();
 
         // No event should be sent for the unknown payload
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(
+            receiver
+                .try_next()
+                .expect("Failed to check channel for unknown payload")
+                .is_none()
+        );
     }
 
     // Tests for handle_a_mesh_packet
@@ -930,7 +984,9 @@ mod tests {
         let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Hello world", 0, 0);
         router.handle_a_mesh_packet(&packet).await;
 
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MCMessageReceived event for new text message");
         match event {
             Some(MCMessageReceived(channel_id, id, from, msg, _rx_time)) => {
                 assert_eq!(channel_id, ChannelId::Channel(0));
@@ -952,7 +1008,9 @@ mod tests {
         let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Reply text", 456, 0);
         router.handle_a_mesh_packet(&packet).await;
 
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MCMessageReceived event for text reply");
         match event {
             Some(MCMessageReceived(_, _, _, msg, _)) => {
                 assert!(
@@ -973,7 +1031,9 @@ mod tests {
         let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "👍", 456, 1);
         router.handle_a_mesh_packet(&packet).await;
 
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MCMessageReceived event for emoji reply");
         match event {
             Some(MCMessageReceived(_, _, _, msg, _)) => {
                 assert!(
@@ -994,7 +1054,9 @@ mod tests {
         let packet = create_ack_mesh_packet(2000, 2000, 0, 789);
         router.handle_a_mesh_packet(&packet).await;
 
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MessageACK event for broadcast");
         match event {
             Some(MessageACK(channel_id, request_id)) => {
                 assert_eq!(channel_id, ChannelId::Channel(0));
@@ -1014,7 +1076,9 @@ mod tests {
         let packet = create_ack_mesh_packet(2000, 1000, 0, 789);
         router.handle_a_mesh_packet(&packet).await;
 
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MessageACK event for DM");
         match event {
             Some(MessageACK(channel_id, request_id)) => {
                 assert_eq!(channel_id, Node(2000));
@@ -1036,7 +1100,12 @@ mod tests {
         sender.close_channel();
 
         // No event should be sent for a packet without a decoded payload
-        assert!(receiver.try_next().unwrap().is_none());
+        assert!(
+            receiver
+                .try_next()
+                .expect("Failed to check channel for packet with no payload")
+                .is_none()
+        );
     }
 
     // Test PacketRouter trait implementation
@@ -1063,7 +1132,9 @@ mod tests {
         assert_eq!(router.my_node_num, Some(99999));
 
         // Check event was sent
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MyNodeNum event from PacketRouter");
         assert!(matches!(event, Some(MyNodeNum(99999))));
     }
 
@@ -1077,7 +1148,9 @@ mod tests {
         let result = router.handle_mesh_packet(packet);
         assert!(result.is_ok());
 
-        let event = receiver.try_next().unwrap();
+        let event = receiver
+            .try_next()
+            .expect("Failed to receive MCMessageReceived event from PacketRouter");
         assert!(matches!(event, Some(MCMessageReceived(_, _, _, _, _))));
     }
 }

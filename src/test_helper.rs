@@ -33,14 +33,14 @@ impl MeshChat {
             msg,
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("Could not get time")
                 .as_secs() as u32,
         );
         let channel_view = self
             .device_view
             .channel_views
             .get_mut(&ChannelId::Channel(0))
-            .unwrap();
+            .expect("Could not get channel view");
         let _ = channel_view.new_message(channel_view_entry, &HistoryLength::All);
     }
 }

@@ -260,19 +260,22 @@ async fn save(config_path: PathBuf, config: Config) -> io::Result<()> {
     config_file.sync_all().await
 }
 
-async fn create(config_path: PathBuf) -> io::Result<()> {
+async fn create(config_dir: PathBuf, filename: &str) -> io::Result<()> {
+    // Create any directories required for the config file
     DirBuilder::new()
         .recursive(true)
-        .create(config_path.parent().unwrap())
+        .create(&config_dir)
         .await?;
-    let config_file = File::create(&config_path).await?;
+    // Create the config file itself
+    let config_file = File::create(&config_dir.join(filename)).await?;
     config_file.sync_all().await
 }
 
 /// Use `load_config` to load the config from disk from the UI
 pub fn load_config() -> Task<Message> {
     if let Some(proj_dirs) = ProjectDirs::from("net", "Mackenzie Serres", "meshchat") {
-        let config_path = proj_dirs.config_dir().join("config.toml");
+        let config_dir = proj_dirs.config_dir().to_path_buf();
+        let config_path = config_dir.join("config.toml");
         if config_path.exists() {
             Task::perform(load(config_path.clone()), {
                 move |result| match result {
@@ -289,7 +292,7 @@ pub fn load_config() -> Task<Message> {
             })
         } else {
             // Create the config file so that it can be relied upon to always exist later on
-            Task::perform(create(config_path.clone()), {
+            Task::perform(create(config_dir, "config.toml"), {
                 move |result| match result {
                     Ok(_) => Message::None,
                     Err(e) => Message::AppError(
@@ -377,7 +380,7 @@ mod tests {
             .await
             .expect("Could not load config file");
         assert_eq!(
-            returned.ble_device.unwrap(),
+            returned.ble_device.expect("BLE device address not saved"),
             BDAddr::from([0, 1, 2, 3, 4, 6]).to_string()
         );
     }
