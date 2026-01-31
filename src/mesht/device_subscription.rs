@@ -433,6 +433,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 
+                        #[allow(clippy::unwrap_used)]
                         let api = stream_api.take().unwrap();
                         device_state = Disconnected;
                         let _ = do_disconnect(api).await;
