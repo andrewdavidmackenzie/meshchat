@@ -593,7 +593,7 @@ mod test {
             NewTextMessage("Hello 1".to_string()),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("system time should be after UNIX_EPOCH")
                 .as_secs() as u32,
         );
         tokio::time::sleep(Duration::from_millis(1500)).await;
@@ -604,7 +604,7 @@ mod test {
             NewTextMessage("Hello 2".to_string()),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("system time should be after UNIX_EPOCH")
                 .as_secs() as u32,
         );
         tokio::time::sleep(Duration::from_millis(1500)).await;
@@ -615,7 +615,7 @@ mod test {
             NewTextMessage("Hello 3".to_string()),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("system time should be after UNIX_EPOCH")
                 .as_secs() as u32,
         );
 
@@ -637,17 +637,17 @@ mod test {
         // Check the order is correct
         let mut iter = channel_view.entries.values();
         assert_eq!(
-            iter.next().unwrap(),
+            iter.next().expect("iterator should have first entry"),
             &oldest_message,
             "The oldest message should be first"
         );
         assert_eq!(
-            iter.next().unwrap(),
+            iter.next().expect("iterator should have second entry"),
             &middle_message,
             "The middle message should be second"
         );
         assert_eq!(
-            iter.next().unwrap(),
+            iter.next().expect("iterator should have third entry"),
             &newest_message,
             "The newest message should be third"
         );
@@ -668,7 +668,7 @@ mod test {
             NewTextMessage("Hello 1".to_string()),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("system time should be after UNIX_EPOCH")
                 .as_secs() as u32,
         );
         let _ = channel_view.new_message(message.clone(), &HistoryLength::All);
@@ -684,7 +684,7 @@ mod test {
             NewTextMessage("Hello 1".to_string()),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("system time should be after UNIX_EPOCH")
                 .as_secs() as u32,
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
@@ -704,7 +704,7 @@ mod test {
             NewTextMessage("Hello 1".to_string()),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .expect("system time should be after UNIX_EPOCH")
                 .as_secs() as u32,
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
@@ -810,10 +810,22 @@ mod test {
         let message = ChannelViewEntry::new(42, 1, NewTextMessage("test".into()), now_secs());
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
-        assert!(!channel_view.entries.get(&42).unwrap().acked());
+        assert!(
+            !channel_view
+                .entries
+                .get(&42)
+                .expect("entry 42 should exist")
+                .acked()
+        );
 
         channel_view.ack(42);
-        assert!(channel_view.entries.get(&42).unwrap().acked());
+        assert!(
+            channel_view
+                .entries
+                .get(&42)
+                .expect("entry 42 should exist after ack")
+                .acked()
+        );
     }
 
     #[test]
@@ -829,11 +841,23 @@ mod test {
         let message = ChannelViewEntry::new(42, 1, NewTextMessage("test".into()), now_secs());
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
-        assert!(!channel_view.entries.get(&42).unwrap().seen());
+        assert!(
+            !channel_view
+                .entries
+                .get(&42)
+                .expect("entry 42 should exist")
+                .seen()
+        );
         assert_eq!(channel_view.unread_count(true, true), 1);
 
         let _ = channel_view.update(MessageSeen(42));
-        assert!(channel_view.entries.get(&42).unwrap().seen());
+        assert!(
+            channel_view
+                .entries
+                .get(&42)
+                .expect("entry 42 should exist after marking seen")
+                .seen()
+        );
         assert_eq!(channel_view.unread_count(true, true), 0);
     }
 
@@ -901,7 +925,10 @@ mod test {
         // Should still only have 1 entry (the original)
         assert_eq!(channel_view.entries.len(), 1);
         // But the original should now have the emoji
-        let original_entry = channel_view.entries.get(&1).unwrap();
+        let original_entry = channel_view
+            .entries
+            .get(&1)
+            .expect("original entry should exist after emoji reply");
         assert!(original_entry.emojis().contains_key("👍"));
     }
 
