@@ -94,7 +94,7 @@ impl ChannelView {
             .map(|t| t.as_secs())
             .unwrap_or(0);
 
-        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
     }
 
@@ -848,7 +848,7 @@ mod test {
         }
         assert_eq!(channel_view.entries.len(), 5);
 
-        // Adding 6th message with limit of 3 should trim to 3
+        // Adding the 6th message with a limit of 3 should trim to 3
         let message = ChannelViewEntry::new(5, 1, NewTextMessage("msg 5".into()), 5);
         let _ = channel_view.new_message(message, &HistoryLength::NumberOfMessages(3));
         assert_eq!(channel_view.entries.len(), 3);
@@ -889,7 +889,7 @@ mod test {
     fn test_emoji_reply_adds_to_existing_message() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
 
-        // Add original message
+        // Add the original message
         let original = ChannelViewEntry::new(1, 100, NewTextMessage("Hello".into()), now_secs());
         let _ = channel_view.new_message(original, &HistoryLength::All);
         assert_eq!(channel_view.entries.len(), 1);

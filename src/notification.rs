@@ -78,7 +78,7 @@ impl Notifications {
 
     /// Convert the notification creation time to a Text element
     fn time_to_text<'a>(rx_time: u32) -> Text<'a, Theme, Renderer> {
-        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap();
+        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap_or_default();
         let datetime_local = datetime_utc.with_timezone(&Local);
         let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
         text(time_str)
@@ -160,7 +160,7 @@ mod tests {
         ));
         assert_eq!(notifications.inner.len(), 1);
 
-        // Check it's stored with correct id
+        // Check it's stored with the correct id
         assert_eq!(notifications.inner[0].0, 0);
     }
 
