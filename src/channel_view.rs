@@ -573,7 +573,7 @@ mod test {
     fn now_secs() -> u32 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("Could not get time")
             .as_secs() as u32
     }
 

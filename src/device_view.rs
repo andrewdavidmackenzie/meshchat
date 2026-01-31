@@ -1631,7 +1631,7 @@ mod tests {
                 .unwrap()
                 .user
                 .as_ref()
-                .unwrap()
+                .expect("User should be set")
                 .long_name,
             "Updated Name"
         );

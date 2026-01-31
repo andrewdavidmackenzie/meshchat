@@ -380,7 +380,7 @@ mod tests {
             .await
             .expect("Could not load config file");
         assert_eq!(
-            returned.ble_device.unwrap(),
+            returned.ble_device.expect("BLE device address not saved"),
             BDAddr::from([0, 1, 2, 3, 4, 6]).to_string()
         );
     }
