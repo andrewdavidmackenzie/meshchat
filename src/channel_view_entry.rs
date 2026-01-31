@@ -354,11 +354,9 @@ impl ChannelViewEntry {
         message_column = self.emoji_row(nodes, message_column);
 
         sensor(message_column)
-            .on_show(|_| {
-                DeviceViewEvent(ChannelMsg(channel_id.clone(), MessageSeen(self.message_id)))
-            })
+            .on_show(|_| DeviceViewEvent(ChannelMsg(*channel_id, MessageSeen(self.message_id))))
             .on_hide(DeviceViewEvent(ChannelMsg(
-                channel_id.clone(),
+                *channel_id,
                 MessageUnseen(self.message_id),
             )))
             .into()
@@ -440,10 +438,10 @@ impl ChannelViewEntry {
         let dm = format!("DM with {}", name);
 
         let picker_element = emoji_picker
-            .view(move |emoji| ReplyWithEmoji(message_id, emoji, channel_id.clone()))
+            .view(move |emoji| ReplyWithEmoji(message_id, emoji, *channel_id))
             .map(move |picker_msg| {
                 DeviceViewEvent(ChannelMsg(
-                    channel_id.clone(),
+                    *channel_id,
                     ChannelViewMessage::EmojiPickerMsg(Box::new(picker_msg)),
                 ))
             });
@@ -456,7 +454,7 @@ impl ChannelViewEntry {
                 (picker_element)))),
                 (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
                 (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
-                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(channel_id.clone(), ChannelViewMessage::PrepareReply(self.message_id))))),
+                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(*channel_id, ChannelViewMessage::PrepareReply(self.message_id))))),
                 (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ChannelId::Node(self.from()))))))
             )
         } else {
@@ -466,7 +464,7 @@ impl ChannelViewEntry {
                 (picker_element)))),
                 (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
                 (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
-                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(channel_id.clone(), ChannelViewMessage::PrepareReply(self.message_id))))))
+                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(*channel_id, ChannelViewMessage::PrepareReply(self.message_id))))))
     };
 
         // Create the menu bar with the root button and list of options

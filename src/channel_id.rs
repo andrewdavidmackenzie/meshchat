@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum ChannelId {
     Channel(i32), // Channel::index 0..7
     Node(u32),    // NodeInfo::node number
@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let original = Channel(3);
-        let cloned = original.clone();
+        let cloned = original;
         assert_eq!(original, cloned);
     }
 

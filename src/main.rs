@@ -316,8 +316,7 @@ impl MeshChat {
                 .add(Notification::Error(summary, detail, rx_time)),
             Message::None => Task::none(),
             ConfigLoaded(config) => {
-                self.device_view
-                    .set_history_length(config.history_length.clone());
+                self.device_view.set_history_length(config.history_length);
                 self.device_view
                     .set_show_position_updates(config.show_position_updates);
                 self.device_view
@@ -344,7 +343,7 @@ impl MeshChat {
                     {
                         self.device_view.update(DeviceViewMessage::ConnectRequest(
                             ble_device.clone(),
-                            self.config.channel_id.clone(),
+                            self.config.channel_id,
                         ))
                     } else {
                         Task::none()
@@ -457,7 +456,7 @@ impl MeshChat {
                 self.config.save_config()
             }
             HistoryLengthSelected(length) => {
-                self.config.history_length = length.clone();
+                self.config.history_length = length;
                 self.config.save_config()
             }
             ShowUserInfo(user) => {
@@ -618,10 +617,10 @@ impl MeshChat {
 
     /// Navigate to show a different view, as defined by the [View] enum
     fn navigate(&mut self, view: View) -> Task<Message> {
-        self.current_view = view.clone();
-        if let View::Device(Some(channel_id)) = view {
+        self.current_view = view;
+        if let View::Device(Some(channel_id)) = &self.current_view {
             self.device_view
-                .update(DeviceViewMessage::ShowChannel(Some(channel_id)))
+                .update(DeviceViewMessage::ShowChannel(Some(*channel_id)))
         } else {
             Task::none()
         }

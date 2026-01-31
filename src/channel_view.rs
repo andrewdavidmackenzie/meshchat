@@ -182,12 +182,12 @@ impl ChannelView {
                 if !self.message.is_empty() {
                     let msg = self.message.clone();
                     self.message = String::new();
-                    let channel_id = self.channel_id.clone();
+                    let channel_id = self.channel_id;
                     self.preparing_reply = None;
                     Task::perform(empty(), move |_| {
                         DeviceViewEvent(DeviceViewMessage::SendTextMessage(
-                            msg.clone(),
-                            channel_id.clone(),
+                            msg,
+                            channel_id,
                             reply_to_id,
                         ))
                     })
@@ -348,25 +348,21 @@ impl ChannelView {
         // a menu or something different in the future
         let mut send_position_button = button(text("Send Position 📌")).style(button_chip_style);
         if enable_position {
-            send_position_button = send_position_button.on_press(DeviceViewEvent(
-                SendPositionMessage(self.channel_id.clone()),
-            ));
+            send_position_button = send_position_button
+                .on_press(DeviceViewEvent(SendPositionMessage(self.channel_id)));
         }
 
         let mut send_info_button = button(text("Send Info ⓘ")).style(button_chip_style);
         if enable_my_info {
-            send_info_button = send_info_button
-                .on_press(DeviceViewEvent(SendInfoMessage(self.channel_id.clone())));
+            send_info_button =
+                send_info_button.on_press(DeviceViewEvent(SendInfoMessage(self.channel_id)));
         }
 
         // a button to allow easy sharing of this app
         let share_meshchat_button =
             button(row([text("Share MeshChat ").into(), icons::share().into()]))
                 .style(button_chip_style)
-                .on_press(DeviceViewEvent(ChannelMsg(
-                    self.channel_id.clone(),
-                    ShareMeshChat,
-                )));
+                .on_press(DeviceViewEvent(ChannelMsg(self.channel_id, ShareMeshChat)));
 
         let channel_buttons = Row::new()
             .padding([2, 0])
@@ -443,7 +439,7 @@ impl ChannelView {
         if let Some(original_text) = ChannelViewEntry::reply_quote(&self.entries, entry_id) {
             let cancel_reply_button: Button<Message> = button(text("⨂").size(16))
                 .on_press(DeviceViewEvent(ChannelMsg(
-                    self.channel_id.clone(),
+                    self.channel_id,
                     CancelPrepareReply,
                 )))
                 .style(button_chip_style)
@@ -520,13 +516,11 @@ impl ChannelView {
             .padding(Padding::from([6, 6]));
         if !self.message.is_empty() {
             send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(
-                self.channel_id.clone(),
+                self.channel_id,
                 SendMessage(self.preparing_reply),
             )));
-            clear_button = clear_button.on_press(DeviceViewEvent(ChannelMsg(
-                self.channel_id.clone(),
-                ClearMessage,
-            )));
+            clear_button =
+                clear_button.on_press(DeviceViewEvent(ChannelMsg(self.channel_id, ClearMessage)));
         }
 
         Row::new()
@@ -535,11 +529,9 @@ impl ChannelView {
                 text_input("Type your message here", &self.message)
                     .style(text_input_style)
                     .id(Id::new(MESSAGE_INPUT_ID))
-                    .on_input(|s| {
-                        DeviceViewEvent(ChannelMsg(self.channel_id.clone(), MessageInput(s)))
-                    })
+                    .on_input(|s| DeviceViewEvent(ChannelMsg(self.channel_id, MessageInput(s))))
                     .on_submit(DeviceViewEvent(ChannelMsg(
-                        self.channel_id.clone(),
+                        self.channel_id,
                         SendMessage(self.preparing_reply),
                     )))
                     .padding([6, 6])

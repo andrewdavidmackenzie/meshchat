@@ -154,7 +154,7 @@ impl DeviceView {
                     );
 
                     return self.subscriber_send(
-                        SendText(message_text, channel_id.clone(), None),
+                        SendText(message_text, channel_id, None),
                         DeviceViewEvent(ShowChannel(Some(channel_id))),
                     );
                 }
@@ -183,7 +183,7 @@ impl DeviceView {
                 }
             }
             ShowChannel(channel_id) => {
-                return self.channel_change(channel_id.clone());
+                return self.channel_change(channel_id);
             }
             SubscriptionMessage(subscription_event) => {
                 return self.process_subscription_event(subscription_event);
@@ -234,13 +234,12 @@ impl DeviceView {
     /// asynchronously, save the modified config
     fn channel_change(&mut self, channel_id: Option<ChannelId>) -> Task<Message> {
         if self.viewing_channel != channel_id {
-            self.viewing_channel = channel_id.clone();
+            self.viewing_channel = channel_id;
 
             if let Some(channel) = &channel_id
                 && let Connected(ble_device) = &self.connection_state
                 && self.channel_views.contains_key(channel)
             {
-                let channel_id = channel_id.clone();
                 let device = ble_device.clone();
                 return Task::perform(empty(), move |_| {
                     Message::DeviceAndChannelChange(Some(device), channel_id)
@@ -274,21 +273,20 @@ impl DeviceView {
             },
             ConnectedEvent(ble_device) => {
                 self.connection_state = Connected(ble_device.clone());
-                match &self.viewing_channel {
+                match self.viewing_channel {
                     None => {
-                        let channel_id = self.viewing_channel.clone();
+                        let channel_id = self.viewing_channel;
                         let device = ble_device.clone();
                         Task::perform(empty(), move |_| {
                             Message::DeviceAndChannelChange(
                                 Some(device),
-                                channel_id.clone(),
+                                channel_id,
                             )
                         })
                     }
                     Some(channel_id) => {
-                        let channel_id = channel_id.clone();
                         Task::perform(empty(), move |_| {
-                            DeviceViewEvent(ShowChannel(Some(channel_id.clone())))
+                            DeviceViewEvent(ShowChannel(Some(channel_id)))
                         })
                     }
                 }
@@ -428,10 +426,8 @@ impl DeviceView {
 
             let channel_id = Node(node_info.num);
             self.nodes.insert(node_info.num, node_info);
-            self.channel_views.insert(
-                channel_id.clone(),
-                ChannelView::new(channel_id, my_node_num),
-            );
+            self.channel_views
+                .insert(channel_id, ChannelView::new(channel_id, my_node_num));
         }
     }
 
@@ -441,10 +437,8 @@ impl DeviceView {
             if let Some(my_node_num) = self.my_node_num {
                 self.channels.push(channel);
                 let channel_id = ChannelId::Channel((self.channels.len() - 1) as i32);
-                self.channel_views.insert(
-                    channel_id.clone(),
-                    ChannelView::new(channel_id, my_node_num),
-                );
+                self.channel_views
+                    .insert(channel_id, ChannelView::new(channel_id, my_node_num));
             }
         }
     }

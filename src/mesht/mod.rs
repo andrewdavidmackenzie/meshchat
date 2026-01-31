@@ -145,14 +145,14 @@ impl From<&meshtastic::protobufs::Channel> for MCChannel {
 }
 
 impl ChannelId {
-    pub fn to_destination(&self) -> (PacketDestination, MeshChannel) {
+    pub fn to_destination(self) -> (PacketDestination, MeshChannel) {
         match self {
             Channel(channel_number) => (
                 PacketDestination::Broadcast,
-                MeshChannel::from(*channel_number as u32),
+                MeshChannel::from(channel_number as u32),
             ),
             Node(node_id) => (
-                PacketDestination::Node(NodeId::from(*node_id)),
+                PacketDestination::Node(NodeId::from(node_id)),
                 MeshChannel::default(),
             ),
         }
@@ -169,7 +169,7 @@ mod test {
 
     #[test]
     fn test_to_channel() {
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = Channel(0);
         let (destination, channel) = channel_id.to_destination();
         match destination {
             PacketDestination::Local => panic!("Should not be local"),
@@ -181,7 +181,7 @@ mod test {
 
     #[test]
     fn test_to_node_destination() {
-        let channel_id = ChannelId::Node(12345);
+        let channel_id = Node(12345);
         let (destination, channel) = channel_id.to_destination();
         match destination {
             PacketDestination::Local => panic!("Should not be local"),
@@ -380,7 +380,7 @@ mod test {
             ..Default::default()
         };
 
-        let node_info = meshtastic::protobufs::NodeInfo {
+        let node_info = NodeInfo {
             num: 12345,
             user: Some(user),
             position: None,
@@ -413,7 +413,7 @@ mod test {
             ..Default::default()
         };
 
-        let node_info = meshtastic::protobufs::NodeInfo {
+        let node_info = NodeInfo {
             num: 99999,
             user: None,
             position: Some(position),

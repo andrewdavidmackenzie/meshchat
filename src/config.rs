@@ -21,7 +21,7 @@ use tokio::io::AsyncWriteExt;
 const EIGHT_HOURS_IN_SECONDS: u64 = 60 * 60 * 8;
 const ONE_DAY_IN_SECONDS: u64 = 60 * 60 * 24;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum HistoryLength {
     #[serde(rename = "all")]
     #[default]
@@ -194,7 +194,7 @@ impl Config {
     fn history_length<'a>(&self) -> Element<'a, Message> {
         pick_list(
             HistoryLength::ALL,
-            Some(self.history_length.clone()),
+            Some(self.history_length),
             HistoryLengthSelected,
         )
         .into()
