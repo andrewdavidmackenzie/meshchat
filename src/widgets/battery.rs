@@ -18,6 +18,11 @@
 //! let battery_unknown = Battery::new()
 //!     .state(BatteryState::Unknown);
 //!
+//! // Use with custom style
+//! let battery_custom = Battery::new()
+//!     .state(BatteryState::Charged(50))
+//!     .style(|_theme, _state| meshchat::battery::Style::default());
+//!
 //! // Use in a column
 //! Column::new()
 //!     .push(battery_75)
@@ -31,7 +36,7 @@ use iced::advanced::renderer;
 use iced::advanced::widget::{Tree, Widget};
 use iced::advanced::{Clipboard, Shell};
 use iced::border::Radius;
-use iced::{Background, Border, Color, advanced, mouse};
+use iced::{Background, Border, Color, Theme, advanced, mouse};
 
 use iced::{Element, Length, Rectangle, Size, Transformation, Vector};
 
@@ -56,27 +61,27 @@ impl Default for BatteryState {
 
 /// A battery widget that displays the charge level or charging status.
 #[allow(missing_debug_implementations)]
-pub struct Battery<Theme>
+pub struct Battery<'a, Theme = iced::Theme>
 where
-    Theme: StyleSheet,
+    Theme: Catalog,
 {
     width: Length,
     height: Length,
-    style: Theme::Style,
     state: BatteryState,
+    class: Theme::Class<'a>,
 }
 
-impl<Theme> Battery<Theme>
+impl<'a, Theme> Battery<'a, Theme>
 where
-    Theme: StyleSheet,
+    Theme: Catalog,
 {
     /// Creates a new [`Battery`] widget.
     pub fn new() -> Self {
         Battery {
             width: Length::Fixed(40.0),
             height: Length::Fixed(20.0),
-            style: Theme::Style::default(),
             state: BatteryState::default(),
+            class: Theme::default(),
         }
     }
 
@@ -92,9 +97,20 @@ where
         self
     }
 
-    /// Sets the style variant of this [`Battery`].
-    pub fn style(mut self, style: impl Into<Theme::Style>) -> Self {
-        self.style = style.into();
+    /// Sets the style of the [`Battery`].
+    #[must_use]
+    pub fn style(mut self, style: impl Fn(&Theme, BatteryState) -> Style + 'a) -> Self
+    where
+        Theme::Class<'a>: From<StyleFn<'a, Theme>>,
+    {
+        self.class = (Box::new(style) as StyleFn<'a, Theme>).into();
+        self
+    }
+
+    /// Sets the style class of the [`Battery`].
+    #[must_use]
+    pub fn class(mut self, class: impl Into<Theme::Class<'a>>) -> Self {
+        self.class = class.into();
         self
     }
 
@@ -111,19 +127,19 @@ where
     }
 }
 
-impl<Theme> Default for Battery<Theme>
+impl<Theme> Default for Battery<'_, Theme>
 where
-    Theme: StyleSheet,
+    Theme: Catalog,
 {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Battery<Theme>
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Battery<'_, Theme>
 where
     Message: Clone,
-    Theme: StyleSheet,
+    Theme: Catalog,
     Renderer: advanced::Renderer + mesh::Renderer,
 {
     fn size(&self) -> Size<Length> {
@@ -153,7 +169,7 @@ where
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let custom_style = theme.appearance(&self.style);
+        let custom_style = theme.style(&self.class, self.state);
 
         // Battery dimensions
         let border_width = 2.0;
@@ -324,20 +340,23 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<Battery<Theme>> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message, Theme, Renderer> From<Battery<'a, Theme>>
+    for Element<'a, Message, Theme, Renderer>
 where
     Message: Clone + 'a,
-    Theme: StyleSheet + 'a,
+    Theme: Catalog + 'a,
     Renderer: advanced::Renderer + 'a + mesh::Renderer,
 {
-    fn from(battery: Battery<Theme>) -> Self {
+    fn from(battery: Battery<'a, Theme>) -> Self {
         Self::new(battery)
     }
 }
 
-/// The appearance of a battery widget.
-#[derive(Debug, Clone, Copy)]
-pub struct Appearance {
+/// The style of a battery widget.
+///
+/// If not specified with [`Battery::style`], then the theme will provide the style.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Style {
     /// The background color of the battery.
     pub background_color: Color,
     /// The border color of the battery.
@@ -354,34 +373,7 @@ pub struct Appearance {
     pub unknown_color: Color,
 }
 
-/*
-pub fn battery_style(_theme: &Theme) -> crate::battery::Appearance {
-    crate::battery::Appearance {
-        background_color: COLOR_GRAY_10,   // Very dark background
-        border_color: COLOR_GRAY_80,       // Light gray border
-        charging_color: COLOR_GREEN,       // Green for charging
-        charge_high_color: COLOR_GREEN,    // Dark green for high charge (>50%)
-        charge_medium_color: COLOR_ORANGE, // Orange for medium charge (20-50%)
-        charge_low_color: COLOR_RED,       // Dark red for low charge (<20%)
-        unknown_color: COLOR_GRAY_40,      // Medium gray for unknown state
-    }
-}
-
-/// Returns the dark style appearance for the battery widget
-pub fn battery_style_dark(_theme: &Theme) -> crate::battery::Appearance {
-    crate::battery::Appearance {
-        background_color: COLOR_GRAY_10,
-        border_color: COLOR_GRAY_80,
-        charging_color: COLOR_GREEN,
-        charge_high_color: COLOR_GREEN,
-        charge_medium_color: COLOR_ORANGE,
-        charge_low_color: COLOR_RED,
-        unknown_color: COLOR_GRAY_40,
-    }
-}
-*/
-
-impl Default for Appearance {
+impl Default for Style {
     fn default() -> Self {
         Self {
             background_color: Color::from_rgba(0.1, 0.1, 0.1, 1.0),
@@ -395,28 +387,79 @@ impl Default for Appearance {
     }
 }
 
-/// A set of rules that dictate the style of a battery widget.
-pub trait StyleSheet {
-    /// The supported style of the [`StyleSheet`].
-    type Style: Default;
+/// The theme catalog of a [`Battery`].
+///
+/// All themes that can be used with [`Battery`]
+/// must implement this trait.
+///
+/// # Example
+/// ```no_run
+/// # use iced::Color;
+/// # use meshchat::battery::{Catalog, BatteryState, Style};
+/// # struct MyTheme;
+/// #[derive(Debug, Default, Clone)]
+/// pub enum BatteryClass {
+///     #[default]
+///     Default,
+///     Dark,
+///     Light,
+/// }
+///
+/// impl Catalog for MyTheme {
+///     type Class<'a> = BatteryClass;
+///
+///     fn default<'a>() -> Self::Class<'a> {
+///         BatteryClass::default()
+///     }
+///
+///     fn style(&self, class: &Self::Class<'_>, state: BatteryState) -> Style {
+///         match class {
+///             BatteryClass::Default | BatteryClass::Dark => Style::default(),
+///             BatteryClass::Light => Style {
+///                 background_color: Color::from_rgb(0.9, 0.9, 0.9),
+///                 border_color: Color::from_rgb(0.3, 0.3, 0.3),
+///                 ..Style::default()
+///             },
+///         }
+///     }
+/// }
+/// ```
+pub trait Catalog {
+    /// The item class of the [`Catalog`].
+    type Class<'a>;
 
-    /// Produces the active [`Appearance`] of a battery widget.
-    fn appearance(&self, style: &Self::Style) -> Appearance;
+    /// The default class produced by the [`Catalog`].
+    fn default<'a>() -> Self::Class<'a>;
+
+    /// The [`Style`] of a class with the given battery state.
+    fn style(&self, class: &Self::Class<'_>, state: BatteryState) -> Style;
 }
 
-impl StyleSheet for iced::Theme {
-    type Style = ();
+/// A styling function for a [`Battery`].
+pub type StyleFn<'a, Theme> = Box<dyn Fn(&Theme, BatteryState) -> Style + 'a>;
 
-    fn appearance(&self, _style: &Self::Style) -> Appearance {
-        Appearance {
-            background_color: Color::from_rgb(0.05, 0.05, 0.05), // Very dark background
-            border_color: Color::from_rgb(0.4, 0.4, 0.4),        // Light gray border
-            charging_color: Color::from_rgb(0.0, 0.7, 0.0),      // Green for charging
-            charge_high_color: Color::from_rgb(0.0, 0.7, 0.0), // Dark green for high charge (>50%)
-            charge_medium_color: Color::from_rgb(0.8, 0.7, 0.0), // Orange/yellow for medium charge (20-50%)
-            charge_low_color: Color::from_rgb(0.8, 0.0, 0.0),    // Dark red for low charge (<20%)
-            unknown_color: Color::from_rgb(0.5, 0.5, 0.5),       // Medium gray for unknown state
-        }
+impl Catalog for Theme {
+    type Class<'a> = StyleFn<'a, Self>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(default)
+    }
+
+    fn style(&self, class: &Self::Class<'_>, state: BatteryState) -> Style {
+        class(self, state)
+    }
+}
+
+/// The default battery style.
+pub fn default(_theme: &Theme, _state: BatteryState) -> Style {
+    Style {
+        background_color: Color::from_rgb(0.05, 0.05, 0.05), // Very dark background
+        border_color: Color::from_rgb(0.4, 0.4, 0.4),        // Light gray border
+        charging_color: Color::from_rgb(0.0, 0.7, 0.0),      // Green for charging
+        charge_high_color: Color::from_rgb(0.0, 0.7, 0.0),   // Green for high charge (>50%)
+        charge_medium_color: Color::from_rgb(0.8, 0.7, 0.0), // Yellow for medium charge (20-50%)
+        charge_low_color: Color::from_rgb(0.8, 0.0, 0.0),    // Red for low charge (<20%)
+        unknown_color: Color::from_rgb(0.5, 0.5, 0.5),       // Gray for unknown state
     }
 }
 
@@ -492,7 +535,7 @@ mod tests {
     // Test Battery struct and builder methods
     #[test]
     fn test_battery_new() {
-        let battery: Battery<iced::Theme> = Battery::new();
+        let battery: Battery<Theme> = Battery::new();
         assert_eq!(battery.width, Length::Fixed(40.0));
         assert_eq!(battery.height, Length::Fixed(20.0));
         assert_eq!(battery.state, BatteryState::Charged(100));
@@ -500,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_battery_default() {
-        let battery: Battery<iced::Theme> = Battery::default();
+        let battery: Battery<Theme> = Battery::default();
         assert_eq!(battery.width, Length::Fixed(40.0));
         assert_eq!(battery.height, Length::Fixed(20.0));
         assert_eq!(battery.state, BatteryState::Charged(100));
@@ -508,55 +551,56 @@ mod tests {
 
     #[test]
     fn test_battery_width() {
-        let battery: Battery<iced::Theme> = Battery::new().width(Length::Fixed(60.0));
+        let battery: Battery<Theme> = Battery::new().width(Length::Fixed(60.0));
         assert_eq!(battery.width, Length::Fixed(60.0));
     }
 
     #[test]
     fn test_battery_width_fill() {
-        let battery: Battery<iced::Theme> = Battery::new().width(Length::Fill);
+        let battery: Battery<Theme> = Battery::new().width(Length::Fill);
         assert_eq!(battery.width, Length::Fill);
     }
 
     #[test]
     fn test_battery_height() {
-        let battery: Battery<iced::Theme> = Battery::new().height(Length::Fixed(30.0));
+        let battery: Battery<Theme> = Battery::new().height(Length::Fixed(30.0));
         assert_eq!(battery.height, Length::Fixed(30.0));
     }
 
     #[test]
     fn test_battery_height_shrink() {
-        let battery: Battery<iced::Theme> = Battery::new().height(Length::Shrink);
+        let battery: Battery<Theme> = Battery::new().height(Length::Shrink);
         assert_eq!(battery.height, Length::Shrink);
     }
 
     #[test]
     fn test_battery_style() {
-        let battery: Battery<iced::Theme> = Battery::new().style(());
-        assert_eq!(battery.style, ());
+        let battery: Battery<Theme> = Battery::new().style(|_theme, _state| Style::default());
+        // Just verify it compiles and runs - can't easily compare closures
+        assert_eq!(battery.state, BatteryState::Charged(100));
     }
 
     #[test]
     fn test_battery_state_builder() {
-        let battery: Battery<iced::Theme> = Battery::new().state(BatteryState::Charging);
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charging);
         assert_eq!(battery.state, BatteryState::Charging);
     }
 
     #[test]
     fn test_battery_state_charged_builder() {
-        let battery: Battery<iced::Theme> = Battery::new().state(BatteryState::Charged(25));
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(25));
         assert_eq!(battery.state, BatteryState::Charged(25));
     }
 
     #[test]
     fn test_battery_state_unknown_builder() {
-        let battery: Battery<iced::Theme> = Battery::new().state(BatteryState::Unknown);
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Unknown);
         assert_eq!(battery.state, BatteryState::Unknown);
     }
 
     #[test]
     fn test_battery_set_state() {
-        let mut battery: Battery<iced::Theme> = Battery::new();
+        let mut battery: Battery<Theme> = Battery::new();
         assert_eq!(battery.state, BatteryState::Charged(100));
 
         battery.set_state(BatteryState::Charging);
@@ -571,7 +615,7 @@ mod tests {
 
     #[test]
     fn test_battery_builder_chain() {
-        let battery: Battery<iced::Theme> = Battery::new()
+        let battery: Battery<Theme> = Battery::new()
             .width(Length::Fixed(80.0))
             .height(Length::Fixed(40.0))
             .state(BatteryState::Charged(75));
@@ -581,46 +625,40 @@ mod tests {
         assert_eq!(battery.state, BatteryState::Charged(75));
     }
 
-    // Test Appearance struct
+    // Test Style struct
     #[test]
-    fn test_appearance_default() {
-        let appearance = Appearance::default();
-        assert_eq!(
-            appearance.background_color,
-            Color::from_rgba(0.1, 0.1, 0.1, 1.0)
-        );
-        assert_eq!(appearance.border_color, Color::WHITE);
+    fn test_style_default() {
+        let style = Style::default();
+        assert_eq!(style.background_color, Color::from_rgba(0.1, 0.1, 0.1, 1.0));
+        assert_eq!(style.border_color, Color::WHITE);
     }
 
     #[test]
-    fn test_appearance_default_charging_color() {
-        let appearance = Appearance::default();
-        assert_eq!(appearance.charging_color, Color::from_rgb(0.2, 0.8, 0.2));
+    fn test_style_default_charging_color() {
+        let style = Style::default();
+        assert_eq!(style.charging_color, Color::from_rgb(0.2, 0.8, 0.2));
     }
 
     #[test]
-    fn test_appearance_default_charge_colors() {
-        let appearance = Appearance::default();
+    fn test_style_default_charge_colors() {
+        let style = Style::default();
         // High color is green
-        assert_eq!(appearance.charge_high_color, Color::from_rgb(0.2, 0.8, 0.2));
-        // Medium color is yellow
-        assert_eq!(
-            appearance.charge_medium_color,
-            Color::from_rgb(0.95, 0.9, 0.2)
-        );
-        // Low color is red
-        assert_eq!(appearance.charge_low_color, Color::from_rgb(0.9, 0.2, 0.2));
+        assert_eq!(style.charge_high_color, Color::from_rgb(0.2, 0.8, 0.2));
+        // The medium color is yellow
+        assert_eq!(style.charge_medium_color, Color::from_rgb(0.95, 0.9, 0.2));
+        // The low color is red
+        assert_eq!(style.charge_low_color, Color::from_rgb(0.9, 0.2, 0.2));
     }
 
     #[test]
-    fn test_appearance_default_unknown_color() {
-        let appearance = Appearance::default();
-        assert_eq!(appearance.unknown_color, Color::from_rgb(0.7, 0.7, 0.7));
+    fn test_style_default_unknown_color() {
+        let style = Style::default();
+        assert_eq!(style.unknown_color, Color::from_rgb(0.7, 0.7, 0.7));
     }
 
     #[test]
-    fn test_appearance_custom() {
-        let appearance = Appearance {
+    fn test_style_custom() {
+        let style = Style {
             background_color: Color::BLACK,
             border_color: Color::WHITE,
             charging_color: Color::from_rgb(0.0, 1.0, 0.0),
@@ -629,75 +667,79 @@ mod tests {
             charge_low_color: Color::from_rgb(1.0, 0.0, 0.0),
             unknown_color: Color::from_rgb(0.5, 0.5, 0.5),
         };
-        assert_eq!(appearance.background_color, Color::BLACK);
-        assert_eq!(appearance.border_color, Color::WHITE);
+        assert_eq!(style.background_color, Color::BLACK);
+        assert_eq!(style.border_color, Color::WHITE);
     }
 
     #[test]
-    fn test_appearance_clone() {
-        let appearance = Appearance::default();
-        let cloned = appearance;
-        assert_eq!(cloned.background_color, appearance.background_color);
-        assert_eq!(cloned.border_color, appearance.border_color);
+    fn test_style_clone() {
+        let style = Style::default();
+        let cloned = style;
+        assert_eq!(cloned.background_color, style.background_color);
+        assert_eq!(cloned.border_color, style.border_color);
     }
 
     #[test]
-    fn test_appearance_debug() {
-        let appearance = Appearance::default();
-        let debug_str = format!("{:?}", appearance);
-        assert!(debug_str.contains("Appearance"));
+    fn test_style_debug() {
+        let style = Style::default();
+        let debug_str = format!("{:?}", style);
+        assert!(debug_str.contains("Style"));
         assert!(debug_str.contains("background_color"));
         assert!(debug_str.contains("border_color"));
     }
 
-    // Test StyleSheet implementation for iced::Theme
+    // Test Catalog implementation for iced::Theme
     #[test]
-    fn test_theme_stylesheet_appearance() {
-        let theme = iced::Theme::Dark;
-        let appearance = theme.appearance(&());
+    fn test_theme_catalog_style() {
+        let theme = Theme::Dark;
+        let class = <Theme as Catalog>::default();
+        let style = theme.style(&class, BatteryState::Charged(100));
         // Verify colors are set
-        assert_eq!(
-            appearance.background_color,
-            Color::from_rgb(0.05, 0.05, 0.05)
-        );
-        assert_eq!(appearance.border_color, Color::from_rgb(0.4, 0.4, 0.4));
+        assert_eq!(style.background_color, Color::from_rgb(0.05, 0.05, 0.05));
+        assert_eq!(style.border_color, Color::from_rgb(0.4, 0.4, 0.4));
     }
 
     #[test]
-    fn test_theme_stylesheet_charging_color() {
-        let theme = iced::Theme::Dark;
-        let appearance = theme.appearance(&());
-        assert_eq!(appearance.charging_color, Color::from_rgb(0.0, 0.7, 0.0));
+    fn test_theme_catalog_charging_color() {
+        let theme = Theme::Dark;
+        let class = <Theme as Catalog>::default();
+        let style = theme.style(&class, BatteryState::Charging);
+        assert_eq!(style.charging_color, Color::from_rgb(0.0, 0.7, 0.0));
     }
 
     #[test]
-    fn test_theme_stylesheet_charge_colors() {
-        let theme = iced::Theme::Dark;
-        let appearance = theme.appearance(&());
-        assert_eq!(appearance.charge_high_color, Color::from_rgb(0.0, 0.7, 0.0));
-        assert_eq!(
-            appearance.charge_medium_color,
-            Color::from_rgb(0.8, 0.7, 0.0)
-        );
-        assert_eq!(appearance.charge_low_color, Color::from_rgb(0.8, 0.0, 0.0));
+    fn test_theme_catalog_charge_colors() {
+        let theme = Theme::Dark;
+        let class = <Theme as Catalog>::default();
+        let style = theme.style(&class, BatteryState::Charged(50));
+        assert_eq!(style.charge_high_color, Color::from_rgb(0.0, 0.7, 0.0));
+        assert_eq!(style.charge_medium_color, Color::from_rgb(0.8, 0.7, 0.0));
+        assert_eq!(style.charge_low_color, Color::from_rgb(0.8, 0.0, 0.0));
     }
 
     #[test]
-    fn test_theme_stylesheet_unknown_color() {
-        let theme = iced::Theme::Dark;
-        let appearance = theme.appearance(&());
-        assert_eq!(appearance.unknown_color, Color::from_rgb(0.5, 0.5, 0.5));
+    fn test_theme_catalog_unknown_color() {
+        let theme = Theme::Dark;
+        let class = <Theme as Catalog>::default();
+        let style = theme.style(&class, BatteryState::Unknown);
+        assert_eq!(style.unknown_color, Color::from_rgb(0.5, 0.5, 0.5));
     }
 
     #[test]
-    fn test_theme_stylesheet_light() {
-        let theme = iced::Theme::Light;
-        let appearance = theme.appearance(&());
-        // Light theme should also return valid colors
-        assert_eq!(
-            appearance.background_color,
-            Color::from_rgb(0.05, 0.05, 0.05)
-        );
+    fn test_theme_catalog_light() {
+        let theme = Theme::Light;
+        let class = <Theme as Catalog>::default();
+        let style = theme.style(&class, BatteryState::Charged(100));
+        // Light theme should also return valid colors (uses default style)
+        assert_eq!(style.background_color, Color::from_rgb(0.05, 0.05, 0.05));
+    }
+
+    // Test style functions
+    #[test]
+    fn test_default_style_fn() {
+        let theme = Theme::Dark;
+        let style = default(&theme, BatteryState::Charged(100));
+        assert_eq!(style.background_color, Color::from_rgb(0.05, 0.05, 0.05));
     }
 
     // Test Widget trait methods
@@ -705,12 +747,11 @@ mod tests {
     fn test_battery_size() {
         use iced::advanced::Widget;
 
-        let battery: Battery<iced::Theme> = Battery::new()
+        let battery: Battery<Theme> = Battery::new()
             .width(Length::Fixed(50.0))
             .height(Length::Fixed(25.0));
 
-        let size =
-            <Battery<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::size(&battery);
+        let size = <Battery<Theme> as Widget<(), Theme, iced::Renderer>>::size(&battery);
         assert_eq!(size.width, Length::Fixed(50.0));
         assert_eq!(size.height, Length::Fixed(25.0));
     }
@@ -719,10 +760,9 @@ mod tests {
     fn test_battery_size_default() {
         use iced::advanced::Widget;
 
-        let battery: Battery<iced::Theme> = Battery::new();
+        let battery: Battery<Theme> = Battery::new();
 
-        let size =
-            <Battery<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::size(&battery);
+        let size = <Battery<Theme> as Widget<(), Theme, iced::Renderer>>::size(&battery);
         assert_eq!(size.width, Length::Fixed(40.0));
         assert_eq!(size.height, Length::Fixed(20.0));
     }

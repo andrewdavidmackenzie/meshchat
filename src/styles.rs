@@ -1,5 +1,7 @@
 #![allow(dead_code)] // for extra colors we have generated but not used yet
 
+use crate::widgets::battery;
+use crate::widgets::battery::BatteryState;
 use iced::border::Radius;
 use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
@@ -661,5 +663,12 @@ pub fn emoji_scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scro
             shadow: NO_SHADOW,
             icon: Default::default(),
         },
+    }
+}
+
+pub fn battery_style(_theme: &Theme, _state: BatteryState) -> battery::Style {
+    battery::Style {
+        border_color: COLOR_CYAN,
+        ..Default::default()
     }
 }
