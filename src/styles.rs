@@ -1,12 +1,14 @@
 #![allow(dead_code)] // for extra colors we have generated but not used yet
 
-use crate::battery::Appearance as BatteryAppearance;
+use crate::widgets::battery;
+use crate::widgets::battery::BatteryState;
 use iced::border::Radius;
+use iced::theme::Palette;
 use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
-use iced::widget::{button, container, scrollable, text, text_input};
+use iced::widget::{button, scrollable, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 use iced_aw::menu;
 use iced_aw::style::colors::RED;
@@ -125,11 +127,13 @@ pub const RADIUS_12_TOP: Radius = Radius {
     bottom_left: 0.0,
 };
 
-pub const TOOLTIP_BORDER: Border = Border {
-    color: Color::WHITE,
-    width: 1.0,
-    radius: RADIUS_12,
-};
+fn tooltip_border(palette: &Palette) -> Border {
+    Border {
+        color: palette.text,
+        width: 1.0,
+        radius: RADIUS_12,
+    }
+}
 
 pub const PICKER_HEADER_BORDER: Border = Border {
     color: Color::WHITE,
@@ -152,60 +156,32 @@ const TEXT_INPUT_RADIUS: Radius = Radius {
 
 pub const CYAN: Color = Color::from_rgba(0.0, 0.8, 0.8, 1.0);
 
-const TEXT_INPUT_BORDER_ACTIVE: Border = Border {
-    radius: TEXT_INPUT_RADIUS, // rounded corners
-    width: 2.0,
-    color: CYAN,
-};
+fn text_input_border(palette: &Palette, status: text_input::Status) -> Border {
+    let border_color = match status {
+        text_input::Status::Active => palette.text,
+        text_input::Status::Hovered => palette.text,
+        text_input::Status::Focused { .. } => CYAN,
+        text_input::Status::Disabled => Color::TRANSPARENT,
+    };
 
-const TEXT_INPUT_BORDER: Border = Border {
-    radius: TEXT_INPUT_RADIUS, // rounded corners
-    width: 2.0,
-    color: Color::WHITE,
-};
-
-const TEXT_INPUT_BORDER_DISABLED: Border = Border {
-    radius: TEXT_INPUT_RADIUS, // rounded corners
-    width: 2.0,
-    color: Color::TRANSPARENT,
-};
+    Border {
+        radius: TEXT_INPUT_RADIUS, // rounded corners
+        width: 2.0,
+        color: border_color,
+    }
+}
 
 pub const TEXT_INPUT_PLACEHOLDER_COLOR: Color = Color::from_rgba(0.5, 0.5, 0.5, 1.0);
 
-pub fn text_input_style(_theme: &Theme, status: text_input::Status) -> text_input::Style {
-    match status {
-        text_input::Status::Active => text_input::Style {
-            background: TEXT_INPUT_BACKGROUND,
-            border: TEXT_INPUT_BORDER,
-            icon: Color::WHITE,
-            placeholder: TEXT_INPUT_PLACEHOLDER_COLOR,
-            value: Color::WHITE,
-            selection: Default::default(),
-        },
-        text_input::Status::Hovered => text_input::Style {
-            background: TEXT_INPUT_BACKGROUND,
-            border: TEXT_INPUT_BORDER,
-            icon: Color::WHITE,
-            placeholder: TEXT_INPUT_PLACEHOLDER_COLOR,
-            value: Color::WHITE,
-            selection: Default::default(),
-        },
-        text_input::Status::Focused { .. } => text_input::Style {
-            background: TEXT_INPUT_BACKGROUND,
-            border: TEXT_INPUT_BORDER_ACTIVE,
-            icon: Color::WHITE,
-            placeholder: TEXT_INPUT_PLACEHOLDER_COLOR,
-            value: Color::WHITE,
-            selection: Default::default(),
-        },
-        text_input::Status::Disabled => text_input::Style {
-            background: TEXT_INPUT_BACKGROUND,
-            border: TEXT_INPUT_BORDER_DISABLED,
-            icon: Color::WHITE,
-            placeholder: TEXT_INPUT_PLACEHOLDER_COLOR,
-            value: Color::WHITE,
-            selection: Default::default(),
-        },
+pub fn text_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+    let palette = theme.palette();
+    text_input::Style {
+        background: Background::Color(palette.background),
+        border: text_input_border(&palette, status),
+        icon: Color::WHITE,
+        placeholder: TEXT_INPUT_PLACEHOLDER_COLOR,
+        value: palette.text,
+        selection: Default::default(),
     }
 }
 
@@ -221,11 +197,12 @@ const BUTTON_BORDER_DISABLED: Border = Border {
     color: Color::TRANSPARENT,
 };
 
-pub fn tooltip_style(_theme: &Theme) -> Style {
+pub fn tooltip_style(theme: &Theme) -> Style {
+    let palette = &theme.palette();
     Style {
         text_color: Some(Color::WHITE),
         background: Some(Color::BLACK.into()),
-        border: TOOLTIP_BORDER,
+        border: tooltip_border(palette),
         shadow: NO_SHADOW,
         snap: false,
     }
@@ -240,11 +217,12 @@ pub fn picker_header_style(_theme: &Theme) -> Style {
         snap: false,
     }
 }
-pub fn count_style(_theme: &Theme) -> Style {
+pub fn count_style(theme: &Theme) -> Style {
+    let palette = &theme.palette();
     Style {
         text_color: Some(Color::WHITE),
         background: Some(Background::Color(RED)),
-        border: TOOLTIP_BORDER,
+        border: tooltip_border(palette),
         shadow: NO_SHADOW,
         snap: false,
     }
@@ -342,7 +320,7 @@ const CONTAINER_BORDER_ACTIVE: Border = Border {
     color: CYAN,
 };
 
-pub fn container_style(_theme: &Theme) -> container::Style {
+pub fn container_style(_theme: &Theme) -> Style {
     Style {
         text_color: Some(Color::WHITE),
         background: Some(Color::TRANSPARENT.into()),
@@ -364,6 +342,14 @@ const TAB_BUTTON_BORDER: Border = Border {
     width: 2.0,
     color: CYAN,
 };
+
+pub fn bubble_style(_theme: &Theme, mine: bool) -> Style {
+    if mine {
+        MY_MESSAGE_BUBBLE_STYLE
+    } else {
+        OTHERS_MESSAGE_BUBBLE_STYLE
+    }
+}
 
 pub fn emoji_tab_style(_theme: &Theme, status: Status, selected: bool) -> button::Style {
     match status {
@@ -487,27 +473,27 @@ pub fn reply_to_style(_theme: &Theme) -> Style {
     REPLY_TO_STYLE
 }
 
-pub const VIEW_BUTTON_HOVER_STYLE: button::Style = button::Style {
-    background: Some(Background::Color(Color::from_rgba(0.0, 0.8, 0.8, 1.0))),
-    text_color: Color::BLACK,
-    border: VIEW_BUTTON_BORDER,
-    shadow: NO_SHADOW,
-    snap: false,
-};
+pub fn channel_row_style(theme: &Theme, status: Status) -> button::Style {
+    let palette = theme.palette();
 
-pub const VIEW_BUTTON_STYLE: button::Style = button::Style {
-    background: Some(Background::Color(Color::from_rgba(0.0, 1.0, 1.0, 0.0))),
-    text_color: Color::WHITE,
-    border: NO_BORDER,
-    shadow: NO_SHADOW,
-    snap: false,
-};
-
-pub fn channel_row_style(_: &Theme, status: Status) -> button::Style {
     if status == Hovered {
-        VIEW_BUTTON_HOVER_STYLE
+        // Black text on CYAN background when hovered
+        button::Style {
+            background: Some(Background::Color(CYAN)),
+            text_color: Color::BLACK,
+            border: VIEW_BUTTON_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        }
     } else {
-        VIEW_BUTTON_STYLE
+        // Black on white (Light theme) or White on black (Dark theme)
+        button::Style {
+            background: Some(Background::Color(palette.background)),
+            text_color: palette.text,
+            border: NO_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        }
     }
 }
 
@@ -547,33 +533,6 @@ pub fn menu_button_style(_theme: &Theme, _status: iced_aw::style::Status) -> men
         menu_shadow: NO_SHADOW,
         path: Background::Color(Color::TRANSPARENT),
         path_border: NO_BORDER,
-    }
-}
-
-/// Battery widget style using dark theme colors
-/// Returns the dark style appearance for the battery widget
-pub fn battery_style(_theme: &Theme) -> BatteryAppearance {
-    BatteryAppearance {
-        background_color: COLOR_GRAY_10,   // Very dark background
-        border_color: COLOR_GRAY_80,       // Light gray border
-        charging_color: COLOR_GREEN,       // Green for charging
-        charge_high_color: COLOR_GREEN,    // Dark green for high charge (>50%)
-        charge_medium_color: COLOR_ORANGE, // Orange for medium charge (20-50%)
-        charge_low_color: COLOR_RED,       // Dark red for low charge (<20%)
-        unknown_color: COLOR_GRAY_40,      // Medium gray for unknown state
-    }
-}
-
-/// Dark variant battery style
-pub fn battery_style_dark(_theme: &Theme) -> BatteryAppearance {
-    BatteryAppearance {
-        background_color: COLOR_GRAY_10,
-        border_color: COLOR_GRAY_80,
-        charging_color: COLOR_GREEN,
-        charge_high_color: COLOR_GREEN,
-        charge_medium_color: COLOR_ORANGE,
-        charge_low_color: COLOR_RED,
-        unknown_color: COLOR_GRAY_40,
     }
 }
 
@@ -624,6 +583,19 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
     }
 }
 
+pub fn modal_style(_theme: &Theme) -> Style {
+    Style {
+        background: Some(
+            Color {
+                a: 0.8,
+                ..Color::BLACK
+            }
+            .into(),
+        ),
+        ..Style::default()
+    }
+}
+
 pub fn emoji_scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let scrollbar_color = match status {
         scrollable::Status::Active { .. } => Background::Color(Color::TRANSPARENT),
@@ -668,5 +640,12 @@ pub fn emoji_scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scro
             shadow: NO_SHADOW,
             icon: Default::default(),
         },
+    }
+}
+
+pub fn battery_style(_theme: &Theme, _state: BatteryState) -> battery::Style {
+    battery::Style {
+        border_color: COLOR_CYAN,
+        ..Default::default()
     }
 }

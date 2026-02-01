@@ -21,15 +21,16 @@ use crate::device_view::DeviceView;
 use crate::device_view::DeviceViewMessage;
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::discovery::ble_discovery;
-use crate::linear::Linear;
 use crate::mesht::device_subscription;
 use crate::notification::{Notification, Notifications};
-use crate::styles::{picker_header_style, tooltip_style};
+use crate::styles::{modal_style, picker_header_style, tooltip_style};
+use crate::widgets::easing;
+use crate::widgets::linear::Linear;
 use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{Column, Space, center, container, mouse_area, opaque, operation, stack, text};
 use iced::window::icon;
-use iced::{Center, Color, Event, Font, Subscription, Task, clipboard, keyboard, window};
+use iced::{Center, Event, Font, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
@@ -40,22 +41,19 @@ use std::fmt::Formatter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 
-mod battery;
 mod channel_view;
 mod channel_view_entry;
 mod config;
 mod device_list_view;
 mod device_view;
 mod discovery;
-mod easing;
-mod linear;
 mod styles;
+mod widgets;
 
 #[rustfmt::skip]
 /// Icons generated as a font using iced_fontello
 mod icons;
 mod channel_id;
-mod emoji_picker;
 mod mesht;
 mod notification;
 #[cfg(test)]
@@ -575,21 +573,7 @@ impl MeshChat {
     {
         stack![
             base.into(),
-            opaque(
-                mouse_area(center(opaque(content)).style(|_theme| {
-                    container::Style {
-                        background: Some(
-                            Color {
-                                a: 0.8,
-                                ..Color::BLACK
-                            }
-                            .into(),
-                        ),
-                        ..container::Style::default()
-                    }
-                }))
-                .on_press(on_blur)
-            )
+            opaque(mouse_area(center(opaque(content)).style(modal_style)).on_press(on_blur))
         ]
         .into()
     }

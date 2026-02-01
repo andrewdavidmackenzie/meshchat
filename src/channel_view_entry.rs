@@ -8,10 +8,11 @@ use crate::channel_view_entry::MCMessage::{
 use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
 use crate::device_view::{long_name, short_name};
 use crate::styles::{
-    COLOR_DICTIONARY, COLOR_GREEN, MY_MESSAGE_BUBBLE_STYLE, OTHERS_MESSAGE_BUBBLE_STYLE,
-    TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, alert_message_style, button_chip_style,
-    menu_button_style, message_text_style, tooltip_style,
+    COLOR_DICTIONARY, COLOR_GREEN, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
+    alert_message_style, bubble_style, button_chip_style, menu_button_style, message_text_style,
+    tooltip_style,
 };
+use crate::widgets::emoji_picker::EmojiPicker;
 use crate::{MCNodeInfo, MCPosition, MCUser, Message};
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
@@ -194,7 +195,7 @@ impl ChannelViewEntry {
 
     /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
     /// it occurs in. These will be separated by Day specifiers, so day is not needed.
-    fn time_to_text(datetime_local: DateTime<Local>) -> Text<'static, Theme, Renderer> {
+    fn time_to_text(datetime_local: DateTime<Local>) -> Text<'static> {
         let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
         text(time_str)
             .color(TIME_TEXT_COLOR)
@@ -252,7 +253,7 @@ impl ChannelViewEntry {
         nodes: &'a HashMap<u32, MCNodeInfo>,
         channel_id: &'a ChannelId,
         mine: bool,
-        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        emoji_picker: &'a EmojiPicker,
     ) -> Element<'a, Message> {
         let message_text = self.message().to_string();
         let mut message_content_column = Column::new();
@@ -310,12 +311,6 @@ impl ChannelViewEntry {
         // Add the message text and time row
         message_content_column = message_content_column.push(text_and_time_row);
 
-        let style = if mine {
-            MY_MESSAGE_BUBBLE_STYLE
-        } else {
-            OTHERS_MESSAGE_BUBBLE_STYLE
-        };
-
         let mut message_row = Row::new().padding([6, 6]);
         if !self.emojis().is_empty() {
             // Butt the emoji_row up against the bubble
@@ -333,7 +328,7 @@ impl ChannelViewEntry {
 
         let message_bubble = Container::new(message_content_column)
             .padding([6, 8])
-            .style(move |_theme: &Theme| style);
+            .style(move |theme: &Theme| bubble_style(theme, mine));
 
         // Put on the right-hand side if my message, on the left if from someone else
         if mine {
@@ -369,7 +364,7 @@ impl ChannelViewEntry {
         short_name: &'a str,
         long_name: &'a str,
         message: String,
-        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        emoji_picker: &'a EmojiPicker,
         channel_id: &'a ChannelId,
     ) -> Column<'a, Message> {
         let text_color = Self::color_from_id(self.from);
@@ -429,7 +424,7 @@ impl ChannelViewEntry {
         &'a self,
         name: &'a str,
         message: String,
-        emoji_picker: &'a crate::emoji_picker::EmojiPicker,
+        emoji_picker: &'a EmojiPicker,
         channel_id: &'a ChannelId,
     ) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_2 = |items| Menu::new(items).max_width(180.0).offset(15.0).spacing(5.0);
@@ -545,7 +540,7 @@ mod tests {
 
     #[test]
     fn test_tokenize_http_link() {
-        let spans = ChannelViewEntry::tokenize("check http://example.com out".into());
+        let spans = ChannelViewEntry::tokenize("check https://example.com out".into());
         assert_eq!(spans.len(), 3);
         assert!(spans[1].link.is_some());
     }
@@ -595,7 +590,7 @@ mod tests {
 
     #[test]
     fn test_truncate_unicode() {
-        // Test with multi-byte unicode characters
+        // Test with multibyte Unicode characters
         let result = ChannelViewEntry::truncate("héllo wörld", 5);
         assert_eq!(result, "héllo");
     }
@@ -704,7 +699,7 @@ mod tests {
 
         let quote =
             ChannelViewEntry::reply_quote(&entries, &1).expect("Could not get reply quoted");
-        assert!(quote.len() < long_message.len() + 10); // "Re: " prefix + some truncation
+        assert!(quote.len() < long_message.len() + 10); // "Re: " prefix plus some truncation
         assert!(quote.ends_with("..."));
     }
 
@@ -714,10 +709,10 @@ mod tests {
         let newer = ChannelViewEntry::new(2, 100, NewTextMessage("new".into()), 2000);
 
         let ordering = ChannelViewEntry::sort_by_rx_time(&1, &older, &2, &newer);
-        assert_eq!(ordering, std::cmp::Ordering::Less);
+        assert_eq!(ordering, Ordering::Less);
 
         let ordering = ChannelViewEntry::sort_by_rx_time(&2, &newer, &1, &older);
-        assert_eq!(ordering, std::cmp::Ordering::Greater);
+        assert_eq!(ordering, Ordering::Greater);
     }
 
     #[test]

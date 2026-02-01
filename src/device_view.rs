@@ -5,7 +5,6 @@ use crate::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent, DisconnectingEvent,
     NotReady, Ready,
 };
-use crate::battery::{Battery, BatteryState};
 use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
 use crate::config::{Config, HistoryLength};
@@ -32,9 +31,10 @@ use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device_list_view::DeviceListView;
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, button_chip_style, channel_row_style, count_style, fav_button_style,
-    scrollbar_style, text_input_style, tooltip_style,
+    DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
+    fav_button_style, scrollbar_style, text_input_style, tooltip_style,
 };
+use crate::widgets::battery::{Battery, BatteryState};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -570,7 +570,7 @@ impl DeviceView {
         };
 
         tooltip(
-            Battery::new().state(battery_state),
+            Battery::new().state(battery_state).style(battery_style),
             text(tooltip_text),
             tooltip::Position::Bottom,
         )

@@ -17,6 +17,7 @@ use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
     text_input_style, tooltip_style,
 };
+use crate::widgets::emoji_picker::{EmojiPicker, PickerMessage};
 use crate::{MCNodeInfo, MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
@@ -49,7 +50,7 @@ pub enum ChannelViewMessage {
     MessageUnseen(u32),
     PickChannel(Option<ChannelId>),
     ReplyWithEmoji(u32, String, ChannelId), // Send an emoji reply
-    EmojiPickerMsg(Box<crate::emoji_picker::PickerMessage<ChannelViewMessage>>),
+    EmojiPickerMsg(Box<PickerMessage<ChannelViewMessage>>),
     ShareMeshChat,
 }
 
@@ -62,7 +63,7 @@ pub struct ChannelView {
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
     my_node_num: u32,
     preparing_reply: Option<u32>,
-    emoji_picker: crate::emoji_picker::EmojiPicker,
+    emoji_picker: EmojiPicker,
 }
 
 async fn empty() {}
@@ -73,9 +74,7 @@ impl ChannelView {
         Self {
             channel_id,
             my_node_num,
-            emoji_picker: crate::emoji_picker::EmojiPicker::new()
-                .height(400)
-                .width(400),
+            emoji_picker: EmojiPicker::new().height(400).width(400),
             ..Default::default()
         }
     }
