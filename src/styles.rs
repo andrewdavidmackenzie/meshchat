@@ -200,8 +200,8 @@ const BUTTON_BORDER_DISABLED: Border = Border {
 pub fn tooltip_style(theme: &Theme) -> Style {
     let palette = &theme.palette();
     Style {
-        text_color: Some(Color::WHITE),
-        background: Some(Color::BLACK.into()),
+        text_color: Some(palette.text),
+        background: Some(palette.background.into()),
         border: tooltip_border(palette),
         shadow: NO_SHADOW,
         snap: false,
@@ -583,15 +583,12 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
     }
 }
 
-pub fn modal_style(_theme: &Theme) -> Style {
+pub fn modal_style(theme: &Theme) -> Style {
+    let mut background = theme.palette().background;
+    background.a = 0.8;
+
     Style {
-        background: Some(
-            Color {
-                a: 0.8,
-                ..Color::BLACK
-            }
-            .into(),
-        ),
+        background: Some(Background::Color(background)),
         ..Style::default()
     }
 }
