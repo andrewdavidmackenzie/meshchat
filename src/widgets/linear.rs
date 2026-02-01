@@ -6,7 +6,7 @@ use iced::advanced::{self, Clipboard, Layout, Shell, Widget};
 use iced::mouse;
 use iced::time::Instant;
 use iced::window::{self};
-use iced::{Background, Color, Element, Event, Length, Rectangle, Size};
+use iced::{Background, Color, Element, Event, Length, Rectangle, Size, Theme};
 
 use super::easing::{self, Easing};
 
@@ -14,29 +14,29 @@ use crate::styles::CYAN;
 use std::time::Duration;
 
 #[allow(missing_debug_implementations)]
-pub struct Linear<'a, Theme>
+pub struct Linear<'a, Theme = iced::Theme>
 where
-    Theme: StyleSheet,
+    Theme: Catalog,
 {
     width: Length,
     height: Length,
-    style: Theme::Style,
     easing: &'a Easing,
     cycle_duration: Duration,
+    class: Theme::Class<'a>,
 }
 
 impl<'a, Theme> Linear<'a, Theme>
 where
-    Theme: StyleSheet,
+    Theme: Catalog,
 {
     /// Creates a new [`Linear`] with the given content.
     pub fn new() -> Self {
         Linear {
             width: Length::Fixed(100.0),
             height: Length::Fixed(4.0),
-            style: Theme::Style::default(),
             easing: easing::standard(),
             cycle_duration: Duration::from_millis(500),
+            class: Theme::default(),
         }
     }
 
@@ -52,9 +52,20 @@ where
         self
     }
 
-    /// Sets the style variant of this [`Linear`].
-    pub fn style(mut self, style: impl Into<Theme::Style>) -> Self {
-        self.style = style.into();
+    /// Sets the style of the [`Linear`].
+    #[must_use]
+    pub fn style(mut self, style: impl Fn(&Theme) -> Style + 'a) -> Self
+    where
+        Theme::Class<'a>: From<StyleFn<'a, Theme>>,
+    {
+        self.class = (Box::new(style) as StyleFn<'a, Theme>).into();
+        self
+    }
+
+    /// Sets the style class of the [`Linear`].
+    #[must_use]
+    pub fn class(mut self, class: impl Into<Theme::Class<'a>>) -> Self {
+        self.class = class.into();
         self
     }
 
@@ -71,9 +82,9 @@ where
     }
 }
 
-impl<'a, Theme> Default for Linear<'a, Theme>
+impl<Theme> Default for Linear<'_, Theme>
 where
-    Theme: StyleSheet,
+    Theme: Catalog,
 {
     fn default() -> Self {
         Self::new()
@@ -139,11 +150,11 @@ impl State {
     }
 }
 
-impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Linear<'a, Theme>
+impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for Linear<'_, Theme>
 where
-    Message: Clone + 'a,
-    Theme: StyleSheet + 'a,
-    Renderer: advanced::Renderer + 'a,
+    Message: Clone,
+    Theme: Catalog,
+    Renderer: advanced::Renderer,
 {
     fn size(&self) -> Size<Length> {
         Size {
@@ -172,7 +183,7 @@ where
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let custom_style = theme.appearance(&self.style);
+        let custom_style = theme.style(&self.class);
         let state = tree.state.downcast_ref::<State>();
 
         renderer.fill_quad(
@@ -249,7 +260,7 @@ where
 impl<'a, Message, Theme, Renderer> From<Linear<'a, Theme>> for Element<'a, Message, Theme, Renderer>
 where
     Message: Clone + 'a,
-    Theme: StyleSheet + 'a,
+    Theme: Catalog + 'a,
     Renderer: advanced::Renderer + 'a,
 {
     fn from(linear: Linear<'a, Theme>) -> Self {
@@ -257,15 +268,18 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Appearance {
+/// The style of a linear progress indicator.
+///
+/// If not specified with [`Linear::style`], then the theme will provide the style.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Style {
     /// The track [`Color`] of the progress indicator.
     pub track_color: Color,
     /// The bar [`Color`] of the progress indicator.
     pub bar_color: Color,
 }
 
-impl Default for Appearance {
+impl Default for Style {
     fn default() -> Self {
         Self {
             track_color: Color::TRANSPARENT,
@@ -274,25 +288,74 @@ impl Default for Appearance {
     }
 }
 
-/// A set of rules that dictate the style of an indicator.
-pub trait StyleSheet {
-    /// The supported style of the [`StyleSheet`].
-    type Style: Default;
+/// The theme catalog of a [`Linear`].
+///
+/// All themes that can be used with [`Linear`]
+/// must implement this trait.
+///
+/// # Example
+/// ```no_run
+/// # use iced::Color;
+/// # use meshchat::linear::{Catalog, Style};
+/// # struct MyTheme;
+/// #[derive(Debug, Default, Clone)]
+/// pub enum LinearClass {
+///     #[default]
+///     Default,
+///     Accent,
+/// }
+///
+/// impl Catalog for MyTheme {
+///     type Class<'a> = LinearClass;
+///
+///     fn default<'a>() -> Self::Class<'a> {
+///         LinearClass::default()
+///     }
+///
+///     fn style(&self, class: &Self::Class<'_>) -> Style {
+///         match class {
+///             LinearClass::Default => Style::default(),
+///             LinearClass::Accent => Style {
+///                 bar_color: Color::from_rgb(0.0, 0.8, 0.8),
+///                 ..Style::default()
+///             },
+///         }
+///     }
+/// }
+/// ```
+pub trait Catalog {
+    /// The item class of the [`Catalog`].
+    type Class<'a>;
 
-    /// Produces the active [`Appearance`] of an indicator.
-    fn appearance(&self, style: &Self::Style) -> Appearance;
+    /// The default class produced by the [`Catalog`].
+    fn default<'a>() -> Self::Class<'a>;
+
+    /// The [`Style`] of a class.
+    fn style(&self, class: &Self::Class<'_>) -> Style;
 }
 
-impl StyleSheet for iced::Theme {
-    type Style = ();
+/// A styling function for a [`Linear`].
+pub type StyleFn<'a, Theme> = Box<dyn Fn(&Theme) -> Style + 'a>;
 
-    fn appearance(&self, _style: &Self::Style) -> Appearance {
-        let palette = self.extended_palette();
+impl Catalog for Theme {
+    type Class<'a> = StyleFn<'a, Self>;
 
-        Appearance {
-            track_color: palette.background.weak.color,
-            bar_color: CYAN,
-        }
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(default)
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> Style {
+        class(self)
+    }
+}
+
+/// The default linear progress indicator style.
+pub fn default(theme: &Theme) -> Style {
+    let palette = theme.extended_palette();
+
+    Style {
+        track_color: palette.background.weak.color,
+        bar_color: CYAN,
     }
 }
 
@@ -437,66 +500,77 @@ mod tests {
         assert!(matches!(state, State::Contracting { progress, .. } if progress == 0.75));
     }
 
-    // Test Appearance
+    // Test Style
     #[test]
-    fn test_appearance_default() {
-        let appearance = Appearance::default();
-        assert_eq!(appearance.track_color, Color::TRANSPARENT);
-        assert_eq!(appearance.bar_color, Color::BLACK);
+    fn test_style_default() {
+        let style = Style::default();
+        assert_eq!(style.track_color, Color::TRANSPARENT);
+        assert_eq!(style.bar_color, Color::BLACK);
     }
 
     #[test]
-    fn test_appearance_custom() {
-        let appearance = Appearance {
+    fn test_style_custom() {
+        let style = Style {
             track_color: Color::WHITE,
             bar_color: Color::from_rgb(1.0, 0.0, 0.0),
         };
-        assert_eq!(appearance.track_color, Color::WHITE);
-        assert_eq!(appearance.bar_color.r, 1.0);
-        assert_eq!(appearance.bar_color.g, 0.0);
-        assert_eq!(appearance.bar_color.b, 0.0);
+        assert_eq!(style.track_color, Color::WHITE);
+        assert_eq!(style.bar_color.r, 1.0);
+        assert_eq!(style.bar_color.g, 0.0);
+        assert_eq!(style.bar_color.b, 0.0);
     }
 
     #[test]
-    fn test_appearance_clone() {
-        let appearance = Appearance {
+    fn test_style_clone() {
+        let style = Style {
             track_color: Color::WHITE,
             bar_color: Color::BLACK,
         };
-        let cloned = appearance;
+        let cloned = style;
         assert_eq!(cloned.track_color, Color::WHITE);
         assert_eq!(cloned.bar_color, Color::BLACK);
     }
 
     #[test]
-    fn test_appearance_debug() {
-        let appearance = Appearance::default();
-        let debug_str = format!("{:?}", appearance);
-        assert!(debug_str.contains("Appearance"));
+    fn test_style_debug() {
+        let style = Style::default();
+        let debug_str = format!("{:?}", style);
+        assert!(debug_str.contains("Style"));
     }
 
-    // Test StyleSheet implementation for iced::Theme
+    // Test Catalog implementation for iced::Theme
     #[test]
-    fn test_theme_stylesheet_appearance() {
-        let theme = iced::Theme::Dark;
-        let appearance = theme.appearance(&());
+    fn test_theme_catalog_style() {
+        let theme = Theme::Dark;
+        let class = <Theme as Catalog>::default();
+        let style = theme.style(&class);
         // bar_color should be CYAN
-        assert_eq!(appearance.bar_color, CYAN);
+        assert_eq!(style.bar_color, CYAN);
         // track_color should be from the theme palette (not transparent or default)
-        assert_ne!(appearance.track_color, Color::TRANSPARENT);
+        assert_ne!(style.track_color, Color::TRANSPARENT);
     }
 
     #[test]
-    fn test_theme_stylesheet_light() {
-        let theme = iced::Theme::Light;
-        let appearance = theme.appearance(&());
-        assert_eq!(appearance.bar_color, CYAN);
+    fn test_theme_catalog_light() {
+        let theme = Theme::Light;
+        let class = <Theme as Catalog>::default();
+        let style = theme.style(&class);
+        assert_eq!(style.bar_color, CYAN);
+    }
+
+    // Test style functions
+    #[test]
+    fn test_default_style_fn() {
+        let theme = Theme::Dark;
+        let style = default(&theme);
+        assert_eq!(style.bar_color, CYAN);
+        assert_ne!(style.track_color, Color::TRANSPARENT);
     }
 
     // Test Linear struct and builder methods
     #[test]
     fn test_linear_new() {
-        let linear: Linear<iced::Theme> = Linear::new();
+        let linear: Linear<Theme> = Linear::new();
         assert_eq!(linear.width, Length::Fixed(100.0));
         assert_eq!(linear.height, Length::Fixed(4.0));
         assert_eq!(linear.cycle_duration, Duration::from_millis(500));
@@ -504,65 +578,66 @@ mod tests {
 
     #[test]
     fn test_linear_default() {
-        let linear: Linear<iced::Theme> = Linear::default();
+        let linear: Linear<Theme> = Linear::default();
         assert_eq!(linear.width, Length::Fixed(100.0));
         assert_eq!(linear.height, Length::Fixed(4.0));
     }
 
     #[test]
     fn test_linear_width() {
-        let linear: Linear<iced::Theme> = Linear::new().width(Length::Fixed(200.0));
+        let linear: Linear<Theme> = Linear::new().width(Length::Fixed(200.0));
         assert_eq!(linear.width, Length::Fixed(200.0));
     }
 
     #[test]
     fn test_linear_width_fill() {
-        let linear: Linear<iced::Theme> = Linear::new().width(Length::Fill);
+        let linear: Linear<Theme> = Linear::new().width(Length::Fill);
         assert_eq!(linear.width, Length::Fill);
     }
 
     #[test]
     fn test_linear_height() {
-        let linear: Linear<iced::Theme> = Linear::new().height(Length::Fixed(10.0));
+        let linear: Linear<Theme> = Linear::new().height(Length::Fixed(10.0));
         assert_eq!(linear.height, Length::Fixed(10.0));
     }
 
     #[test]
     fn test_linear_height_shrink() {
-        let linear: Linear<iced::Theme> = Linear::new().height(Length::Shrink);
+        let linear: Linear<Theme> = Linear::new().height(Length::Shrink);
         assert_eq!(linear.height, Length::Shrink);
     }
 
     #[test]
     fn test_linear_style() {
-        let linear: Linear<iced::Theme> = Linear::new().style(());
-        assert_eq!(linear.style, ());
+        let linear: Linear<Theme> = Linear::new().style(|_theme| Style::default());
+        // Just verify it compiles and runs - can't easily compare closures
+        assert_eq!(linear.width, Length::Fixed(100.0));
     }
 
     #[test]
     fn test_linear_easing() {
         let custom_easing = easing::emphasized_accelerate();
-        let linear: Linear<iced::Theme> = Linear::new().easing(custom_easing);
+        let linear: Linear<Theme> = Linear::new().easing(custom_easing);
         // Verify easing was set by checking it's not the default
         assert!(std::ptr::eq(linear.easing, custom_easing));
     }
 
     #[test]
     fn test_linear_cycle_duration() {
-        let linear: Linear<iced::Theme> = Linear::new().cycle_duration(Duration::from_millis(1000));
+        let linear: Linear<Theme> = Linear::new().cycle_duration(Duration::from_millis(1000));
         // cycle_duration is halved internally
         assert_eq!(linear.cycle_duration, Duration::from_millis(500));
     }
 
     #[test]
     fn test_linear_cycle_duration_custom() {
-        let linear: Linear<iced::Theme> = Linear::new().cycle_duration(Duration::from_secs(2));
+        let linear: Linear<Theme> = Linear::new().cycle_duration(Duration::from_secs(2));
         assert_eq!(linear.cycle_duration, Duration::from_secs(1));
     }
 
     #[test]
     fn test_linear_builder_chain() {
-        let linear: Linear<iced::Theme> = Linear::new()
+        let linear: Linear<Theme> = Linear::new()
             .width(Length::Fixed(300.0))
             .height(Length::Fixed(8.0))
             .cycle_duration(Duration::from_millis(800));
@@ -577,11 +652,11 @@ mod tests {
     fn test_linear_size() {
         use iced::advanced::Widget;
 
-        let linear: Linear<iced::Theme> = Linear::new()
+        let linear: Linear<Theme> = Linear::new()
             .width(Length::Fixed(150.0))
             .height(Length::Fixed(6.0));
 
-        let size = <Linear<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::size(&linear);
+        let size = <Linear<Theme> as Widget<(), Theme, iced::Renderer>>::size(&linear);
         assert_eq!(size.width, Length::Fixed(150.0));
         assert_eq!(size.height, Length::Fixed(6.0));
     }
@@ -591,8 +666,8 @@ mod tests {
         use iced::advanced::Widget;
         use iced::advanced::widget::tree;
 
-        let linear: Linear<iced::Theme> = Linear::new();
-        let tag = <Linear<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::tag(&linear);
+        let linear: Linear<Theme> = Linear::new();
+        let tag = <Linear<Theme> as Widget<(), Theme, iced::Renderer>>::tag(&linear);
         assert_eq!(tag, tree::Tag::of::<State>());
     }
 
@@ -600,9 +675,8 @@ mod tests {
     fn test_linear_state() {
         use iced::advanced::Widget;
 
-        let linear: Linear<iced::Theme> = Linear::new();
-        let state =
-            <Linear<iced::Theme> as Widget<(), iced::Theme, iced::Renderer>>::state(&linear);
+        let linear: Linear<Theme> = Linear::new();
+        let state = <Linear<Theme> as Widget<(), Theme, iced::Renderer>>::state(&linear);
         // State should be created (we can't easily inspect it, but it shouldn't panic)
         let _ = state;
     }
