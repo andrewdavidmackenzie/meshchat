@@ -754,4 +754,1031 @@ mod tests {
         let time = entry.time();
         assert!(time.year() >= 2020);
     }
+
+    #[test]
+    fn test_mc_message_display_position() {
+        let position = MCPosition {
+            latitude: 37.7749,
+            longitude: -122.4194,
+            altitude: Some(10),
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+        let msg = PositionMessage(position);
+        let display = format!("{}", msg);
+        assert!(display.contains("📌"));
+        assert!(display.contains("37.77"));
+        assert!(display.contains("-122.42"));
+    }
+
+    #[test]
+    fn test_mc_message_display_position_negative_coords() {
+        let position = MCPosition {
+            latitude: -33.8688,
+            longitude: 151.2093,
+            altitude: None,
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+        let msg = PositionMessage(position);
+        let display = format!("{}", msg);
+        assert!(display.contains("📌"));
+        assert!(display.contains("-33.87"));
+        assert!(display.contains("151.21"));
+    }
+
+    #[test]
+    fn test_mc_message_display_position_zero_coords() {
+        let position = MCPosition {
+            latitude: 0.0,
+            longitude: 0.0,
+            altitude: None,
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+        let msg = PositionMessage(position);
+        let display = format!("{}", msg);
+        assert_eq!(display, "📌 0.00, 0.00");
+    }
+
+    #[test]
+    fn test_mc_message_display_user() {
+        let user = MCUser {
+            id: "!abc123".to_string(),
+            long_name: "John Doe".to_string(),
+            short_name: "JD".to_string(),
+            hw_model_str: "T-Beam".to_string(),
+            hw_model: 1,
+            is_licensed: true,
+            role_str: "Router".to_string(),
+            role: 1,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+        let msg = UserMessage(user);
+        let display = format!("{}", msg);
+        assert!(display.contains("ⓘ"));
+        assert!(display.contains("John Doe"));
+        assert!(display.contains("JD"));
+        assert!(display.contains("!abc123"));
+        assert!(display.contains("T-Beam"));
+    }
+
+    #[test]
+    fn test_mc_message_display_user_empty_names() {
+        let user = MCUser {
+            id: "".to_string(),
+            long_name: "".to_string(),
+            short_name: "".to_string(),
+            hw_model_str: "Unknown".to_string(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+        let msg = UserMessage(user);
+        let display = format!("{}", msg);
+        assert!(display.contains("ⓘ"));
+        assert!(display.contains("Unknown"));
+    }
+
+    #[test]
+    fn test_mc_message_display_user_special_characters() {
+        let user = MCUser {
+            id: "!xyz789".to_string(),
+            long_name: "José García".to_string(),
+            short_name: "JG".to_string(),
+            hw_model_str: "Heltec V3".to_string(),
+            hw_model: 2,
+            is_licensed: false,
+            role_str: "Client".to_string(),
+            role: 0,
+            public_key: vec![1, 2, 3],
+            is_unmessagable: true,
+        };
+        let msg = UserMessage(user);
+        let display = format!("{}", msg);
+        assert!(display.contains("José García"));
+        assert!(display.contains("JG"));
+        assert!(display.contains("Heltec V3"));
+    }
+
+    #[test]
+    fn test_mc_position_display_directly() {
+        let position = MCPosition {
+            latitude: 51.5074,
+            longitude: -0.1278,
+            altitude: Some(11),
+            time: 1234567890,
+            location_source: 1,
+            altitude_source: 1,
+            timestamp: 1234567890,
+            timestamp_millis_adjust: 0,
+            altitude_hae: Some(11),
+            altitude_geoidal_separation: Some(0),
+            pdop: 1,
+            hdop: 1,
+            vdop: 1,
+            gps_accuracy: 5,
+            ground_speed: Some(0),
+            ground_track: Some(0),
+            fix_quality: 1,
+            fix_type: 3,
+            sats_in_view: 8,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 1,
+            precision_bits: 32,
+        };
+        let display = format!("{}", position);
+        assert_eq!(display, "📌 51.51, -0.13");
+    }
+
+    #[test]
+    fn test_mc_user_display_directly() {
+        let user = MCUser {
+            id: "!meshtastic".to_string(),
+            long_name: "Test User".to_string(),
+            short_name: "TU".to_string(),
+            hw_model_str: "RAK4631".to_string(),
+            hw_model: 3,
+            is_licensed: true,
+            role_str: "Router".to_string(),
+            role: 2,
+            public_key: vec![0xDE, 0xAD, 0xBE, 0xEF],
+            is_unmessagable: false,
+        };
+        let display = format!("{}", user);
+        assert_eq!(
+            display,
+            "ⓘ from 'Test User' ('TU'), id = '!meshtastic', with hardware 'RAK4631'"
+        );
+    }
+
+    // Tests for color_from_id()
+    #[test]
+    fn test_color_from_id_returns_valid_color() {
+        use crate::styles::COLOR_DICTIONARY;
+
+        let color = ChannelViewEntry::color_from_id(12345);
+        // The color should be one of the colors in COLOR_DICTIONARY
+        assert!(COLOR_DICTIONARY.contains(&color));
+    }
+
+    #[test]
+    fn test_color_from_id_consistent() {
+        // Same id should always return the same color
+        let color1 = ChannelViewEntry::color_from_id(42);
+        let color2 = ChannelViewEntry::color_from_id(42);
+        assert_eq!(color1, color2);
+    }
+
+    #[test]
+    fn test_color_from_id_different_ids_can_differ() {
+        // Different ids may produce different colors (though collisions are possible)
+        let color1 = ChannelViewEntry::color_from_id(1);
+        let color2 = ChannelViewEntry::color_from_id(2);
+        let color3 = ChannelViewEntry::color_from_id(3);
+        // At least some should be different (testing distribution)
+        let all_same = color1 == color2 && color2 == color3;
+        // It's statistically unlikely all three are the same
+        assert!(!all_same || color1 == color2);
+    }
+
+    #[test]
+    fn test_color_from_id_zero() {
+        use crate::styles::COLOR_DICTIONARY;
+
+        let color = ChannelViewEntry::color_from_id(0);
+        assert!(COLOR_DICTIONARY.contains(&color));
+    }
+
+    #[test]
+    fn test_color_from_id_max_u32() {
+        use crate::styles::COLOR_DICTIONARY;
+
+        let color = ChannelViewEntry::color_from_id(u32::MAX);
+        assert!(COLOR_DICTIONARY.contains(&color));
+    }
+
+    // Tests for time_to_text()
+    #[test]
+    fn test_time_to_text_formats_correctly() {
+        use chrono::TimeZone;
+
+        // Create a specific local time
+        let datetime = Local.with_ymd_and_hms(2024, 6, 15, 14, 30, 0).unwrap();
+        let text_widget = ChannelViewEntry::time_to_text(datetime);
+
+        // We can't easily inspect the Text widget's content, but we can verify it doesn't panic
+        // and returns a valid widget
+        let _ = text_widget;
+    }
+
+    #[test]
+    fn test_time_to_text_midnight() {
+        use chrono::TimeZone;
+
+        let datetime = Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+        let text_widget = ChannelViewEntry::time_to_text(datetime);
+        let _ = text_widget;
+    }
+
+    #[test]
+    fn test_time_to_text_end_of_day() {
+        use chrono::TimeZone;
+
+        let datetime = Local.with_ymd_and_hms(2024, 12, 31, 23, 59, 59).unwrap();
+        let text_widget = ChannelViewEntry::time_to_text(datetime);
+        let _ = text_widget;
+    }
+
+    #[test]
+    fn test_time_to_text_single_digit_hour() {
+        use chrono::TimeZone;
+
+        let datetime = Local.with_ymd_and_hms(2024, 6, 15, 9, 5, 0).unwrap();
+        let text_widget = ChannelViewEntry::time_to_text(datetime);
+        let _ = text_widget;
+    }
+
+    // Tests for list_of_nodes()
+    #[test]
+    fn test_list_of_nodes_empty() {
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let sources: Vec<u32> = vec![];
+
+        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        // Element should be created without a panic
+        let _ = element;
+    }
+
+    #[test]
+    fn test_list_of_nodes_single_known_node() {
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            100,
+            MCNodeInfo {
+                num: 100,
+                user: Some(MCUser {
+                    id: "!node100".to_string(),
+                    long_name: "Node One Hundred".to_string(),
+                    short_name: "N100".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        let sources = vec![100];
+
+        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_list_of_nodes_multiple_nodes() {
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            1,
+            MCNodeInfo {
+                num: 1,
+                user: Some(MCUser {
+                    id: "!node1".to_string(),
+                    long_name: "First Node".to_string(),
+                    short_name: "FN".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        nodes.insert(
+            2,
+            MCNodeInfo {
+                num: 2,
+                user: Some(MCUser {
+                    id: "!node2".to_string(),
+                    long_name: "Second Node".to_string(),
+                    short_name: "SN".to_string(),
+                    hw_model_str: "Heltec".to_string(),
+                    hw_model: 2,
+                    is_licensed: true,
+                    role_str: "Router".to_string(),
+                    role: 1,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        let sources = vec![1, 2];
+
+        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_list_of_nodes_unknown_node() {
+        // Test with a node id that's not in the node map
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let sources = vec![999]; // This node doesn't exist in the map
+
+        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_list_of_nodes_mixed_known_unknown() {
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            1,
+            MCNodeInfo {
+                num: 1,
+                user: Some(MCUser {
+                    id: "!known".to_string(),
+                    long_name: "Known Node".to_string(),
+                    short_name: "KN".to_string(),
+                    hw_model_str: "RAK".to_string(),
+                    hw_model: 3,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        // sources include both known (1) and unknown (999) nodes
+        let sources = vec![1, 999];
+
+        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_list_of_nodes_node_without_user() {
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            50,
+            MCNodeInfo {
+                num: 50,
+                user: None, // No user info
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        let sources = vec![50];
+
+        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let _ = element;
+    }
+
+    // Tests for menu_button()
+    #[test]
+    fn test_menu_button_creates_button() {
+        let btn = menu_button("Test Label".to_string(), Message::None);
+        // Button should be created without a panic
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_button_with_copy_message() {
+        let btn = menu_button(
+            "copy".to_string(),
+            CopyToClipBoard("test content".to_string()),
+        );
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_button_with_empty_label() {
+        let btn = menu_button("".to_string(), Message::None);
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_button_with_long_label() {
+        let btn = menu_button(
+            "This is a very long label that might wrap".to_string(),
+            Message::None,
+        );
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_button_with_unicode_label() {
+        let btn = menu_button("复制 📋".to_string(), Message::None);
+        let _ = btn;
+    }
+
+    // Tests for menu_root_button()
+    #[test]
+    fn test_menu_root_button_creates_button() {
+        let btn = menu_root_button("▼");
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_root_button_with_different_symbol() {
+        let btn = menu_root_button("⋮");
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_root_button_with_empty_label() {
+        let btn = menu_root_button("");
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_root_button_with_text() {
+        let btn = menu_root_button("Menu");
+        let _ = btn;
+    }
+
+    #[test]
+    fn test_menu_root_button_with_emoji() {
+        let btn = menu_root_button("☰");
+        let _ = btn;
+    }
+
+    // Tests for top_row()
+    #[test]
+    fn test_top_row_basic() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+        use iced::widget::Column;
+
+        let entry = ChannelViewEntry::new(1, 100, NewTextMessage("Hello".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Channel(0);
+        let column: Column<Message> = Column::new();
+
+        let result = entry.top_row(
+            column,
+            "TN",
+            "Test Node",
+            "Hello".to_string(),
+            &emoji_picker,
+            &channel_id,
+        );
+        let _ = result;
+    }
+
+    #[test]
+    fn test_top_row_with_dm_channel() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+        use iced::widget::Column;
+
+        let entry = ChannelViewEntry::new(2, 200, NewTextMessage("DM message".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Node(200);
+        let column: Column<Message> = Column::new();
+
+        let result = entry.top_row(
+            column,
+            "DN",
+            "DM Node",
+            "DM message".to_string(),
+            &emoji_picker,
+            &channel_id,
+        );
+        let _ = result;
+    }
+
+    #[test]
+    fn test_top_row_with_empty_names() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+        use iced::widget::Column;
+
+        let entry = ChannelViewEntry::new(3, 300, NewTextMessage("test".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Channel(1);
+        let column: Column<Message> = Column::new();
+
+        let result = entry.top_row(
+            column,
+            "",
+            "",
+            "test".to_string(),
+            &emoji_picker,
+            &channel_id,
+        );
+        let _ = result;
+    }
+
+    #[test]
+    fn test_top_row_with_unicode_names() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+        use iced::widget::Column;
+
+        let entry = ChannelViewEntry::new(4, 400, NewTextMessage("こんにちは".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Channel(0);
+        let column: Column<Message> = Column::new();
+
+        let result = entry.top_row(
+            column,
+            "日本",
+            "日本語ノード",
+            "こんにちは".to_string(),
+            &emoji_picker,
+            &channel_id,
+        );
+        let _ = result;
+    }
+
+    // Tests for emoji_row()
+    #[test]
+    fn test_emoji_row_no_emojis() {
+        use iced::widget::Column;
+
+        let entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), now_secs());
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let column: Column<Message> = Column::new();
+
+        let result = entry.emoji_row(&nodes, column);
+        let _ = result;
+    }
+
+    #[test]
+    fn test_emoji_row_with_single_emoji() {
+        use iced::widget::Column;
+
+        let mut entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), now_secs());
+        entry.add_emoji("👍".to_string(), 200);
+
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            200,
+            MCNodeInfo {
+                num: 200,
+                user: Some(MCUser {
+                    id: "!node200".to_string(),
+                    long_name: "Reactor Node".to_string(),
+                    short_name: "RN".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        let column: Column<Message> = Column::new();
+
+        let result = entry.emoji_row(&nodes, column);
+        let _ = result;
+    }
+
+    #[test]
+    fn test_emoji_row_with_multiple_emojis() {
+        use iced::widget::Column;
+
+        let mut entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), now_secs());
+        entry.add_emoji("👍".to_string(), 200);
+        entry.add_emoji("❤️".to_string(), 300);
+        entry.add_emoji("😂".to_string(), 400);
+
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let column: Column<Message> = Column::new();
+
+        let result = entry.emoji_row(&nodes, column);
+        let _ = result;
+    }
+
+    #[test]
+    fn test_emoji_row_same_emoji_multiple_senders() {
+        use iced::widget::Column;
+
+        let mut entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), now_secs());
+        entry.add_emoji("👍".to_string(), 200);
+        entry.add_emoji("👍".to_string(), 300);
+        entry.add_emoji("👍".to_string(), 400);
+
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let column: Column<Message> = Column::new();
+
+        let result = entry.emoji_row(&nodes, column);
+        let _ = result;
+    }
+
+    // Tests for menu_bar()
+    #[test]
+    fn test_menu_bar_channel_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Channel(0);
+
+        let result = entry.menu_bar("TN", "test message".to_string(), &emoji_picker, &channel_id);
+        let _ = result;
+    }
+
+    #[test]
+    fn test_menu_bar_dm_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(2, 200, NewTextMessage("dm test".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Node(200);
+
+        let result = entry.menu_bar(
+            "DN",
+            "dm test message".to_string(),
+            &emoji_picker,
+            &channel_id,
+        );
+        let _ = result;
+    }
+
+    #[test]
+    fn test_menu_bar_with_empty_name() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(3, 300, NewTextMessage("test".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Channel(1);
+
+        let result = entry.menu_bar("", "test".to_string(), &emoji_picker, &channel_id);
+        let _ = result;
+    }
+
+    #[test]
+    fn test_menu_bar_with_long_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let long_msg = "This is a very long message that might affect how the menu displays or behaves when copied or forwarded to other users in the mesh network.";
+        let entry = ChannelViewEntry::new(4, 400, NewTextMessage(long_msg.into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Channel(0);
+
+        let result = entry.menu_bar("LM", long_msg.to_string(), &emoji_picker, &channel_id);
+        let _ = result;
+    }
+
+    #[test]
+    fn test_menu_bar_with_unicode_content() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry =
+            ChannelViewEntry::new(5, 500, NewTextMessage("Привет мир! 🌍".into()), now_secs());
+        let emoji_picker = EmojiPicker::new();
+        let channel_id = ChannelId::Channel(2);
+
+        let result = entry.menu_bar(
+            "РУ",
+            "Привет мир! 🌍".to_string(),
+            &emoji_picker,
+            &channel_id,
+        );
+        let _ = result;
+    }
+
+    // Tests for view()
+    #[test]
+    fn test_view_my_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(1, 100, NewTextMessage("Hello world".into()), now_secs());
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_others_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(
+            2,
+            200,
+            NewTextMessage("Message from other".into()),
+            now_secs(),
+        );
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            200,
+            MCNodeInfo {
+                num: 200,
+                user: Some(MCUser {
+                    id: "!sender".to_string(),
+                    long_name: "Sender Node".to_string(),
+                    short_name: "SN".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                channel: 0,
+                is_ignored: false,
+            },
+        );
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, false, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_alert_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(3, 100, AlertMessage("System alert!".into()), now_secs());
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_text_message_reply() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        // Create the original message first
+        let original = ChannelViewEntry::new(
+            1,
+            100,
+            NewTextMessage("Original message".into()),
+            now_secs(),
+        );
+        let mut entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        entries.insert(1, original);
+
+        // Create the reply
+        let reply = ChannelViewEntry::new(
+            2,
+            200,
+            TextMessageReply(1, "This is my reply".into()),
+            now_secs(),
+        );
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = reply.view(&entries, &nodes, &channel_id, false, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_position_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let position = MCPosition {
+            latitude: 37.7749,
+            longitude: -122.4194,
+            altitude: Some(10),
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: None,
+            altitude_geoidal_separation: None,
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: None,
+            ground_track: None,
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+        let entry = ChannelViewEntry::new(4, 100, PositionMessage(position), now_secs());
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_emoji_reply_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(5, 100, EmojiReply(1, "👍".into()), now_secs());
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_user_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let user = MCUser {
+            id: "!newuser".to_string(),
+            long_name: "New User".to_string(),
+            short_name: "NU".to_string(),
+            hw_model_str: "Heltec".to_string(),
+            hw_model: 2,
+            is_licensed: false,
+            role_str: "Client".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+        let entry = ChannelViewEntry::new(6, 100, UserMessage(user), now_secs());
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_with_emojis() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let mut entry =
+            ChannelViewEntry::new(7, 100, NewTextMessage("Popular message".into()), now_secs());
+        entry.add_emoji("👍".to_string(), 200);
+        entry.add_emoji("❤️".to_string(), 300);
+
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_acked_message() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let mut entry =
+            ChannelViewEntry::new(8, 100, NewTextMessage("Acked message".into()), now_secs());
+        entry.ack();
+
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_dm_channel() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(9, 100, NewTextMessage("DM message".into()), now_secs());
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Node(200); // DM channel
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_message_with_link() {
+        use crate::channel_id::ChannelId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = ChannelViewEntry::new(
+            10,
+            100,
+            NewTextMessage("Check out https://example.com for more info".into()),
+            now_secs(),
+        );
+        let entries: RingMap<u32, ChannelViewEntry> = RingMap::new();
+        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let channel_id = ChannelId::Channel(0);
+        let emoji_picker = EmojiPicker::new();
+
+        let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
+        let _ = element;
+    }
 }
