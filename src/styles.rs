@@ -1,12 +1,11 @@
 #![allow(dead_code)] // for extra colors we have generated but not used yet
 
-use crate::battery::Appearance as BatteryAppearance;
 use iced::border::Radius;
 use iced::widget::button::Status;
 use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
-use iced::widget::{button, container, scrollable, text, text_input};
+use iced::widget::{button, scrollable, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 use iced_aw::menu;
 use iced_aw::style::colors::RED;
@@ -342,7 +341,7 @@ const CONTAINER_BORDER_ACTIVE: Border = Border {
     color: CYAN,
 };
 
-pub fn container_style(_theme: &Theme) -> container::Style {
+pub fn container_style(_theme: &Theme) -> Style {
     Style {
         text_color: Some(Color::WHITE),
         background: Some(Color::TRANSPARENT.into()),
@@ -364,6 +363,14 @@ const TAB_BUTTON_BORDER: Border = Border {
     width: 2.0,
     color: CYAN,
 };
+
+pub fn bubble_style(_theme: &Theme, mine: bool) -> Style {
+    if mine {
+        MY_MESSAGE_BUBBLE_STYLE
+    } else {
+        OTHERS_MESSAGE_BUBBLE_STYLE
+    }
+}
 
 pub fn emoji_tab_style(_theme: &Theme, status: Status, selected: bool) -> button::Style {
     match status {
@@ -550,33 +557,6 @@ pub fn menu_button_style(_theme: &Theme, _status: iced_aw::style::Status) -> men
     }
 }
 
-/// Battery widget style using dark theme colors
-/// Returns the dark style appearance for the battery widget
-pub fn battery_style(_theme: &Theme) -> BatteryAppearance {
-    BatteryAppearance {
-        background_color: COLOR_GRAY_10,   // Very dark background
-        border_color: COLOR_GRAY_80,       // Light gray border
-        charging_color: COLOR_GREEN,       // Green for charging
-        charge_high_color: COLOR_GREEN,    // Dark green for high charge (>50%)
-        charge_medium_color: COLOR_ORANGE, // Orange for medium charge (20-50%)
-        charge_low_color: COLOR_RED,       // Dark red for low charge (<20%)
-        unknown_color: COLOR_GRAY_40,      // Medium gray for unknown state
-    }
-}
-
-/// Dark variant battery style
-pub fn battery_style_dark(_theme: &Theme) -> BatteryAppearance {
-    BatteryAppearance {
-        background_color: COLOR_GRAY_10,
-        border_color: COLOR_GRAY_80,
-        charging_color: COLOR_GREEN,
-        charge_high_color: COLOR_GREEN,
-        charge_medium_color: COLOR_ORANGE,
-        charge_low_color: COLOR_RED,
-        unknown_color: COLOR_GRAY_40,
-    }
-}
-
 pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable::Style {
     let scrollbar_color = match status {
         scrollable::Status::Active { .. } => Background::Color(Color::TRANSPARENT),
@@ -621,6 +601,19 @@ pub fn scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scrollable
             shadow: NO_SHADOW,
             icon: Default::default(),
         },
+    }
+}
+
+pub fn modal_style(_theme: &Theme) -> Style {
+    Style {
+        background: Some(
+            Color {
+                a: 0.8,
+                ..Color::BLACK
+            }
+            .into(),
+        ),
+        ..Style::default()
     }
 }
 

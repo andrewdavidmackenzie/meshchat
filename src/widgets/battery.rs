@@ -354,6 +354,33 @@ pub struct Appearance {
     pub unknown_color: Color,
 }
 
+/*
+pub fn battery_style(_theme: &Theme) -> crate::battery::Appearance {
+    crate::battery::Appearance {
+        background_color: COLOR_GRAY_10,   // Very dark background
+        border_color: COLOR_GRAY_80,       // Light gray border
+        charging_color: COLOR_GREEN,       // Green for charging
+        charge_high_color: COLOR_GREEN,    // Dark green for high charge (>50%)
+        charge_medium_color: COLOR_ORANGE, // Orange for medium charge (20-50%)
+        charge_low_color: COLOR_RED,       // Dark red for low charge (<20%)
+        unknown_color: COLOR_GRAY_40,      // Medium gray for unknown state
+    }
+}
+
+/// Returns the dark style appearance for the battery widget
+pub fn battery_style_dark(_theme: &Theme) -> crate::battery::Appearance {
+    crate::battery::Appearance {
+        background_color: COLOR_GRAY_10,
+        border_color: COLOR_GRAY_80,
+        charging_color: COLOR_GREEN,
+        charge_high_color: COLOR_GREEN,
+        charge_medium_color: COLOR_ORANGE,
+        charge_low_color: COLOR_RED,
+        unknown_color: COLOR_GRAY_40,
+    }
+}
+*/
+
 impl Default for Appearance {
     fn default() -> Self {
         Self {
@@ -381,7 +408,6 @@ impl StyleSheet for iced::Theme {
     type Style = ();
 
     fn appearance(&self, _style: &Self::Style) -> Appearance {
-        // Use dark theme colors for the battery widget
         Appearance {
             background_color: Color::from_rgb(0.05, 0.05, 0.05), // Very dark background
             border_color: Color::from_rgb(0.4, 0.4, 0.4),        // Light gray border
