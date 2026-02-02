@@ -15,9 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-15, windows-latest, ubuntu-24.04-arm ]
-        # Add back in "windows-11-arm" when https://github.com/andrewdavidmackenzie/meshchat/issues/169
-        # is fixed
+        os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm ]
 
     steps:
       - name: Checkout
@@ -48,6 +46,7 @@ jobs:
 
       - name: Install WiX
         if: runner.os == 'Windows'
+        continue-on-error: true # windows-arm will probably fail
         run: dotnet tool install --global wix
 
       - name: Install cargo wix for Windows
