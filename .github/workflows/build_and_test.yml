@@ -41,7 +41,7 @@ jobs:
         run: cargo install cargo-bundle
 
       - name: Build bundle
-        run: cargo bundle --release
+        run: cargo bundle --release --format msi
       ########### Testing
 
 
