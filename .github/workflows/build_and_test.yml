@@ -81,7 +81,7 @@ jobs:
 
       - name: Run cargo wix on Windows
         if: runner.os == 'Windows'
-        run: cargo wix --verbose
+        run: cargo wix --verbose --nocapture
       #########Testing
 
       - name: debug build
