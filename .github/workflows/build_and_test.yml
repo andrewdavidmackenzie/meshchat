@@ -21,7 +21,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm ]
+        os: [ windows-latest ]
+        #os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm ]
+    ########### Testing
 
     steps:
       - name: Checkout
@@ -33,6 +35,15 @@ jobs:
           components: llvm-tools-preview
 
       - uses: Swatinem/rust-cache@v2
+
+      ########### Testing
+      - name: Install cargo bundle
+        run: cargo install cargo-bundle
+
+      - name: Build bundle
+        run: cargo bundle --release
+      ########### Testing
+
 
       - name: Install grcov
         if: runner.os != 'Windows'
