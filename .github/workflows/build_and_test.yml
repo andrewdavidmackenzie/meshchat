@@ -21,7 +21,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm ]
+        os: [ windows-11-arm ]
+        #########Testing
+        #os: [ ubuntu-latest, windows-latest, macos-15, windows-11-arm, ubuntu-24.04-arm ]
 
     steps:
       - name: Checkout
@@ -55,10 +57,23 @@ jobs:
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v1.1
 
-      - name: Install WiX
+      - name: Cache WiX v3
         if: runner.os == 'Windows'
-        continue-on-error: true # windows-arm will probably fail
-        run: dotnet tool install --global wix
+        id: cache-wix
+        uses: actions/cache@v4
+        with:
+          path: ~/.wix/bin
+          key: wix-3.11.2
+
+      - name: Install WiX v3
+        if: runner.os == 'Windows' && steps.cache-wix.outputs.cache-hit != 'true'
+        run: |
+          curl -LO https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311-binaries.zip
+          Expand-Archive wix311-binaries.zip -DestinationPath "$env:USERPROFILE\.wix\bin"
+
+      - name: Add WiX to PATH
+        if: runner.os == 'Windows'
+        run: echo "$env:USERPROFILE\.wix\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Install cargo wix for Windows
         if: runner.os == 'Windows'
