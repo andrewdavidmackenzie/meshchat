@@ -2,9 +2,9 @@ use crate::SubscriberMessage::{
     Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
 };
 use crate::SubscriptionEvent::{
-    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
-    DisconnectingEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
-    NewNodePosition, RadioNotification,
+    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
+    DisconnectedEvent, DisconnectingEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel,
+    NewNode, NewNodeInfo, NewNodePosition, RadioNotification,
 };
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
@@ -19,8 +19,9 @@ use iced::stream;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
 use meshtastic::errors::Error;
 use meshtastic::packet::{PacketReceiver, PacketRouter};
+use meshtastic::protobufs::config::PayloadVariant::Lora;
 use meshtastic::protobufs::from_radio::PayloadVariant::{
-    Channel, ClientNotification, MyInfo, NodeInfo, Packet,
+    Channel, ClientNotification, Config, MyInfo, NodeInfo, Packet,
 };
 use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
@@ -73,6 +74,21 @@ impl MyRouter {
         }
     }
 
+    fn pascal_case(s: &str) -> String {
+        s.split('_')
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first
+                        .to_uppercase()
+                        .chain(chars.map(|c| c.to_ascii_lowercase()))
+                        .collect(),
+                }
+            })
+            .collect()
+    }
+
     /// Handle [FromRadio] packets received from the radio, filter down to packets we know the App/Gui
     /// is interested in and forward those to the Gui using the provided `gui_sender`
     async fn handle_a_packet_from_radio(&mut self, packet: Box<FromRadio>) {
@@ -118,6 +134,22 @@ impl MyRouter {
                     ))
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+            }
+            Some(Config(config)) => {
+                if let Some(Lora(lora_config)) = config.payload_variant.as_ref()
+                    && lora_config.use_preset
+                {
+                    // From docs: If bandwidth is specified, do not use modem_config
+                    if lora_config.bandwidth == 0 {
+                        self.gui_sender
+                            .send(ChannelName(
+                                0,
+                                Self::pascal_case(lora_config.modem_preset().as_str_name()),
+                            ))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
+                }
             }
             _ => {}
         }

@@ -2,8 +2,8 @@ use crate::SubscriberMessage::{
     Connect, Disconnect, SendEmojiReply, SendPosition, SendText, SendUser,
 };
 use crate::SubscriptionEvent::{
-    ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent, DisconnectingEvent,
-    NotReady, Ready,
+    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
+    DisconnectingEvent, NotReady, Ready,
 };
 use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
@@ -398,6 +398,10 @@ impl DeviceView {
                 }
                 Task::none()
             }
+            ChannelName(channel_number, name) => {
+                self.set_channel_name(channel_number, name);
+                Task::none()
+            }
         }
     }
 
@@ -440,6 +444,13 @@ impl DeviceView {
                 self.channel_views
                     .insert(channel_id, ChannelView::new(channel_id, my_node_num));
             }
+        }
+    }
+
+    /// set the name of an existing channel if it can be found using its number
+    pub fn set_channel_name(&mut self, channel_number: i32, name: String) {
+        if let Some(channel) = self.channels.get_mut(channel_number as usize) {
+            channel.name = name;
         }
     }
 
