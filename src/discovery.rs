@@ -116,7 +116,7 @@ async fn announce_device_changes(
         }
     }
 
-    println!("Found: {:?}", ble_devices_now);
+    //println!("Found: {:?}", ble_devices_now);
 
     let (found, lost) = process_device_changes(&ble_devices_now, mesh_radio_devices);
 
