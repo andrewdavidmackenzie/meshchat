@@ -1,6 +1,6 @@
 # ![MeshChat Logo](assets/images/small_icon.png) MeshChat
 
-[![codecov](https://codecov.io/gh/andrewdavidmackenzie/meshchat/graph/badge.svg?token=VYddKXC8mh)](https://codecov.io/gh/andrewdavidmackenzie/meshchat)
+[![codecov](https://codecov.io/gh/andrewdavidmackenzie/meshchat/branch/main/graph/badge.svg?token=VYddKXC8mh)](https://codecov.io/gh/andrewdavidmackenzie/meshchat)
 
 Meshchat is an Iced cross-platform GUI application to interact with Meshtastic LoRa radios:
 
