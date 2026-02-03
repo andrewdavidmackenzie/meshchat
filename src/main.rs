@@ -7,9 +7,10 @@ use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
     ConfigLoaded, CopyToClipBoard, DeviceAndChannelChange, DeviceListViewEvent, DeviceViewEvent,
     Exit, HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
-    RemoveNodeAlias, RemoveNotification, ShowLocation, ShowUserInfo, ToggleAutoReconnect,
-    ToggleAutoUpdate, ToggleNodeFavourite, ToggleShowPositionUpdates, ToggleShowUserUpdates,
-    WindowEvent,
+    RemoveNodeAlias, RemoveNotification, SetWindowPosition, SetWindowSize, ShowLocation,
+    ShowUserInfo, ToggleAutoReconnect, ToggleAutoUpdate, ToggleNodeFavourite,
+    ToggleSaveWindowPosition, ToggleSaveWindowSize, ToggleShowPositionUpdates,
+    ToggleShowUserUpdates, WindowEvent,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -30,7 +31,7 @@ use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{Column, Space, center, container, mouse_area, opaque, operation, stack, text};
 use iced::window::icon;
-use iced::{Center, Event, Font, Subscription, Task, clipboard, keyboard, window};
+use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
@@ -219,6 +220,10 @@ pub enum Message {
     ToggleShowUserUpdates,
     ToggleAutoReconnect,
     ToggleAutoUpdate,
+    ToggleSaveWindowSize,
+    SetWindowSize(Size),
+    SetWindowPosition(Option<Point>),
+    ToggleSaveWindowPosition,
     HistoryLengthSelected(HistoryLength),
     #[cfg(feature = "auto-update")]
     UpdateChecked(Result<Status, String>),
@@ -245,7 +250,13 @@ async fn check_for_update() -> Result<Status, String> {
 }
 
 fn main() -> iced::Result {
-    let mut window_settings = window::Settings::default();
+    let mut window_settings = window::Settings {
+        size: Size {
+            width: 600.0,
+            height: 800.0,
+        },
+        ..Default::default()
+    };
 
     // Try and add an icon to the window::Settings
     let icon_bytes = include_bytes!("../assets/images/icon.ico");
@@ -291,6 +302,25 @@ impl MeshChat {
         }
     }
 
+    fn window_size_change_request(size: Size) -> Task<Message> {
+        window::latest().then(move |latest| {
+            if let Some(id) = latest {
+                window::resize(id, size)
+            } else {
+                Task::none()
+            }
+        })
+    }
+
+    fn window_position_change_request(position: Point) -> Task<Message> {
+        window::latest().then(move |latest| {
+            if let Some(id) = latest {
+                window::move_to(id, position)
+            } else {
+                Task::none()
+            }
+        })
+    }
     /// Update the app state based on a message received from the GUI.
     /// This is the main function of the app, and it drives the GUI.
     /// It is called every time a message is received from the GUI, and it updates the app state
@@ -323,33 +353,38 @@ impl MeshChat {
 
                 self.config = config;
 
-                let update_task = {
-                    #[cfg(feature = "auto-update")]
-                    if self.config.auto_update_startup {
-                        Task::perform(check_for_update(), UpdateChecked)
-                    } else {
-                        Task::none()
-                    }
-                    #[cfg(not(feature = "auto-update"))]
-                    Task::none()
-                };
+                let mut tasks = vec![];
+                #[cfg(feature = "auto-update")]
+                if self.config.auto_update_startup {
+                    tasks.push(Task::perform(check_for_update(), UpdateChecked));
+                }
 
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
-                let connect_task = {
-                    if let Some(ble_device) = &self.config.ble_device
-                        && self.config.auto_reconnect
-                    {
-                        self.device_view.update(DeviceViewMessage::ConnectRequest(
-                            ble_device.clone(),
-                            self.config.channel_id,
-                        ))
-                    } else {
-                        Task::none()
-                    }
-                };
+                if let Some(ble_device) = &self.config.ble_device
+                    && self.config.auto_reconnect
+                {
+                    tasks.push(self.device_view.update(DeviceViewMessage::ConnectRequest(
+                        ble_device.clone(),
+                        self.config.channel_id,
+                    )))
+                }
 
-                Task::batch(vec![update_task, connect_task])
+                if self.config.restore_window_size
+                    && let Some(window_size) = &self.config.window_size
+                {
+                    tasks.push(Self::window_size_change_request(window_size.size()));
+                }
+
+                if self.config.restore_window_position
+                    && let Some(window_position) = &self.config.window_position
+                {
+                    tasks.push(Self::window_position_change_request(
+                        window_position.point(),
+                    ));
+                }
+
+                Task::batch(tasks)
             }
             DeviceAndChannelChange(ble_device, channel) => {
                 self.config.ble_device = ble_device;
@@ -401,31 +436,7 @@ impl MeshChat {
                 self.config.device_aliases.remove(&ble_device);
                 self.config.save_config()
             }
-            Message::Event(event) => match event {
-                Event::Keyboard(keyboard::Event::KeyPressed {
-                    key: keyboard::Key::Named(key::Named::Tab),
-                    modifiers,
-                    ..
-                }) => {
-                    if modifiers.shift() {
-                        operation::focus_previous()
-                    } else {
-                        operation::focus_next()
-                    }
-                }
-                Event::Keyboard(keyboard::Event::KeyPressed {
-                    key: keyboard::Key::Named(key::Named::Escape),
-                    ..
-                }) => {
-                    // Exit any interactive modes underway
-                    self.showing_settings = false;
-                    self.show_user = None;
-                    self.device_view.cancel_interactive();
-                    self.device_list_view.stop_editing_alias();
-                    Task::none()
-                }
-                _ => Task::none(),
-            },
+            Message::Event(event) => self.process_event(event),
             OpenSettingsDialog => {
                 self.showing_settings = true;
                 Task::none()
@@ -454,6 +465,26 @@ impl MeshChat {
                 self.config.auto_update_startup = !self.config.auto_update_startup;
                 self.config.save_config()
             }
+            ToggleSaveWindowSize => {
+                self.config.restore_window_size = !self.config.restore_window_size;
+                if self.config.restore_window_size {
+                    window::latest().and_then(window::size).map(SetWindowSize)
+                } else {
+                    self.config.window_size = None;
+                    self.config.save_config()
+                }
+            }
+            ToggleSaveWindowPosition => {
+                self.config.restore_window_position = !self.config.restore_window_position;
+                if self.config.restore_window_position {
+                    window::latest()
+                        .and_then(window::position)
+                        .map(SetWindowPosition)
+                } else {
+                    self.config.window_position = None;
+                    self.config.save_config()
+                }
+            }
             HistoryLengthSelected(length) => {
                 self.config.history_length = length;
                 self.config.save_config()
@@ -479,7 +510,70 @@ impl MeshChat {
                 }
                 Task::none()
             }
+            SetWindowSize(size) => {
+                if self.config.restore_window_size {
+                    self.config.window_size = Some(size.into());
+                }
+                Task::none()
+            }
+            SetWindowPosition(position) => {
+                if self.config.restore_window_position {
+                    self.config.window_position = position.map(Into::into);
+                }
+                Task::none()
+            }
         }
+    }
+
+    fn process_event(&mut self, event: Event) -> Task<Message> {
+        match event {
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(key::Named::Tab),
+                modifiers,
+                ..
+            }) => {
+                if modifiers.shift() {
+                    operation::focus_previous()
+                } else {
+                    operation::focus_next()
+                }
+            }
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Named(key::Named::Escape),
+                ..
+            }) => {
+                // Exit any interactive modes underway
+                self.showing_settings = false;
+                self.show_user = None;
+                self.device_view.cancel_interactive();
+                self.device_list_view.stop_editing_alias();
+                Task::none()
+            }
+            Event::Window(window::Event::Moved(point)) => {
+                if self.config.restore_window_position {
+                    self.config.window_position = Some(point.into());
+                    self.config.save_config()
+                } else {
+                    Task::none()
+                }
+            }
+            Event::Window(window::Event::Resized(size)) => {
+                if self.config.restore_window_size {
+                    self.config.window_size = Some(size.into());
+                    self.config.save_config()
+                } else {
+                    Task::none()
+                }
+            }
+            _ => Task::none(),
+        }
+        /*
+        WindowEvent(event) => {
+            if let iced::Event::Window(window::Event::CloseRequested) = event {
+                // Close connection?
+            }
+        }
+         */
     }
 
     /// Render the main app view

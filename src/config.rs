@@ -1,6 +1,6 @@
 use crate::Message::{
-    HistoryLengthSelected, ToggleAutoReconnect, ToggleAutoUpdate, ToggleShowPositionUpdates,
-    ToggleShowUserUpdates,
+    HistoryLengthSelected, ToggleAutoReconnect, ToggleAutoUpdate, ToggleSaveWindowPosition,
+    ToggleSaveWindowSize, ToggleShowPositionUpdates, ToggleShowUserUpdates,
 };
 use crate::channel_id::ChannelId;
 use crate::styles::{picker_header_style, tooltip_style};
@@ -8,7 +8,7 @@ use crate::{MeshChat, Message};
 use directories::ProjectDirs;
 use iced::font::Weight;
 use iced::widget::{Column, container, pick_list, text, toggler};
-use iced::{Center, Element, Fill, Font, Task};
+use iced::{Center, Element, Fill, Font, Point, Size, Task};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -20,6 +20,94 @@ use tokio::io::AsyncWriteExt;
 
 const EIGHT_HOURS_IN_SECONDS: u64 = 60 * 60 * 8;
 const ONE_DAY_IN_SECONDS: u64 = 60 * 60 * 24;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Config {
+    #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
+    pub ble_device: Option<String>,
+    #[serde(default, rename = "channel", skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<ChannelId>,
+    #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]
+    pub fav_nodes: HashSet<u32>,
+    #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
+    pub aliases: HashMap<u32, String>, // node name aliases
+    #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
+    pub device_aliases: HashMap<String, String>, // device (as a string) to alias
+    #[serde(
+        default = "HistoryLength::default",
+        skip_serializing_if = "HistoryLength::is_all"
+    )]
+    pub history_length: HistoryLength,
+    /// Whether node position updates sent are shown in the chat view or just update node position
+    #[serde(default = "default_show_position")]
+    pub show_position_updates: bool,
+    /// Whether node User updates sent are shown in the chat view or just update node User
+    #[serde(default = "default_show_user")]
+    pub show_user_updates: bool,
+    #[serde(default = "default_auto_reconnect")]
+    pub auto_reconnect: bool,
+    /// Whether we should attempt an auto-update on start-up
+    #[serde(default = "default_auto_update_startup")]
+    pub auto_update_startup: bool,
+    #[serde(default)]
+    pub restore_window_position: bool,
+    #[serde(default)]
+    pub window_position: Option<WindowPosition>,
+    #[serde(default)]
+    pub restore_window_size: bool,
+    #[serde(default)]
+    pub window_size: Option<WindowSize>,
+}
+
+/// Struct we will use to serialize and deserialize window position
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WindowPosition {
+    pub x: u32,
+    pub y: u32,
+}
+
+/// Struct we will use to serialize and deserialize window size
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WindowSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl From<Point> for WindowPosition {
+    fn from(value: Point) -> Self {
+        WindowPosition {
+            x: value.x as u32,
+            y: value.y as u32,
+        }
+    }
+}
+
+impl From<Size> for WindowSize {
+    fn from(value: Size) -> Self {
+        WindowSize {
+            width: value.width as u32,
+            height: value.height as u32,
+        }
+    }
+}
+
+impl WindowPosition {
+    pub fn point(&self) -> Point<f32> {
+        Point {
+            x: self.x as f32,
+            y: self.y as f32,
+        }
+    }
+}
+
+impl WindowSize {
+    pub fn size(&self) -> Size {
+        Size {
+            width: self.width as f32,
+            height: self.height as f32,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq)]
 pub enum HistoryLength {
@@ -62,36 +150,6 @@ impl std::fmt::Display for HistoryLength {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Config {
-    #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
-    pub ble_device: Option<String>,
-    #[serde(default, rename = "channel", skip_serializing_if = "Option::is_none")]
-    pub channel_id: Option<ChannelId>,
-    #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]
-    pub fav_nodes: HashSet<u32>,
-    #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
-    pub aliases: HashMap<u32, String>, // node name aliases
-    #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
-    pub device_aliases: HashMap<String, String>, // device (as a string) to alias
-    #[serde(
-        default = "HistoryLength::default",
-        skip_serializing_if = "HistoryLength::is_all"
-    )]
-    pub history_length: HistoryLength,
-    /// Whether node position updates sent are shown in the chat view or just update node position
-    #[serde(default = "default_show_position")]
-    pub show_position_updates: bool,
-    /// Whether node User updates sent are shown in the chat view or just update node User
-    #[serde(default = "default_show_user")]
-    pub show_user_updates: bool,
-    #[serde(default = "default_auto_reconnect")]
-    pub auto_reconnect: bool,
-    /// Whether we should attempt an auto-update on start-up
-    #[serde(default = "default_auto_update_startup")]
-    pub auto_update_startup: bool,
-}
-
 /// Some values have non-false (true) defaults, so implement using default functions
 /// to make sure it matches what a deserialized empty config would give.
 impl Default for Config {
@@ -107,6 +165,10 @@ impl Default for Config {
             show_user_updates: default_show_user(),
             auto_reconnect: default_auto_reconnect(),
             auto_update_startup: default_auto_update_startup(),
+            restore_window_position: false,
+            window_position: None,
+            restore_window_size: false,
+            window_size: None,
         }
     }
 }
@@ -144,7 +206,9 @@ impl Config {
             .push(self.show_user_updates())
             .push(self.auto_reconnect())
             .push(self.history_length())
-            .push(self.auto_update());
+            .push(self.auto_update())
+            .push(self.save_window_position())
+            .push(self.save_window_size());
 
         let inner = Column::new()
             .spacing(8)
@@ -216,6 +280,28 @@ impl Config {
             .label("Check for App updates on startup")
             .on_toggle(Self::toggle_auto_update)
             .into()
+    }
+
+    fn save_window_position<'a>(&self) -> Element<'a, Message> {
+        toggler(self.restore_window_position)
+            .label("Restore window position on startup")
+            .on_toggle(Self::toggle_save_window_position)
+            .into()
+    }
+
+    fn save_window_size<'a>(&self) -> Element<'a, Message> {
+        toggler(self.restore_window_size)
+            .label("Restore window size on startup")
+            .on_toggle(Self::toggle_save_window_size)
+            .into()
+    }
+
+    fn toggle_save_window_position(_current_setting: bool) -> Message {
+        ToggleSaveWindowPosition
+    }
+
+    fn toggle_save_window_size(_current_setting: bool) -> Message {
+        ToggleSaveWindowSize
     }
 
     fn toggle_auto_update(_current_setting: bool) -> Message {
