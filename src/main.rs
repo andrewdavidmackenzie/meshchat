@@ -175,6 +175,7 @@ pub enum SubscriptionEvent {
     NewNodeInfo(ChannelId, u32, u32, MCUser, u32),          // channel_id, id, from, MCUser, rx_time
     NewNodePosition(ChannelId, u32, u32, MCPosition, u32), // channel_id, id, from, MCPosition, rx_time
     DeviceBatteryLevel(Option<u32>),
+    ChannelName(i32, String), // channel number, name
 }
 
 /// Messages sent from the GUI to the subscription
