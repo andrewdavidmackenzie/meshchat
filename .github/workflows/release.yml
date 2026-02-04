@@ -63,8 +63,10 @@ jobs:
             BUNDLE_PATH="${BUNDLE_DIR}/${BUNDLE_NAME}"
           elif [ "${{ runner.os }}" == "Windows" ]; then
             BUNDLE_PATH=$(find target/release/bundle -name "*.msi" | head -1)
-            ORIGINAL_NAME=$(basename "$BUNDLE_PATH")
+            BUNDLE_DIR=$(dirname "$BUNDLE_PATH")
             BUNDLE_NAME="meshchat_${VERSION}_${ARCH}.msi"
+            mv "$BUNDLE_PATH" "${BUNDLE_DIR}/${BUNDLE_NAME}"
+            BUNDLE_PATH="${BUNDLE_DIR}/${BUNDLE_NAME}"
           fi
           echo "bundle_path=$BUNDLE_PATH" >> $GITHUB_OUTPUT
           echo "bundle_name=$BUNDLE_NAME" >> $GITHUB_OUTPUT
