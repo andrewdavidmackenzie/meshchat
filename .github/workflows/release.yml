@@ -53,7 +53,7 @@ jobs:
           elif [ "${{ runner.os }}" == "macOS" ]; then
             BUNDLE_PATH=$(find target/release/bundle -name "*.app" -type d | head -1)
             ORIGINAL_NAME=$(basename "$BUNDLE_PATH")
-            BUNDLE_NAME="${ORIGINAL_NAME}%.app_${{ runner.arch }}.app"
+            BUNDLE_NAME="${ORIGINAL_NAME%.app}_${{ runner.arch }}.app"
             BUNDLE_DIR=$(dirname "$BUNDLE_PATH")
             # Create a zip for macOS app bundle
             cd "$BUNDLE_DIR"
@@ -63,7 +63,7 @@ jobs:
           elif [ "${{ runner.os }}" == "Windows" ]; then
             BUNDLE_PATH=$(find target/release/bundle -name "*.msi" | head -1)
             ORIGINAL_NAME=$(basename "$BUNDLE_PATH")
-            BUNDLE_NAME="${ORIGINAL_NAME}%.msi_${{ runner.arch }}.msi"
+            BUNDLE_NAME="${ORIGINAL_NAME%.msi}_${{ runner.arch }}.msi"
           fi
           echo "bundle_path=$BUNDLE_PATH" >> $GITHUB_OUTPUT
           echo "bundle_name=$BUNDLE_NAME" >> $GITHUB_OUTPUT
