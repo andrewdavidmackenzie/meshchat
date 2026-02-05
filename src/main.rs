@@ -10,7 +10,7 @@ use crate::Message::{
     RemoveNodeAlias, RemoveNotification, SetWindowPosition, SetWindowSize, ShowLocation,
     ShowUserInfo, ToggleAutoReconnect, ToggleAutoUpdate, ToggleNodeFavourite,
     ToggleSaveWindowPosition, ToggleSaveWindowSize, ToggleShowPositionUpdates,
-    ToggleShowUserUpdates, WindowEvent,
+    ToggleShowUserUpdates,
 };
 use crate::View::DeviceList;
 use crate::channel_id::ChannelId;
@@ -194,7 +194,6 @@ pub enum SubscriberMessage {
 #[derive(Debug, Clone)]
 pub enum Message {
     Navigation(View),
-    WindowEvent(Event),
     DeviceListViewEvent(DeviceListEvent),
     DeviceViewEvent(DeviceViewMessage),
     Exit,
@@ -331,7 +330,6 @@ impl MeshChat {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Navigation(view) => self.navigate(view),
-            WindowEvent(event) => self.window_handler(event),
             DeviceListViewEvent(device_list_event) => {
                 self.device_list_view.update(device_list_event)
             }
@@ -565,15 +563,16 @@ impl MeshChat {
                     Task::none()
                 }
             }
+            Event::Window(window::Event::CloseRequested) => {
+                if let Connected(_) = self.device_view.connection_state() {
+                    self.device_view.update(DisconnectRequest(true))
+                } else {
+                    window::latest().and_then(window::close)
+                }
+            }
+
             _ => Task::none(),
         }
-        /*
-        WindowEvent(event) => {
-            if let iced::Event::Window(window::Event::CloseRequested) = event {
-                // Close connection?
-            }
-        }
-         */
     }
 
     /// Render the main app view
@@ -684,7 +683,6 @@ impl MeshChat {
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![
-            event::listen().map(WindowEvent),
             Subscription::run(ble_discovery).map(DeviceListViewEvent),
             Subscription::run(device_subscription::subscribe)
                 .map(|m| DeviceViewEvent(SubscriptionMessage(m))),
@@ -700,19 +698,6 @@ impl MeshChat {
         if let View::Device(Some(channel_id)) = &self.current_view {
             self.device_view
                 .update(DeviceViewMessage::ShowChannel(Some(*channel_id)))
-        } else {
-            Task::none()
-        }
-    }
-
-    /// Handle window events, like close button or minimize button
-    fn window_handler(&mut self, event: Event) -> Task<Message> {
-        if let Event::Window(window::Event::CloseRequested) = event {
-            if let Connected(_) = self.device_view.connection_state() {
-                self.device_view.update(DisconnectRequest(true))
-            } else {
-                window::latest().and_then(window::close)
-            }
         } else {
             Task::none()
         }
