@@ -254,6 +254,8 @@ fn main() -> iced::Result {
             width: 600.0,
             height: 800.0,
         },
+        exit_on_close_request: false,
+        resizable: true,
         ..Default::default()
     };
 
@@ -265,8 +267,6 @@ fn main() -> iced::Result {
 
     iced::application(MeshChat::new, MeshChat::update, MeshChat::view)
         .subscription(MeshChat::subscription)
-        .exit_on_close_request(false)
-        .resizable(true)
         .font(icons::FONT)
         .title(MeshChat::title)
         .window(window_settings)
