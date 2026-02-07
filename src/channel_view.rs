@@ -15,7 +15,7 @@ use crate::device_view::DeviceViewMessage::{
 use crate::device_view::{DeviceView, DeviceViewMessage};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
-    text_input_style, tooltip_style,
+    text_input_button_style, text_input_container_style, text_input_style, tooltip_style,
 };
 use crate::widgets::emoji_picker::{EmojiPicker, PickerMessage};
 use crate::{MCNodeInfo, MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
@@ -26,12 +26,11 @@ use iced::font::Weight;
 use iced::padding::right;
 use iced::widget::operation::RelativeOffset;
 use iced::widget::scrollable::Scrollbar;
-use iced::widget::text_input::{Icon, Side};
 use iced::widget::{
     Button, Column, Container, Row, Space, button, container, row, scrollable, text, text_input,
 };
 use iced::widget::{Id, operation};
-use iced::{Center, Element, Fill, Font, Padding, Pixels, Task};
+use iced::{Center, Element, Fill, Font, Padding, Task};
 use ringmap::RingMap;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -506,47 +505,61 @@ impl ChannelView {
             .into()
     }
 
-    fn input_box(&'_ self) -> Element<'_, Message> {
+    fn send_button(&'_ self) -> Button<'_, Message> {
         let mut send_button = button(icons::send().size(18))
-            .style(button_chip_style)
+            .style(text_input_button_style)
             .padding(Padding::from([6, 6]));
-        let mut clear_button = button(text("⨂").size(18))
-            .style(button_chip_style)
-            .padding(Padding::from([6, 6]));
+
         if !self.message.is_empty() {
             send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(
                 self.channel_id,
                 SendMessage(self.preparing_reply),
             )));
+        }
+
+        send_button
+    }
+
+    fn clear_button(&'_ self) -> Button<'_, Message> {
+        let mut clear_button = button(text("⨂").size(18))
+            .style(text_input_button_style)
+            .padding(Padding::from([6, 6]));
+        if !self.message.is_empty() {
             clear_button =
                 clear_button.on_press(DeviceViewEvent(ChannelMsg(self.channel_id, ClearMessage)));
         }
 
-        Row::new()
-            .align_y(Center)
-            .push(
-                text_input("Type your message here", &self.message)
-                    .style(text_input_style)
-                    .id(Id::new(MESSAGE_INPUT_ID))
-                    .on_input(|s| DeviceViewEvent(ChannelMsg(self.channel_id, MessageInput(s))))
-                    .on_submit(DeviceViewEvent(ChannelMsg(
-                        self.channel_id,
-                        SendMessage(self.preparing_reply),
-                    )))
-                    .padding([6, 6])
-                    .icon(Icon {
-                        font: Font::with_name("icons"),
-                        code_point: '\u{2709}',
-                        size: Some(Pixels(18.0)),
-                        spacing: 4.0,
-                        side: Side::Left,
-                    }),
+        clear_button
+    }
+
+    fn input_box(&'_ self) -> Element<'_, Message> {
+        container(
+            container(
+                Row::new()
+                    .push(Space::new().width(9.0))
+                    .push(
+                        text_input("Type your message here", &self.message)
+                            .style(text_input_style)
+                            .padding([4, 4])
+                            .id(Id::new(MESSAGE_INPUT_ID))
+                            .on_input(|s| {
+                                DeviceViewEvent(ChannelMsg(self.channel_id, MessageInput(s)))
+                            })
+                            .on_submit(DeviceViewEvent(ChannelMsg(
+                                self.channel_id,
+                                SendMessage(self.preparing_reply),
+                            ))),
+                    )
+                    .push(Space::new().width(4.0))
+                    .push(self.clear_button())
+                    .push(self.send_button())
+                    .push(Space::new().width(4.0))
+                    .align_y(Center),
             )
-            .push(Space::new().width(4.0))
-            .push(clear_button)
-            .push(Space::new().width(4.0))
-            .push(send_button)
-            .into()
+            .style(text_input_container_style),
+        )
+        .padding(Padding::from([8, 8]))
+        .into()
     }
 }
 

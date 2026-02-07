@@ -32,13 +32,14 @@ use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device_list_view::DeviceListView;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
-    fav_button_style, scrollbar_style, text_input_style, tooltip_style,
+    fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
+    text_input_style, tooltip_style,
 };
 use crate::widgets::battery::{Battery, BatteryState};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
+    Button, Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
 use std::collections::HashMap;
@@ -1009,27 +1010,36 @@ impl DeviceView {
     }
 
     fn search_box(&self) -> Element<'static, Message> {
-        let mut clear_button = button(text("⨂").size(18))
-            .style(button_chip_style)
-            .padding(Padding::from([6, 6]));
-        if !self.filter.is_empty() {
-            clear_button = clear_button.on_press(DeviceViewEvent(ClearFilter));
-        }
-
-        Row::new()
-            .push(
-                text_input("Search for Channel or Node", &self.filter)
-                    .style(text_input_style)
-                    .padding([6, 6])
-                    .on_input(|s| DeviceViewEvent(SearchInput(s))),
+        container(
+            container(
+                Row::new()
+                    .push(Space::new().width(9.0))
+                    .push(
+                        text_input("Search for Channel or Node", &self.filter)
+                            .style(text_input_style)
+                            .padding([4, 4])
+                            .on_input(|s| DeviceViewEvent(SearchInput(s))),
+                    )
+                    .push(Space::new().width(4.0))
+                    .push(text_input_clear_button(!self.filter.is_empty()))
+                    .push(Space::new().width(4.0))
+                    .align_y(Center),
             )
-            .push(Space::new().width(4.0))
-            .push(clear_button)
-            .push(Space::new().width(4.0))
-            .padding([0, 4])
-            .align_y(Center)
-            .into()
+            .style(text_input_container_style),
+        )
+        .padding(Padding::from([8, 8]))
+        .into()
     }
+}
+pub fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
+    let mut clear_button = button(text("⨂").size(18))
+        .style(text_input_button_style)
+        .padding(Padding::from([6, 6]));
+    if enable {
+        clear_button = clear_button.on_press(DeviceViewEvent(ClearFilter));
+    }
+
+    clear_button
 }
 
 /// Return a short name to display in the message box as the source of a message.
