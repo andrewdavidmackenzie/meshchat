@@ -11,7 +11,7 @@ include = ["src", "assets", "build.rs", "README.md", "LICENSE"]
 
 [features]
 default = ["meshtastic", "meshcore"]
-meshcore = []
+meshcore = ["dep:meshcore-rs"]
 meshtastic = ["dep:meshtastic"]
 debug = ["iced/debug"] # use "... --features "debug" to enable this for Iced
 hot = ["iced/hot"]
@@ -49,6 +49,7 @@ uuid = { version = "1.20.0", default-features = false, features = ["v4"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
+meshcore-rs = { version = "0.1.1", default-features = false, features = ["ble"], optional = true }
 self_update = { version = "0.42.0", default-features = false, optional = true }
 
 [dev-dependencies]
