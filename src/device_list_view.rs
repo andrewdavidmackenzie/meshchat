@@ -28,6 +28,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RadioType {
     #[default]
+    None,
     #[cfg(feature = "meshtastic")]
     Meshtastic,
     #[cfg(feature = "meshcore")]
@@ -195,6 +196,7 @@ impl DeviceListView {
 
             // Add firmware icon based on radio type
             let icon_path = match device_info.radio_type {
+                RadioType::None => "assets/images/unknown.png",
                 #[cfg(feature = "meshtastic")]
                 RadioType::Meshtastic => "assets/images/meshtastic.png",
                 #[cfg(feature = "meshcore")]
