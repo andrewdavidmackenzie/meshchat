@@ -1859,4 +1859,19 @@ mod tests {
             ChannelViewMessage::MessageInput("test".into()),
         ));
     }
+
+    #[test]
+    fn test_text_input_clear_button_enabled() {
+        // When enabled (has content), button should have on_press handler
+        let button = text_input_clear_button(true);
+        // We can't directly test on_press, but we verify the button is created
+        drop(button);
+    }
+
+    #[test]
+    fn test_text_input_clear_button_disabled() {
+        // When disabled (no content), button should not have on_press handler
+        let button = text_input_clear_button(false);
+        drop(button);
+    }
 }
