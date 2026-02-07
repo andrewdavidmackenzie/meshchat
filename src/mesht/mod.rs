@@ -4,8 +4,11 @@ use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::{NodeInfo, Position, User};
 use meshtastic::types::{MeshChannel, NodeId};
+use uuid::Uuid;
 
 pub mod device_subscription;
+
+pub const MESHTASTIC_SERVICE_UUID: Uuid = Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd);
 
 /// Conversions between [User] and MeshChat [MCUser]
 impl From<&User> for MCUser {

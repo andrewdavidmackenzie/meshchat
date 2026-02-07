@@ -5,6 +5,10 @@ use crate::device_list_view::DeviceListEvent::BLEMeshCoreRadioFound;
 use crate::device_list_view::DeviceListEvent::BLEMeshtasticRadioFound;
 use crate::device_list_view::DeviceListEvent::{BLERadioLost, Error};
 use crate::device_list_view::RadioType;
+#[cfg(feature = "meshcore")]
+use crate::meshc::MESHCORE_SERVICE_UUID;
+#[cfg(feature = "meshtastic")]
+use crate::mesht::MESHTASTIC_SERVICE_UUID;
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Adapter, Manager};
 use futures::SinkExt;
@@ -14,11 +18,6 @@ use iced::stream;
 use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
-
-#[cfg(feature = "meshtastic")]
-const MESHTASTIC_SERVICE_UUID: Uuid = Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd);
-#[cfg(feature = "meshcore")]
-const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
 /// A stream of [DeviceListEvent] announcing the discovery or loss of devices via BLE
 pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
@@ -165,6 +164,7 @@ async fn announce_device_changes(
                         eprintln!("Discovery could not send BLEMeshCoreRadioFound: {e}")
                     });
             }
+            RadioType::None => {}
         }
     }
 }

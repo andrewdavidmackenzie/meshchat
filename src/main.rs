@@ -62,6 +62,8 @@ mod notification;
 #[cfg(test)]
 mod test_helper;
 
+#[cfg(feature = "meshcore")]
+mod meshc;
 #[cfg(feature = "meshtastic")]
 mod mesht;
 
