@@ -15,8 +15,8 @@ use crate::{MeshChat, Message, View};
 use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    Column, Container, Id, Row, Space, button, container, operation, scrollable, text, text_input,
-    tooltip,
+    Column, Container, Id, Row, Space, button, container, image, operation, scrollable, text,
+    text_input, tooltip,
 };
 use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
 use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
@@ -157,6 +157,12 @@ impl DeviceListView {
 
         for (ble_device, device_name) in &self.device_list {
             let mut device_row = Row::new().align_y(Center).padding(2);
+
+            // Add firmware icon (using Meshtastic icon for now)
+            let icon = image("assets/images/meshtastic.png").width(24).height(24);
+            device_row = device_row.push(icon);
+            device_row = device_row.push(Space::new().width(8));
+
             let name_element: Element<'a, Message> =
                 if let Some(alias) = config.device_aliases.get(ble_device) {
                     tooltip(
