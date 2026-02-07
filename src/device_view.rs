@@ -1874,4 +1874,93 @@ mod tests {
         let button = text_input_clear_button(false);
         drop(button);
     }
+
+    #[test]
+    fn test_set_channel_name_existing_channel() {
+        let mut device_view = DeviceView::default();
+        device_view.channels.push(MCChannel {
+            index: 0,
+            name: "Original".into(),
+        });
+
+        device_view.set_channel_name(0, "Updated".into());
+        assert_eq!(device_view.channels[0].name, "Updated");
+    }
+
+    #[test]
+    fn test_set_channel_name_nonexistent_channel() {
+        let mut device_view = DeviceView::default();
+        // No channels exist, should not panic
+        device_view.set_channel_name(5, "Test".into());
+        assert!(device_view.channels.is_empty());
+    }
+
+    #[test]
+    fn test_set_channel_name_multiple_channels() {
+        let mut device_view = DeviceView::default();
+        device_view.channels.push(MCChannel {
+            index: 0,
+            name: "Channel0".into(),
+        });
+        device_view.channels.push(MCChannel {
+            index: 1,
+            name: "Channel1".into(),
+        });
+        device_view.channels.push(MCChannel {
+            index: 2,
+            name: "Channel2".into(),
+        });
+
+        device_view.set_channel_name(1, "UpdatedChannel1".into());
+
+        assert_eq!(device_view.channels[0].name, "Channel0");
+        assert_eq!(device_view.channels[1].name, "UpdatedChannel1");
+        assert_eq!(device_view.channels[2].name, "Channel2");
+    }
+
+    #[test]
+    fn test_channel_change_no_change() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        // Same channel, should return Task::none equivalent behavior
+        let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
+        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+    }
+
+    #[test]
+    fn test_channel_change_to_different_channel() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        let _task = device_view.channel_change(Some(ChannelId::Channel(1)));
+        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(1)));
+    }
+
+    #[test]
+    fn test_channel_change_to_none() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        let _task = device_view.channel_change(None);
+        assert_eq!(device_view.viewing_channel, None);
+    }
+
+    #[test]
+    fn test_channel_change_from_none() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = None;
+
+        let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
+        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+    }
+
+    #[test]
+    fn test_channel_change_to_node() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        let _task = device_view.channel_change(Some(Node(12345)));
+        assert_eq!(device_view.viewing_channel, Some(Node(12345)));
+    }
 }
