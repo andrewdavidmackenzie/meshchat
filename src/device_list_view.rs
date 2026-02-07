@@ -2,6 +2,8 @@ use crate::Message::{
     AddDeviceAlias, DeviceListViewEvent, DeviceViewEvent, Navigation, RemoveDeviceAlias,
 };
 use crate::config::Config;
+#[cfg(feature = "meshcore")]
+use crate::device_list_view::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
 use crate::device_list_view::DeviceListEvent::BLEMeshtasticRadioFound;
 use crate::device_list_view::DeviceListEvent::{
@@ -22,19 +24,38 @@ use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
 use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
 use std::collections::HashMap;
 
+/// The type of radio firmware detected
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RadioType {
+    #[default]
+    #[cfg(feature = "meshtastic")]
+    Meshtastic,
+    #[cfg(feature = "meshcore")]
+    MeshCore,
+}
+
 #[derive(Debug, Clone)]
 pub enum DeviceListEvent {
     #[cfg(feature = "meshtastic")]
     BLEMeshtasticRadioFound(String),
+    #[cfg(feature = "meshcore")]
+    BLEMeshCoreRadioFound(String),
     BLERadioLost(String),
     Error(String),
     StartEditingAlias(String),
     AliasInput(String), // From text_input
 }
 
+/// Information about a discovered device
+#[derive(Debug, Clone)]
+pub struct DeviceInfo {
+    pub original_name: String,
+    pub radio_type: RadioType,
+}
+
 #[derive(Default)]
 pub struct DeviceListView {
-    device_list: HashMap<String, String>, // Alias/Name, Original Name
+    device_list: HashMap<String, DeviceInfo>, // BLE address -> DeviceInfo
     alias: String,
     editing_alias: Option<String>,
 }
@@ -51,7 +72,21 @@ impl DeviceListView {
                 if let std::collections::hash_map::Entry::Vacant(vacant_entry) =
                     self.device_list.entry(device.clone())
                 {
-                    vacant_entry.insert(device);
+                    vacant_entry.insert(DeviceInfo {
+                        original_name: device,
+                        radio_type: RadioType::Meshtastic,
+                    });
+                }
+            }
+            #[cfg(feature = "meshcore")]
+            BLEMeshCoreRadioFound(device) => {
+                if let std::collections::hash_map::Entry::Vacant(vacant_entry) =
+                    self.device_list.entry(device.clone())
+                {
+                    vacant_entry.insert(DeviceInfo {
+                        original_name: device,
+                        radio_type: RadioType::MeshCore,
+                    });
                 }
             }
             BLERadioLost(device) => {
@@ -155,11 +190,17 @@ impl DeviceListView {
 
         let mut main_col = Column::new();
 
-        for (ble_device, device_name) in &self.device_list {
+        for (ble_device, device_info) in &self.device_list {
             let mut device_row = Row::new().align_y(Center).padding(2);
 
-            // Add firmware icon (using Meshtastic icon for now)
-            let icon = image("assets/images/meshtastic.png").width(24).height(24);
+            // Add firmware icon based on radio type
+            let icon_path = match device_info.radio_type {
+                #[cfg(feature = "meshtastic")]
+                RadioType::Meshtastic => "assets/images/meshtastic.png",
+                #[cfg(feature = "meshcore")]
+                RadioType::MeshCore => "assets/images/meshcore.png",
+            };
+            let icon = image(icon_path).width(24).height(24);
             device_row = device_row.push(icon);
             device_row = device_row.push(Space::new().width(8));
 
@@ -167,7 +208,10 @@ impl DeviceListView {
                 if let Some(alias) = config.device_aliases.get(ble_device) {
                     tooltip(
                         text(alias).width(250),
-                        text(format!("Original device name: {}", device_name)),
+                        text(format!(
+                            "Original device name: {}",
+                            device_info.original_name
+                        )),
                         tooltip::Position::Right,
                     )
                     .style(tooltip_style)
@@ -183,7 +227,7 @@ impl DeviceListView {
                         .style(text_input_style)
                         .into()
                 } else {
-                    text(device_name).width(250).into()
+                    text(&device_info.original_name).width(250).into()
                 };
 
             device_row = device_row.push(name_element);
@@ -191,7 +235,9 @@ impl DeviceListView {
 
             device_row = device_row.push(Self::menu_bar(
                 ble_device,
-                config.device_aliases.contains_key(device_name),
+                config
+                    .device_aliases
+                    .contains_key(&device_info.original_name),
             ));
 
             device_row = device_row.push(Space::new().width(6));
