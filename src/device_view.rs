@@ -32,13 +32,14 @@ use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device_list_view::DeviceListView;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
-    fav_button_style, scrollbar_style, text_input_style, tooltip_style,
+    fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
+    text_input_style, tooltip_style,
 };
 use crate::widgets::battery::{Battery, BatteryState};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
+    Button, Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
 use std::collections::HashMap;
@@ -1009,27 +1010,36 @@ impl DeviceView {
     }
 
     fn search_box(&self) -> Element<'static, Message> {
-        let mut clear_button = button(text("⨂").size(18))
-            .style(button_chip_style)
-            .padding(Padding::from([6, 6]));
-        if !self.filter.is_empty() {
-            clear_button = clear_button.on_press(DeviceViewEvent(ClearFilter));
-        }
-
-        Row::new()
-            .push(
-                text_input("Search for Channel or Node", &self.filter)
-                    .style(text_input_style)
-                    .padding([6, 6])
-                    .on_input(|s| DeviceViewEvent(SearchInput(s))),
+        container(
+            container(
+                Row::new()
+                    .push(Space::new().width(9.0))
+                    .push(
+                        text_input("Search for Channel or Node", &self.filter)
+                            .style(text_input_style)
+                            .padding([4, 4])
+                            .on_input(|s| DeviceViewEvent(SearchInput(s))),
+                    )
+                    .push(Space::new().width(4.0))
+                    .push(text_input_clear_button(!self.filter.is_empty()))
+                    .push(Space::new().width(4.0))
+                    .align_y(Center),
             )
-            .push(Space::new().width(4.0))
-            .push(clear_button)
-            .push(Space::new().width(4.0))
-            .padding([0, 4])
-            .align_y(Center)
-            .into()
+            .style(text_input_container_style),
+        )
+        .padding(Padding::from([8, 8]))
+        .into()
     }
+}
+pub fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
+    let mut clear_button = button(text("⨂").size(18))
+        .style(text_input_button_style)
+        .padding(Padding::from([6, 6]));
+    if enable {
+        clear_button = clear_button.on_press(DeviceViewEvent(ClearFilter));
+    }
+
+    clear_button
 }
 
 /// Return a short name to display in the message box as the source of a message.
@@ -1848,5 +1858,109 @@ mod tests {
             ChannelId::Channel(0),
             ChannelViewMessage::MessageInput("test".into()),
         ));
+    }
+
+    #[test]
+    fn test_text_input_clear_button_enabled() {
+        // When enabled (has content), button should have on_press handler
+        let button = text_input_clear_button(true);
+        // We can't directly test on_press, but we verify the button is created
+        drop(button);
+    }
+
+    #[test]
+    fn test_text_input_clear_button_disabled() {
+        // When disabled (no content), button should not have on_press handler
+        let button = text_input_clear_button(false);
+        drop(button);
+    }
+
+    #[test]
+    fn test_set_channel_name_existing_channel() {
+        let mut device_view = DeviceView::default();
+        device_view.channels.push(MCChannel {
+            index: 0,
+            name: "Original".into(),
+        });
+
+        device_view.set_channel_name(0, "Updated".into());
+        assert_eq!(device_view.channels[0].name, "Updated");
+    }
+
+    #[test]
+    fn test_set_channel_name_nonexistent_channel() {
+        let mut device_view = DeviceView::default();
+        // No channels exist, should not panic
+        device_view.set_channel_name(5, "Test".into());
+        assert!(device_view.channels.is_empty());
+    }
+
+    #[test]
+    fn test_set_channel_name_multiple_channels() {
+        let mut device_view = DeviceView::default();
+        device_view.channels.push(MCChannel {
+            index: 0,
+            name: "Channel0".into(),
+        });
+        device_view.channels.push(MCChannel {
+            index: 1,
+            name: "Channel1".into(),
+        });
+        device_view.channels.push(MCChannel {
+            index: 2,
+            name: "Channel2".into(),
+        });
+
+        device_view.set_channel_name(1, "UpdatedChannel1".into());
+
+        assert_eq!(device_view.channels[0].name, "Channel0");
+        assert_eq!(device_view.channels[1].name, "UpdatedChannel1");
+        assert_eq!(device_view.channels[2].name, "Channel2");
+    }
+
+    #[test]
+    fn test_channel_change_no_change() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        // Same channel, should return Task::none equivalent behavior
+        let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
+        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+    }
+
+    #[test]
+    fn test_channel_change_to_different_channel() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        let _task = device_view.channel_change(Some(ChannelId::Channel(1)));
+        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(1)));
+    }
+
+    #[test]
+    fn test_channel_change_to_none() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        let _task = device_view.channel_change(None);
+        assert_eq!(device_view.viewing_channel, None);
+    }
+
+    #[test]
+    fn test_channel_change_from_none() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = None;
+
+        let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
+        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+    }
+
+    #[test]
+    fn test_channel_change_to_node() {
+        let mut device_view = DeviceView::default();
+        device_view.viewing_channel = Some(ChannelId::Channel(0));
+
+        let _task = device_view.channel_change(Some(Node(12345)));
+        assert_eq!(device_view.viewing_channel, Some(Node(12345)));
     }
 }

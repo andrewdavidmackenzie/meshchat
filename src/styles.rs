@@ -5,7 +5,6 @@ use crate::widgets::battery::BatteryState;
 use iced::border::Radius;
 use iced::theme::Palette;
 use iced::widget::button::Status;
-use iced::widget::button::Status::Hovered;
 use iced::widget::container::Style;
 use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
 use iced::widget::{button, scrollable, text, text_input};
@@ -173,15 +172,26 @@ fn text_input_border(palette: &Palette, status: text_input::Status) -> Border {
 
 pub const TEXT_INPUT_PLACEHOLDER_COLOR: Color = Color::from_rgba(0.5, 0.5, 0.5, 1.0);
 
-pub fn text_input_style(theme: &Theme, status: text_input::Status) -> text_input::Style {
+pub fn text_input_style(theme: &Theme, _status: text_input::Status) -> text_input::Style {
     let palette = theme.palette();
     text_input::Style {
         background: Background::Color(palette.background),
-        border: text_input_border(&palette, status),
+        border: NO_BORDER,
         icon: Color::WHITE,
         placeholder: TEXT_INPUT_PLACEHOLDER_COLOR,
         value: palette.text,
         selection: Default::default(),
+    }
+}
+
+pub fn text_input_container_style(theme: &Theme) -> Style {
+    let palette = theme.palette();
+    Style {
+        text_color: None,
+        background: Some(Background::Color(palette.background)),
+        border: text_input_border(&palette, text_input::Status::Active),
+        shadow: Default::default(),
+        snap: false,
     }
 }
 
@@ -237,7 +247,7 @@ pub fn fav_button_style(_theme: &Theme, status: Status) -> button::Style {
             shadow: NO_SHADOW,
             snap: false,
         },
-        Hovered => button::Style {
+        Status::Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
@@ -270,7 +280,7 @@ pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
             shadow: NO_SHADOW,
             snap: false,
         },
-        Hovered => button::Style {
+        Status::Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
@@ -288,6 +298,40 @@ pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_DISABLED,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+    }
+}
+
+pub fn text_input_button_style(theme: &Theme, status: Status) -> button::Style {
+    let palette = theme.palette();
+    match status {
+        Status::Active => button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: palette.text,
+            border: NO_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+        Status::Hovered => button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: CYAN,
+            border: NO_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+        Status::Pressed => button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: palette.text,
+            border: NO_BORDER,
+            shadow: NO_SHADOW,
+            snap: false,
+        },
+        Status::Disabled => button::Style {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            text_color: COLOR_GRAY_60, // TODO disabled color from palette
+            border: NO_BORDER,
             shadow: NO_SHADOW,
             snap: false,
         },
@@ -364,7 +408,7 @@ pub fn emoji_tab_style(_theme: &Theme, status: Status, selected: bool) -> button
             shadow: NO_SHADOW,
             snap: false,
         },
-        Hovered => button::Style {
+        Status::Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
             text_color: Color::WHITE,
             border: TAB_BUTTON_BORDER,
@@ -476,7 +520,7 @@ pub fn reply_to_style(_theme: &Theme) -> Style {
 pub fn channel_row_style(theme: &Theme, status: Status) -> button::Style {
     let palette = theme.palette();
 
-    if status == Hovered {
+    if status == Status::Hovered {
         // Black text on CYAN background when hovered
         button::Style {
             background: Some(Background::Color(CYAN)),
