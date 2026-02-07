@@ -474,12 +474,13 @@ mod tests {
         assert!(view.device_list.is_empty());
     }
 
+    #[cfg(feature = "meshtastic")]
     // Test DeviceListEvent enum
     #[test]
     fn test_device_list_event_debug() {
         let event = BLEMeshtasticRadioFound("device1".into());
         let debug_str = format!("{:?}", event);
-        assert!(debug_str.contains("BLERadioFound"));
+        assert!(debug_str.contains("BLEMeshtasticRadioFound"));
         assert!(debug_str.contains("device1"));
     }
 
