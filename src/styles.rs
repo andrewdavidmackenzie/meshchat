@@ -306,7 +306,7 @@ pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
     }
 }
 
-pub fn text_input_clear_style(theme: &Theme, status: Status) -> button::Style {
+pub fn text_input_button_style(theme: &Theme, status: Status) -> button::Style {
     let palette = theme.palette();
     match status {
         Status::Active => button::Style {

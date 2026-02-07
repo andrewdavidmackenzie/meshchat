@@ -32,7 +32,7 @@ use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device_list_view::DeviceListView;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
-    fav_button_style, scrollbar_style, text_input_clear_style, text_input_container_style,
+    fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
     text_input_style, tooltip_style,
 };
 use crate::widgets::battery::{Battery, BatteryState};
@@ -1009,17 +1009,6 @@ impl DeviceView {
             .push(Space::new().width(10))
     }
 
-    fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
-        let mut clear_button = button(text("⨂").size(18))
-            .style(text_input_clear_style)
-            .padding(Padding::from([6, 6]));
-        if enable {
-            clear_button = clear_button.on_press(DeviceViewEvent(ClearFilter));
-        }
-
-        clear_button
-    }
-
     fn search_box(&self) -> Element<'static, Message> {
         container(
             container(
@@ -1032,7 +1021,7 @@ impl DeviceView {
                             .on_input(|s| DeviceViewEvent(SearchInput(s))),
                     )
                     .push(Space::new().width(4.0))
-                    .push(Self::text_input_clear_button(!self.filter.is_empty()))
+                    .push(text_input_clear_button(!self.filter.is_empty()))
                     .push(Space::new().width(4.0))
                     .align_y(Center),
             )
@@ -1041,6 +1030,16 @@ impl DeviceView {
         .padding(Padding::from([8, 8]))
         .into()
     }
+}
+pub fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
+    let mut clear_button = button(text("⨂").size(18))
+        .style(text_input_button_style)
+        .padding(Padding::from([6, 6]));
+    if enable {
+        clear_button = clear_button.on_press(DeviceViewEvent(ClearFilter));
+    }
+
+    clear_button
 }
 
 /// Return a short name to display in the message box as the source of a message.
