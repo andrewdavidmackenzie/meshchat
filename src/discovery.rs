@@ -143,7 +143,8 @@ async fn announce_device_changes(
             .unwrap_or_else(|e| eprintln!("Discovery could not send BLERadioLost: {e}"));
     }
 
-    // Send found events with appropriate radio type
+    // Send found events with the appropriate radio type
+    #[allow(unused_variables)]
     for (device, radio_type) in found {
         match radio_type {
             #[cfg(feature = "meshtastic")]
@@ -170,6 +171,7 @@ async fn announce_device_changes(
 }
 
 /// Detect the radio type from the service UUIDs advertised by the peripheral
+#[allow(unused_variables)]
 fn detect_radio_type(services: &[Uuid]) -> RadioType {
     #[cfg(feature = "meshtastic")]
     if services.contains(&MESHTASTIC_SERVICE_UUID) {
