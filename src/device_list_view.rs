@@ -2,8 +2,10 @@ use crate::Message::{
     AddDeviceAlias, DeviceListViewEvent, DeviceViewEvent, Navigation, RemoveDeviceAlias,
 };
 use crate::config::Config;
+#[cfg(feature = "meshtastic")]
+use crate::device_list_view::DeviceListEvent::BLEMeshtasticRadioFound;
 use crate::device_list_view::DeviceListEvent::{
-    AliasInput, BLERadioFound, BLERadioLost, Error, StartEditingAlias,
+    AliasInput, BLERadioLost, Error, StartEditingAlias,
 };
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
@@ -22,7 +24,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub enum DeviceListEvent {
-    BLERadioFound(String),
+    #[cfg(feature = "meshtastic")]
+    BLEMeshtasticRadioFound(String),
     BLERadioLost(String),
     Error(String),
     StartEditingAlias(String),
@@ -43,7 +46,8 @@ const ALIAS_INPUT_TEXT_ID: &str = "alias_input_text";
 impl DeviceListView {
     pub fn update(&mut self, device_list_event: DeviceListEvent) -> Task<Message> {
         match device_list_event {
-            BLERadioFound(device) => {
+            #[cfg(feature = "meshtastic")]
+            BLEMeshtasticRadioFound(device) => {
                 if let std::collections::hash_map::Entry::Vacant(vacant_entry) =
                     self.device_list.entry(device.clone())
                 {
@@ -310,7 +314,7 @@ mod tests {
         let mut view = DeviceListView::default();
         assert!(view.device_list.is_empty());
 
-        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
 
         assert_eq!(view.device_list.len(), 1);
         assert!(view.device_list.contains_key("AA:BB:CC:DD:EE:FF"));
@@ -320,8 +324,8 @@ mod tests {
     fn test_ble_radio_found_duplicate() {
         let mut view = DeviceListView::default();
 
-        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
-        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
 
         // Should still only have 1 entry
         assert_eq!(view.device_list.len(), 1);
@@ -331,8 +335,8 @@ mod tests {
     fn test_ble_radio_found_multiple() {
         let mut view = DeviceListView::default();
 
-        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
-        let _ = view.update(BLERadioFound("11:22:33:44:55:66".to_string()));
+        let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLEMeshtasticRadioFound("11:22:33:44:55:66".to_string()));
 
         assert_eq!(view.device_list.len(), 2);
     }
@@ -341,7 +345,7 @@ mod tests {
     fn test_ble_radio_lost() {
         let mut view = DeviceListView::default();
 
-        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
         assert_eq!(view.device_list.len(), 1);
 
         let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
@@ -442,7 +446,7 @@ mod tests {
         let mut config = Config::default();
 
         // Find a device
-        let _ = view.update(BLERadioFound("AA:BB:CC:DD:EE:FF".to_string()));
+        let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
         assert_eq!(view.device_list.len(), 1);
 
         // Start aliasing
@@ -453,7 +457,7 @@ mod tests {
         let _ = view.update(AliasInput("My Radio".to_string()));
         assert_eq!(view.alias, "My Radio");
 
-        // Simulate saving (would be done by parent)
+        // Simulate saving (would be done by the parent)
         config
             .device_aliases
             .insert("AA:BB:CC:DD:EE:FF".to_string(), "My Radio".to_string());
@@ -473,7 +477,7 @@ mod tests {
     // Test DeviceListEvent enum
     #[test]
     fn test_device_list_event_debug() {
-        let event = BLERadioFound("device1".into());
+        let event = BLEMeshtasticRadioFound("device1".into());
         let debug_str = format!("{:?}", event);
         assert!(debug_str.contains("BLERadioFound"));
         assert!(debug_str.contains("device1"));
@@ -532,9 +536,9 @@ mod tests {
         let mut view = DeviceListView::default();
 
         // Add multiple devices
-        let _ = view.update(BLERadioFound("device1".into()));
-        let _ = view.update(BLERadioFound("device2".into()));
-        let _ = view.update(BLERadioFound("device3".into()));
+        let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
+        let _ = view.update(BLEMeshtasticRadioFound("device2".into()));
+        let _ = view.update(BLEMeshtasticRadioFound("device3".into()));
         assert_eq!(view.device_list.len(), 3);
 
         // Remove one
@@ -563,7 +567,7 @@ mod tests {
         assert_eq!(view.editing_alias, Some("device1".into()));
         assert_eq!(view.alias, "alias1");
 
-        // Start editing for device2 - should clear previous state
+        // Start editing for device2 - should clear the previous state
         let _ = view.update(StartEditingAlias("device2".into()));
         assert_eq!(view.editing_alias, Some("device2".into()));
         assert!(view.alias.is_empty()); // Should be cleared
@@ -603,7 +607,7 @@ mod tests {
         let mut view = DeviceListView::default();
 
         // Find device
-        let _ = view.update(BLERadioFound("device1".into()));
+        let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         // Start editing alias
         let _ = view.update(StartEditingAlias("device1".into()));
@@ -650,7 +654,7 @@ mod tests {
         let mut view = DeviceListView::default();
         let long_name = "B".repeat(100);
 
-        let _ = view.update(BLERadioFound(long_name.clone()));
+        let _ = view.update(BLEMeshtasticRadioFound(long_name.clone()));
         assert!(view.device_list.contains_key(&long_name));
     }
 

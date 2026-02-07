@@ -10,21 +10,21 @@ license = "GPL-3.0"
 include = ["src", "assets", "build.rs", "README.md", "LICENSE"]
 
 [features]
-default = []
+default = ["meshtastic", "meshcore"]
+meshcore = []
+meshtastic = ["dep:meshtastic"]
 debug = ["iced/debug"] # use "... --features "debug" to enable this for Iced
 hot = ["iced/hot"]
 # Allow the feature to check for app updates to be disabled by people building for distribution channels that take care of updates themselves
 auto-update = ["self_update"]
 
 [dependencies]
-# For communications with BLE connected radios running mesht firmware
-meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"] }
 # GUI framework
 iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia", "tokio", "advanced", "canvas", "x11", "wayland", "advanced-shaping", "image"] }
 # for saving config files in platform-dependent directories
 directories = { version = "6.0.0", default-features = false }
 # for serialization and deserialization of config struct
-serde = { version = "1.0.228", default-features = false, features = ["derive"] }
+serde = { version = "1.0.228", default-features = false, features = ["std", "derive"] }
 # for serialization and deserialization of Config to toml format
 toml = { version = "0.9.11", default-features = false, features = ["serde", "parse", "display"] }
 # For gui.send to send messages to UI from device_subscription.rs
@@ -34,7 +34,7 @@ tokio-stream = { version = "0.1.17", default-features = false }
 # For receiving messages from UI in device_subscription.rs
 async-stream = { version = "0.3.6", default-features = false }
 # For mpsc sender/receiver and async file IO
-tokio = { version = "1.48.0", default-features = false }
+tokio = { version = "1.48.0", default-features = false, features = ["fs", "io-util"] }
 # For ordering messages in ChannelView
 ringmap = { version = "0.2" }
 # For horizontal busy bar in easing.rs
@@ -45,16 +45,17 @@ webbrowser = { version = "1.0", default-features = false }
 iced_aw = { version = "0.13", default-features = false, features = ["menu"] }
 btleplug = { version = "0.11.8", default-features = false }
 emojis = { version = "0.8.0", default-features = false }
+uuid = { version = "1.20.0", default-features = false, features = ["v4"] }
 
 # Optional dependencies
+meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
 self_update = { version = "0.42.0", default-features = false, optional = true }
-uuid = { version = "1.20.0", default-features = false, features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3.23.0"
 
 [build-dependencies]
-iced_fontello = "0.13"
+iced_fontello = "0.14.0"
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
 

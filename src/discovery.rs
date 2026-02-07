@@ -1,5 +1,7 @@
 use crate::device_list_view::DeviceListEvent;
-use crate::device_list_view::DeviceListEvent::{BLERadioFound, BLERadioLost, Error};
+#[cfg(feature = "meshtastic")]
+use crate::device_list_view::DeviceListEvent::BLEMeshtasticRadioFound;
+use crate::device_list_view::DeviceListEvent::{BLERadioLost, Error};
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
 use btleplug::platform::{Adapter, Manager};
 use futures::SinkExt;
@@ -10,10 +12,20 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use uuid::Uuid;
 
-const MSH_SERVICE: Uuid = Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd);
+#[cfg(feature = "meshtastic")]
+const MESHTASTIC_SERVICE_UUID: Uuid = Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd);
+#[cfg(feature = "meshcore")]
+const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
 /// A stream of [DeviceListEvent] announcing the discovery or loss of devices via BLE
 pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
+    #[allow(unused_mut)]
+    let mut service_filter: Vec<Uuid> = vec![];
+    #[cfg(feature = "meshtastic")]
+    service_filter.push(MESHTASTIC_SERVICE_UUID);
+    #[cfg(feature = "meshcore")]
+    service_filter.push(MESHCORE_SERVICE_UUID);
+
     stream::channel(
         100,
         move |mut gui_sender: Sender<DeviceListEvent>| async move {
@@ -29,7 +41,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                                 // start scanning for MeshTastic radios
                                 match adapter
                                     .start_scan(ScanFilter {
-                                        services: vec![MSH_SERVICE],
+                                        services: service_filter,
                                     })
                                     .await
                                 {
@@ -129,9 +141,12 @@ async fn announce_device_changes(
     }
 
     // Send found events
+    #[allow(unused_variables)] // TODO
     for device in found {
+        // TODO send with a radio type or the service UUID
+        #[cfg(feature = "meshtastic")]
         gui_sender
-            .send(BLERadioFound(device))
+            .send(BLEMeshtasticRadioFound(device))
             .await
             .unwrap_or_else(|e| eprintln!("Discovery could not send BLERadioFound: {e}"));
     }
@@ -487,7 +502,7 @@ mod tests {
     #[test]
     fn test_msh_service_uuid() {
         assert_eq!(
-            MSH_SERVICE,
+            MESHTASTIC_SERVICE_UUID,
             Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd)
         );
     }

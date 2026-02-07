@@ -20,8 +20,10 @@ use crate::device_list_view::{DeviceListEvent, DeviceListView};
 use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
 use crate::device_view::DeviceView;
 use crate::device_view::DeviceViewMessage;
+#[allow(unused_imports)] // TODO remove later
 use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::discovery::ble_discovery;
+#[cfg(feature = "meshtastic")]
 use crate::mesht::device_subscription;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
@@ -33,6 +35,7 @@ use iced::widget::{Column, Space, center, container, mouse_area, opaque, operati
 use iced::window::icon;
 use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
+#[cfg(feature = "meshtastic")]
 use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
 use self_update::Status;
@@ -55,10 +58,12 @@ mod widgets;
 /// Icons generated as a font using iced_fontello
 mod icons;
 mod channel_id;
-mod mesht;
 mod notification;
 #[cfg(test)]
 mod test_helper;
+
+#[cfg(feature = "meshtastic")]
+mod mesht;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -187,6 +192,7 @@ pub enum SubscriberMessage {
     SendEmojiReply(String, ChannelId, u32),
     SendPosition(ChannelId, MCPosition),
     SendUser(ChannelId, MCUser),
+    #[cfg(feature = "meshtastic")]
     MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
 }
 
@@ -684,6 +690,7 @@ impl MeshChat {
     fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![
             Subscription::run(ble_discovery).map(DeviceListViewEvent),
+            #[cfg(feature = "meshtastic")]
             Subscription::run(device_subscription::subscribe)
                 .map(|m| DeviceViewEvent(SubscriptionMessage(m))),
             event::listen().map(Message::Event),
