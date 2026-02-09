@@ -1,10 +1,13 @@
-all: clippy udeps test debug
+all: clippy udeps test features debug
 
 pr: checks tests
 
 checks: format clippy publish udeps todos
 
 tests: debug release publish test
+
+features:
+	cargo check-all-features
 
 format:
 	cargo fmt --all -- --check
