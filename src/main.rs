@@ -12,16 +12,16 @@ use crate::Message::{
     ToggleSaveWindowPosition, ToggleSaveWindowSize, ToggleShowPositionUpdates,
     ToggleShowUserUpdates,
 };
-use crate::View::DeviceList;
+use crate::View::{DeviceListView, DeviceView};
 use crate::channel_id::ChannelId;
 use crate::channel_view_entry::MCMessage;
 use crate::config::{Config, HistoryLength, load_config};
-use crate::device_list_view::{DeviceListEvent, DeviceListView};
-use crate::device_view::ConnectionState::{Connected, Connecting, Disconnecting};
-use crate::device_view::DeviceView;
-use crate::device_view::DeviceViewMessage;
+use crate::device::ConnectionState::{Connected, Connecting, Disconnecting};
+use crate::device::Device;
+use crate::device::DeviceViewMessage;
 #[allow(unused_imports)] // TODO remove later
-use crate::device_view::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
+use crate::device::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
+use crate::device_list::{DeviceList, DeviceListEvent};
 use crate::discovery::ble_discovery;
 #[cfg(feature = "meshtastic")]
 use crate::mesht::device_subscription;
@@ -48,8 +48,8 @@ use tokio::sync::mpsc::Sender;
 mod channel_view;
 mod channel_view_entry;
 mod config;
-mod device_list_view;
-mod device_view;
+mod device;
+mod device_list;
 mod discovery;
 mod styles;
 mod widgets;
@@ -142,16 +142,16 @@ impl fmt::Display for MCPosition {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum View {
     #[default]
-    DeviceList,
-    Device(Option<ChannelId>),
+    DeviceListView,
+    DeviceView(Option<ChannelId>),
 }
 
 #[derive(Default)]
 struct MeshChat {
     config: Config,
     current_view: View,
-    device_list_view: DeviceListView,
-    device_view: DeviceView,
+    device_list: DeviceList,
+    device: Device,
     notifications: Notifications,
     showing_settings: bool,
     show_user: Option<MCUser>,
@@ -298,7 +298,7 @@ impl MeshChat {
     /// Return the title of the app, which is used in the window title bar.
     /// Include the version number of the app and the number of unread messages, if any
     fn title(&self) -> String {
-        let unread_count = self.device_view.unread_count(
+        let unread_count = self.device.unread_count(
             self.config.show_position_updates,
             self.config.show_user_updates,
         );
@@ -328,6 +328,7 @@ impl MeshChat {
             }
         })
     }
+
     /// Update the app state based on a message received from the GUI.
     /// This is the main function of the app, and it drives the GUI.
     /// It is called every time a message is received from the GUI, and it updates the app state
@@ -338,10 +339,8 @@ impl MeshChat {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Navigation(view) => self.navigate(view),
-            DeviceListViewEvent(device_list_event) => {
-                self.device_list_view.update(device_list_event)
-            }
-            DeviceViewEvent(device_event) => self.device_view.update(device_event),
+            DeviceListViewEvent(device_list_event) => self.device_list.update(device_list_event),
+            DeviceViewEvent(device_event) => self.device.update(device_event),
             Exit => window::latest().and_then(window::close),
             AppNotification(summary, detail, rx_time) => self
                 .notifications
@@ -351,11 +350,10 @@ impl MeshChat {
                 .add(Notification::Error(summary, detail, rx_time)),
             Message::None => Task::none(),
             ConfigLoaded(config) => {
-                self.device_view.set_history_length(config.history_length);
-                self.device_view
+                self.device.set_history_length(config.history_length);
+                self.device
                     .set_show_position_updates(config.show_position_updates);
-                self.device_view
-                    .set_show_user_updates(config.show_user_updates);
+                self.device.set_show_user_updates(config.show_user_updates);
 
                 self.config = config;
 
@@ -370,7 +368,7 @@ impl MeshChat {
                 if let Some(ble_device) = &self.config.ble_device
                     && self.config.auto_reconnect
                 {
-                    tasks.push(self.device_view.update(DeviceViewMessage::ConnectRequest(
+                    tasks.push(self.device.update(DeviceViewMessage::ConnectRequest(
                         ble_device.clone(),
                         self.config.channel_id,
                     )))
@@ -417,7 +415,7 @@ impl MeshChat {
             }
             CopyToClipBoard(string) => clipboard::write(string),
             AddNodeAlias(node_id, alias) => {
-                self.device_view.stop_editing_alias();
+                self.device.stop_editing_alias();
                 if !alias.is_empty() {
                     self.config.aliases.insert(node_id, alias);
                     self.config.save_config()
@@ -430,7 +428,7 @@ impl MeshChat {
                 self.config.save_config()
             }
             AddDeviceAlias(ble_device, alias) => {
-                self.device_list_view.stop_editing_alias();
+                self.device_list.stop_editing_alias();
                 if !alias.is_empty() {
                     self.config.device_aliases.insert(ble_device, alias);
                     self.config.save_config()
@@ -453,13 +451,13 @@ impl MeshChat {
             }
             ToggleShowPositionUpdates => {
                 self.config.show_position_updates = !self.config.show_position_updates;
-                self.device_view
+                self.device
                     .set_show_position_updates(self.config.show_position_updates);
                 self.config.save_config()
             }
             ToggleShowUserUpdates => {
                 self.config.show_user_updates = !self.config.show_user_updates;
-                self.device_view
+                self.device
                     .set_show_user_updates(self.config.show_user_updates);
                 self.config.save_config()
             }
@@ -551,8 +549,8 @@ impl MeshChat {
                 // Exit any interactive modes underway
                 self.showing_settings = false;
                 self.show_user = None;
-                self.device_view.cancel_interactive();
-                self.device_list_view.stop_editing_alias();
+                self.device.cancel_interactive();
+                self.device_list.stop_editing_alias();
                 Task::none()
             }
             Event::Window(window::Event::Moved(point)) => {
@@ -572,8 +570,8 @@ impl MeshChat {
                 }
             }
             Event::Window(window::Event::CloseRequested) => {
-                if let Connected(_) = self.device_view.connection_state() {
-                    self.device_view.update(DisconnectRequest(true))
+                if let Connected(_) = self.device.connection_state() {
+                    self.device.update(DisconnectRequest(true))
                 } else {
                     window::latest().and_then(window::close)
                 }
@@ -585,19 +583,17 @@ impl MeshChat {
 
     /// Render the main app view
     fn view(&self) -> Element<'_, Message> {
-        let state = self.device_view.connection_state();
+        let state = self.device.connection_state();
 
         // Build the inner view and show busy if in DeviceList which is in discovery mode
         let (inner, scanning) = match self.current_view {
-            DeviceList => (self.device_list_view.view(&self.config, state), true),
-            View::Device(_) => (self.device_view.view(&self.config), false),
+            DeviceListView => (self.device_list.view(&self.config, state), true),
+            DeviceView(_) => (self.device.view(&self.config), false),
         };
 
         let header = match self.current_view {
-            DeviceList => self.device_list_view.header(&self.config, state),
-            View::Device(_) => self
-                .device_view
-                .header(&self.config, state, &self.device_list_view),
+            DeviceListView => self.device_list.header(&self.config, state),
+            DeviceView(_) => self.device.header(&self.config, state, &self.device_list),
         };
 
         // Create the stack of elements, starting with the header
@@ -704,8 +700,8 @@ impl MeshChat {
     /// Navigate to show a different view, as defined by the [View] enum
     fn navigate(&mut self, view: View) -> Task<Message> {
         self.current_view = view;
-        if let View::Device(Some(channel_id)) = &self.current_view {
-            self.device_view
+        if let DeviceView(Some(channel_id)) = &self.current_view {
+            self.device
                 .update(DeviceViewMessage::ShowChannel(Some(*channel_id)))
         } else {
             Task::none()
@@ -716,6 +712,7 @@ impl MeshChat {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::View::DeviceListView;
     use crate::channel_view_entry::MCMessage::NewTextMessage;
     use iced::keyboard::key::NativeCode::MacOS;
     use iced::keyboard::{Key, Location};
@@ -757,14 +754,14 @@ mod tests {
     #[test]
     fn test_default_view() {
         let meshchat = test_helper::test_app();
-        assert_eq!(meshchat.current_view, DeviceList);
+        assert_eq!(meshchat.current_view, DeviceListView);
     }
 
     #[test]
     fn navigate_to_device_view() {
         let mut meshchat = test_helper::test_app();
-        let _ = meshchat.update(Navigation(View::Device(None)));
-        assert_eq!(meshchat.current_view, View::Device(None));
+        let _ = meshchat.update(Navigation(DeviceView(None)));
+        assert_eq!(meshchat.current_view, DeviceView(None));
     }
 
     #[test]
@@ -829,17 +826,17 @@ mod tests {
 
     #[test]
     fn test_view_default() {
-        assert_eq!(View::default(), DeviceList);
+        assert_eq!(View::default(), DeviceListView);
     }
 
     #[test]
     fn test_view_equality() {
-        assert_eq!(View::Device(None), View::Device(None));
+        assert_eq!(DeviceView(None), DeviceView(None));
         assert_eq!(
-            View::Device(Some(ChannelId::Channel(0))),
-            View::Device(Some(ChannelId::Channel(0)))
+            DeviceView(Some(ChannelId::Channel(0))),
+            DeviceView(Some(ChannelId::Channel(0)))
         );
-        assert_ne!(DeviceList, View::Device(None));
+        assert_ne!(DeviceListView, DeviceView(None));
     }
 
     #[test]

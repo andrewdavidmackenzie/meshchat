@@ -5,8 +5,8 @@ use crate::channel_view::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyW
 use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
-use crate::device_view::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
-use crate::device_view::{long_name, short_name};
+use crate::device::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
+use crate::device::{long_name, short_name};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
     alert_message_style, bubble_style, button_chip_style, menu_button_style, message_text_style,

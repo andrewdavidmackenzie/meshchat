@@ -2,16 +2,14 @@ use crate::Message::{
     AddDeviceAlias, DeviceListViewEvent, DeviceViewEvent, Navigation, RemoveDeviceAlias,
 };
 use crate::config::Config;
+use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
+use crate::device::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
+use crate::device::{ConnectionState, Device};
 #[cfg(feature = "meshcore")]
-use crate::device_list_view::DeviceListEvent::BLEMeshCoreRadioFound;
+use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
-use crate::device_list_view::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list_view::DeviceListEvent::{
-    AliasInput, BLERadioLost, Error, StartEditingAlias,
-};
-use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-use crate::device_view::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
-use crate::device_view::{ConnectionState, DeviceView};
+use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
+use crate::device_list::DeviceListEvent::{AliasInput, BLERadioLost, Error, StartEditingAlias};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
 use crate::{MeshChat, Message, View};
 use iced::Bottom;
@@ -55,7 +53,7 @@ pub struct DeviceInfo {
 }
 
 #[derive(Default)]
-pub struct DeviceListView {
+pub struct DeviceList {
     device_list: HashMap<String, DeviceInfo>, // BLE address -> DeviceInfo
     alias: String,
     editing_alias: Option<String>,
@@ -65,7 +63,7 @@ async fn empty() {}
 
 const ALIAS_INPUT_TEXT_ID: &str = "alias_input_text";
 
-impl DeviceListView {
+impl DeviceList {
     pub fn update(&mut self, device_list_event: DeviceListEvent) -> Task<Message> {
         match device_list_event {
             #[cfg(feature = "meshtastic")]
@@ -156,7 +154,7 @@ impl DeviceListView {
             Connected(mac_address) => Row::new().push(
                 button(text(self.device_name_or_alias(mac_address, config)))
                     .style(button_chip_style)
-                    .on_press(Navigation(View::Device(None))),
+                    .on_press(Navigation(View::DeviceView(None))),
             ),
             Disconnecting(mac_address) => Row::new().push(
                 text(format!(
@@ -177,7 +175,7 @@ impl DeviceListView {
             )
         }
 
-        header.push(DeviceView::settings_button()).into()
+        header.push(Device::settings_button()).into()
     }
 
     pub fn view<'a>(
@@ -194,7 +192,7 @@ impl DeviceListView {
         for (ble_device, device_info) in &self.device_list {
             let mut device_row = Row::new().align_y(Center).padding(2);
 
-            // Add firmware icon based on radio type
+            // Add firmware icon based on a radio type
             let icon_path = match device_info.radio_type {
                 RadioType::None => "assets/images/unknown.png",
                 #[cfg(feature = "meshtastic")]
@@ -357,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_default() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         assert!(view.device_list.is_empty());
         assert!(view.alias.is_empty());
         assert!(view.editing_alias.is_none());
@@ -365,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_ble_radio_found() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         assert!(view.device_list.is_empty());
 
         let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
@@ -376,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_ble_radio_found_duplicate() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
         let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
@@ -387,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_ble_radio_found_multiple() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
         let _ = view.update(BLEMeshtasticRadioFound("11:22:33:44:55:66".to_string()));
@@ -397,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_ble_radio_lost() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
         assert_eq!(view.device_list.len(), 1);
@@ -408,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_ble_radio_lost_nonexistent() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         // Losing a device that was never found should not panic
         let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
@@ -417,7 +415,7 @@ mod tests {
 
     #[test]
     fn test_alias_input() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         assert!(view.alias.is_empty());
 
         let _ = view.update(AliasInput("My Radio".to_string()));
@@ -426,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_start_editing_alias() {
-        let mut view = DeviceListView {
+        let mut view = DeviceList {
             alias: "existing".to_string(),
             ..Default::default()
         };
@@ -439,7 +437,7 @@ mod tests {
 
     #[test]
     fn test_stop_editing_alias() {
-        let mut view = DeviceListView {
+        let mut view = DeviceList {
             editing_alias: Some("AA:BB:CC:DD:EE:FF".to_string()),
             alias: "My Radio".to_string(),
             ..Default::default()
@@ -453,7 +451,7 @@ mod tests {
 
     #[test]
     fn test_device_name_or_alias_no_alias() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
 
         let name = view.device_name_or_alias("AA:BB:CC:DD:EE:FF", &config);
@@ -462,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_device_name_or_alias_with_alias() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let mut config = Config::default();
         config
             .device_aliases
@@ -474,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_device_name_or_alias_different_device() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let mut config = Config::default();
         config
             .device_aliases
@@ -487,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_error_returns_task() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         // Error should return a task (not Task::none)
         let _task = view.update(Error("Test error".to_string()));
@@ -496,7 +494,7 @@ mod tests {
 
     #[test]
     fn test_workflow_find_alias_lose() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let mut config = Config::default();
 
         // Find a device
@@ -571,7 +569,7 @@ mod tests {
     // Additional update tests
     #[test]
     fn test_update_alias_input_empty() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         view.alias = "existing".into();
 
         let _ = view.update(AliasInput("".into()));
@@ -580,7 +578,7 @@ mod tests {
 
     #[test]
     fn test_update_alias_input_special_chars() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         let _ = view.update(AliasInput("My Radio 🔊 #1".into()));
         assert_eq!(view.alias, "My Radio 🔊 #1");
@@ -588,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_multiple_devices_found_and_lost() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         // Add multiple devices
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
@@ -614,7 +612,7 @@ mod tests {
 
     #[test]
     fn test_start_editing_alias_clears_previous() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         // Start editing for device1
         let _ = view.update(StartEditingAlias("device1".into()));
@@ -630,7 +628,7 @@ mod tests {
 
     #[test]
     fn test_device_name_or_alias_empty_string() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
 
         let name = view.device_name_or_alias("", &config);
@@ -639,7 +637,7 @@ mod tests {
 
     #[test]
     fn test_device_name_or_alias_with_multiple_aliases() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let mut config = Config::default();
         config
             .device_aliases
@@ -659,7 +657,7 @@ mod tests {
 
     #[test]
     fn test_editing_alias_while_device_lost() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         // Find device
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
@@ -680,7 +678,7 @@ mod tests {
 
     #[test]
     fn test_stop_editing_alias_when_not_editing() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         assert!(view.editing_alias.is_none());
 
         // Should not panic when not editing
@@ -691,14 +689,14 @@ mod tests {
 
     #[test]
     fn test_error_with_empty_message() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _task = view.update(Error("".into()));
         // Should not panic
     }
 
     #[test]
     fn test_error_with_long_message() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let long_error = "A".repeat(1000);
         let _task = view.update(Error(long_error));
         // Should not panic
@@ -706,7 +704,7 @@ mod tests {
 
     #[test]
     fn test_ble_radio_found_with_long_name() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let long_name = "B".repeat(100);
 
         let _ = view.update(BLEMeshtasticRadioFound(long_name.clone()));
@@ -715,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_device_list_view_default_values() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         assert!(view.device_list.is_empty());
         assert!(view.alias.is_empty());
         assert!(view.editing_alias.is_none());
@@ -724,7 +722,7 @@ mod tests {
     #[cfg(feature = "meshcore")]
     #[test]
     fn test_ble_meshcore_radio_found() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         assert!(view.device_list.is_empty());
 
         let _ = view.update(BLEMeshCoreRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
@@ -743,7 +741,7 @@ mod tests {
     #[cfg(feature = "meshcore")]
     #[test]
     fn test_ble_meshcore_radio_found_duplicate() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         let _ = view.update(BLEMeshCoreRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
         let _ = view.update(BLEMeshCoreRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
@@ -840,7 +838,7 @@ mod tests {
     #[cfg(feature = "meshtastic")]
     #[test]
     fn test_radio_type_meshtastic() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("AA:BB:CC:DD:EE:FF".to_string()));
 
         let device_info = view
@@ -852,14 +850,14 @@ mod tests {
 
     #[test]
     fn test_alias_unicode() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(AliasInput("📱 My Device 日本語".into()));
         assert_eq!(view.alias, "📱 My Device 日本語");
     }
 
     #[test]
     fn test_device_list_empty_after_all_lost() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         // Add some devices
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
@@ -876,16 +874,16 @@ mod tests {
 
     #[test]
     fn test_view_empty_device_list() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
         let connection_state = Disconnected(None, None);
         let _element = view.view(&config, &connection_state);
-        // Should not panic and return "Searching" message element
+        // Should not panic and return the "Searching" message element
     }
 
     #[test]
     fn test_view_with_devices_disconnected() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
         let _ = view.update(BLEMeshtasticRadioFound("device2".into()));
 
@@ -897,7 +895,7 @@ mod tests {
 
     #[test]
     fn test_view_with_device_connecting() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -908,7 +906,7 @@ mod tests {
 
     #[test]
     fn test_view_with_device_connected() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -919,7 +917,7 @@ mod tests {
 
     #[test]
     fn test_view_with_device_disconnecting() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -930,7 +928,7 @@ mod tests {
 
     #[test]
     fn test_view_with_alias() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let mut config = Config::default();
@@ -945,7 +943,7 @@ mod tests {
 
     #[test]
     fn test_view_while_editing_alias() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
         let _ = view.update(StartEditingAlias("device1".into()));
         let _ = view.update(AliasInput("New Alias".into()));
@@ -958,7 +956,7 @@ mod tests {
 
     #[test]
     fn test_header_disconnected() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
         let connection_state = Disconnected(None, None);
         let _element = view.header(&config, &connection_state);
@@ -967,7 +965,7 @@ mod tests {
 
     #[test]
     fn test_header_connecting() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
         let connection_state = Connecting("device1".into());
         let _element = view.header(&config, &connection_state);
@@ -976,7 +974,7 @@ mod tests {
 
     #[test]
     fn test_header_connected() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
         let connection_state = Connected("device1".into());
         let _element = view.header(&config, &connection_state);
@@ -985,7 +983,7 @@ mod tests {
 
     #[test]
     fn test_header_disconnecting() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
         let connection_state = Disconnecting("device1".into());
         let _element = view.header(&config, &connection_state);
@@ -994,7 +992,7 @@ mod tests {
 
     #[test]
     fn test_header_with_alias() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let mut config = Config::default();
         config
             .device_aliases
@@ -1007,7 +1005,7 @@ mod tests {
 
     #[test]
     fn test_view_many_devices() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         for i in 0..20 {
             let _ = view.update(BLEMeshtasticRadioFound(format!("device{}", i)));
         }
@@ -1020,7 +1018,7 @@ mod tests {
 
     #[test]
     fn test_view_with_error_in_connection_state() {
-        let view = DeviceListView::default();
+        let view = DeviceList::default();
         let config = Config::default();
         let connection_state =
             Disconnected(Some("device1".into()), Some("Connection failed".into()));
@@ -1032,12 +1030,12 @@ mod tests {
 
     #[test]
     fn test_view_shows_connect_button_when_disconnected() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
 
-        // When disconnected, view should show Connect button (exercises that branch)
+        // When disconnected, the view should show the Connect button (exercises that branch)
         let connection_state = Disconnected(None, None);
         let _element = view.view(&config, &connection_state);
         // Exercises the Disconnected match arm in view()
@@ -1045,7 +1043,7 @@ mod tests {
 
     #[test]
     fn test_view_shows_disconnect_button_when_connected_to_this_device() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -1058,7 +1056,7 @@ mod tests {
 
     #[test]
     fn test_view_shows_nothing_when_connected_to_different_device() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -1071,7 +1069,7 @@ mod tests {
 
     #[test]
     fn test_view_shows_connecting_when_connecting_to_this_device() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -1084,7 +1082,7 @@ mod tests {
 
     #[test]
     fn test_view_shows_nothing_when_connecting_to_different_device() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -1097,7 +1095,7 @@ mod tests {
 
     #[test]
     fn test_view_shows_disconnecting_when_disconnecting_this_device() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -1109,7 +1107,7 @@ mod tests {
 
     #[test]
     fn test_view_shows_nothing_when_disconnecting_different_device() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
 
         let config = Config::default();
@@ -1121,7 +1119,7 @@ mod tests {
 
     #[test]
     fn test_view_alias_vs_original_name() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
         let _ = view.update(BLEMeshtasticRadioFound("device2".into()));
 
@@ -1138,7 +1136,7 @@ mod tests {
 
     #[test]
     fn test_view_editing_alias_shows_text_input() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
         let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
         let _ = view.update(BLEMeshtasticRadioFound("device2".into()));
 
@@ -1154,21 +1152,21 @@ mod tests {
 
     #[test]
     fn test_menu_bar_with_alias_exists() {
-        // When alias exists, menu should show "Unalias this device"
-        let _menu = DeviceListView::menu_bar("device1", true);
+        // When alias exists, the menu should show "Unalias this device"
+        let _menu = DeviceList::menu_bar("device1", true);
         // Exercises alias_exists == true branch
     }
 
     #[test]
     fn test_menu_bar_without_alias() {
-        // When no alias, menu should show "Alias this device"
-        let _menu = DeviceListView::menu_bar("device1", false);
+        // When no alias, the menu should show "Alias this device"
+        let _menu = DeviceList::menu_bar("device1", false);
         // Exercises alias_exists == false branch
     }
 
     #[test]
     fn test_view_all_radio_types() {
-        let mut view = DeviceListView::default();
+        let mut view = DeviceList::default();
 
         // Add devices of different types
         #[cfg(feature = "meshtastic")]

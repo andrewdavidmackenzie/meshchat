@@ -8,8 +8,8 @@ use crate::SubscriptionEvent::{
 use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::ChannelViewEntry;
 use crate::config::{Config, HistoryLength};
-use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-use crate::device_view::DeviceViewMessage::{
+use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
+use crate::device::DeviceViewMessage::{
     AliasInput, ChannelMsg, ClearFilter, ConnectRequest, DisconnectRequest, ForwardMessage,
     SearchInput, SendEmojiReplyMessage, SendInfoMessage, SendPositionMessage, SendTextMessage,
     ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
@@ -25,11 +25,11 @@ use crate::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
 };
-use crate::View::DeviceList;
+use crate::View::DeviceListView;
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
-use crate::device_list_view::DeviceListView;
+use crate::device_list::DeviceList;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
     fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
@@ -80,7 +80,7 @@ pub enum DeviceViewMessage {
 }
 
 #[derive(Default)]
-pub struct DeviceView {
+pub struct Device {
     connection_state: ConnectionState,
     subscription_sender: Option<Sender<SubscriberMessage>>,
     my_node_num: Option<u32>,
@@ -103,7 +103,7 @@ pub struct DeviceView {
 }
 async fn empty() {}
 
-impl DeviceView {
+impl Device {
     /// Get the current [ConnectionState] of this device
     pub fn connection_state(&self) -> &ConnectionState {
         &self.connection_state
@@ -139,12 +139,14 @@ impl DeviceView {
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
         match device_view_message {
             ConnectRequest(ble_device, channel_id) => {
-                return self
-                    .subscriber_send(Connect(ble_device), Navigation(View::Device(channel_id)));
+                return self.subscriber_send(
+                    Connect(ble_device),
+                    Navigation(View::DeviceView(channel_id)),
+                );
             }
             DisconnectRequest(exit) => {
                 self.exit_pending = exit;
-                return self.subscriber_send(Disconnect, Navigation(DeviceList));
+                return self.subscriber_send(Disconnect, Navigation(DeviceListView));
             }
             ForwardMessage(channel_id) => {
                 if let Some(entry) = self.forwarding_message.take() {
@@ -306,7 +308,7 @@ impl DeviceView {
                 self.channels.clear();
                 self.my_node_num = None;
                 self.viewing_channel = None;
-                Task::perform(empty(), |_| Navigation(DeviceList))
+                Task::perform(empty(), |_| Navigation(DeviceListView))
             }
             Ready(sender) => {
                 self.subscription_sender = Some(sender);
@@ -314,13 +316,13 @@ impl DeviceView {
             }
             ConnectionError(id, summary, detail) => {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
-                Task::perform(empty(), |_| Navigation(DeviceList))
+                Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
                         AppError(summary.clone(), detail.clone(), MeshChat::now())
                     }))
             }
             NotReady => {
-                Task::perform(empty(), |_| Navigation(DeviceList))
+                Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
                         AppError("Subscription not ready".to_string(),
                                  "An attempt was made to communicate to radio prior to the subscription being Ready".to_string(),
@@ -483,12 +485,12 @@ impl DeviceView {
         &'a self,
         config: &'a Config,
         state: &'a ConnectionState,
-        device_list_view: &DeviceListView,
+        device_list_view: &DeviceList,
     ) -> Element<'a, Message> {
         let mut header = Row::new().padding(4).align_y(Center).push(
             button("Devices")
                 .style(button_chip_style)
-                .on_press(Navigation(DeviceList)),
+                .on_press(Navigation(DeviceListView)),
         );
 
         header = match state {
@@ -1067,9 +1069,8 @@ mod tests {
     use super::*;
     use crate::Message::Navigation;
     use crate::SubscriberMessage::{Connect, Disconnect};
-    use crate::View::DeviceList;
-    use crate::device_view::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-    use crate::device_view::DeviceViewMessage::{ClearFilter, SearchInput};
+    use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
+    use crate::device::DeviceViewMessage::{ClearFilter, SearchInput};
     use crate::test_helper;
     use btleplug::api::BDAddr;
 
@@ -1105,15 +1106,12 @@ mod tests {
     async fn test_connect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
-        let _task = meshchat.device_view.subscriber_send(
+        let _task = meshchat.device.subscriber_send(
             Connect(BDAddr::from([0, 0, 0, 0, 0, 0]).to_string()),
-            Navigation(DeviceList),
+            Navigation(DeviceListView),
         );
 
-        assert_eq!(
-            meshchat.device_view.connection_state,
-            Disconnected(None, None)
-        );
+        assert_eq!(meshchat.device.connection_state, Disconnected(None, None));
     }
 
     #[tokio::test]
@@ -1121,12 +1119,9 @@ mod tests {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
         let _task = meshchat
-            .device_view
-            .subscriber_send(Disconnect, Navigation(DeviceList));
-        assert_eq!(
-            meshchat.device_view.connection_state,
-            Disconnected(None, None)
-        );
+            .device
+            .subscriber_send(Disconnect, Navigation(DeviceListView));
+        assert_eq!(meshchat.device.connection_state, Disconnected(None, None));
     }
 
     #[test]
@@ -1241,7 +1236,7 @@ mod tests {
 
     #[test]
     fn test_device_view_default() {
-        let device_view = DeviceView::default();
+        let device_view = Device::default();
         assert_eq!(device_view.connection_state(), &Disconnected(None, None));
         assert_eq!(device_view.unread_count(true, true), 0);
         assert!(device_view.channel_views.is_empty());
@@ -1249,7 +1244,7 @@ mod tests {
 
     #[test]
     fn test_search_input() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.filter.is_empty());
 
         let _ = device_view.update(SearchInput("test".into()));
@@ -1258,7 +1253,7 @@ mod tests {
 
     #[test]
     fn test_clear_filter() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let _ = device_view.update(SearchInput("test".into()));
         assert!(!device_view.filter.is_empty());
 
@@ -1268,7 +1263,7 @@ mod tests {
 
     #[test]
     fn test_cancel_interactive() {
-        let mut device_view = DeviceView {
+        let mut device_view = Device {
             editing_alias: Some(123),
             alias: "test alias".into(),
             ..Default::default()
@@ -1283,7 +1278,7 @@ mod tests {
 
     #[test]
     fn test_start_editing_alias() {
-        let mut device_view = DeviceView {
+        let mut device_view = Device {
             alias: "existing".into(),
             ..Default::default()
         };
@@ -1296,7 +1291,7 @@ mod tests {
 
     #[test]
     fn test_stop_editing_alias() {
-        let mut device_view = DeviceView {
+        let mut device_view = Device {
             editing_alias: Some(123),
             alias: "test".into(),
             ..Default::default()
@@ -1310,14 +1305,14 @@ mod tests {
 
     #[test]
     fn test_alias_input() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let _ = device_view.update(AliasInput("new alias".into()));
         assert_eq!(device_view.alias, "new alias");
     }
 
     #[test]
     fn test_set_history_length() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.set_history_length(HistoryLength::NumberOfMessages(50));
         assert_eq!(
             device_view.history_length,
@@ -1327,7 +1322,7 @@ mod tests {
 
     #[test]
     fn test_set_show_position_updates() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(!device_view.show_position_updates);
 
         device_view.set_show_position_updates(true);
@@ -1339,7 +1334,7 @@ mod tests {
 
     #[test]
     fn test_set_show_user_updates() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(!device_view.show_user_updates);
 
         device_view.set_show_user_updates(true);
@@ -1348,7 +1343,7 @@ mod tests {
 
     #[test]
     fn test_start_forwarding_message() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.forwarding_message.is_none());
 
         let entry = ChannelViewEntry::new(
@@ -1364,7 +1359,7 @@ mod tests {
 
     #[test]
     fn test_stop_forwarding_message() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let entry = ChannelViewEntry::new(
             1,
             100,
@@ -1380,7 +1375,7 @@ mod tests {
 
     #[test]
     fn test_unread_count_empty() {
-        let device_view = DeviceView::default();
+        let device_view = Device::default();
         assert_eq!(device_view.unread_count(true, true), 0);
     }
 
@@ -1388,21 +1383,21 @@ mod tests {
 
     #[test]
     fn test_subscription_connecting_event() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let _ = device_view.update(SubscriptionMessage(ConnectingEvent("device1".into())));
         assert_eq!(device_view.connection_state, Connecting("device1".into()));
     }
 
     #[test]
     fn test_subscription_connected_event() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let _ = device_view.update(SubscriptionMessage(ConnectedEvent("device1".into())));
         assert_eq!(device_view.connection_state, Connected("device1".into()));
     }
 
     #[test]
     fn test_subscription_disconnecting_event() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.connection_state = Connected("device1".into());
         let _ = device_view.update(SubscriptionMessage(DisconnectingEvent("device1".into())));
         assert_eq!(
@@ -1413,7 +1408,7 @@ mod tests {
 
     #[test]
     fn test_subscription_my_node_num() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.my_node_num.is_none());
 
         let _ = device_view.update(SubscriptionMessage(MyNodeNum(12345)));
@@ -1422,7 +1417,7 @@ mod tests {
 
     #[test]
     fn test_subscription_ready() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.subscription_sender.is_none());
 
         let (sender, _receiver) = tokio::sync::mpsc::channel::<SubscriberMessage>(10);
@@ -1432,7 +1427,7 @@ mod tests {
 
     #[test]
     fn test_subscription_device_battery_level() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.battery_level.is_none());
 
         let _ = device_view.update(SubscriptionMessage(DeviceBatteryLevel(Some(75))));
@@ -1441,14 +1436,14 @@ mod tests {
 
     #[test]
     fn test_subscription_device_battery_level_none() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let _ = device_view.update(SubscriptionMessage(DeviceBatteryLevel(None)));
         assert!(device_view.battery_level.is_none());
     }
 
     #[test]
     fn test_subscription_new_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         assert!(device_view.channels.is_empty());
 
@@ -1469,7 +1464,7 @@ mod tests {
 
     #[test]
     fn test_subscription_new_node() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         let node_info = MCNodeInfo {
@@ -1499,7 +1494,7 @@ mod tests {
 
     #[test]
     fn test_subscription_new_node_ignored() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         let node_info = MCNodeInfo {
@@ -1518,7 +1513,7 @@ mod tests {
 
     #[test]
     fn test_subscription_new_node_is_my_node() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(12345);
 
         let position = test_position(37.7749, -122.4194);
@@ -1561,7 +1556,7 @@ mod tests {
 
     #[test]
     fn test_update_node_position() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add a node first
@@ -1601,7 +1596,7 @@ mod tests {
 
     #[test]
     fn test_update_node_position_my_node() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(12345);
 
         // Add my node first
@@ -1632,7 +1627,7 @@ mod tests {
 
     #[test]
     fn test_update_node_user() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add a node first
@@ -1683,14 +1678,14 @@ mod tests {
 
     #[test]
     fn test_aliased_long_name_no_node() {
-        let device_view = DeviceView::default();
+        let device_view = Device::default();
         let config = Config::default();
         assert!(device_view.aliased_long_name(&config, 12345).is_none());
     }
 
     #[test]
     fn test_aliased_long_name_with_alias() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         let node_info = MCNodeInfo {
@@ -1724,7 +1719,7 @@ mod tests {
 
     #[test]
     fn test_aliased_long_name_without_alias() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         let node_info = MCNodeInfo {
@@ -1757,7 +1752,7 @@ mod tests {
 
     #[test]
     fn test_aliased_long_name_node_without_user() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         let node_info = MCNodeInfo {
@@ -1777,13 +1772,13 @@ mod tests {
 
     #[test]
     fn test_connection_state_accessor() {
-        let device_view = DeviceView::default();
+        let device_view = Device::default();
         assert_eq!(device_view.connection_state(), &Disconnected(None, None));
     }
 
     #[test]
     fn test_show_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.viewing_channel.is_none());
 
         let _ = device_view.update(ShowChannel(Some(ChannelId::Channel(0))));
@@ -1792,7 +1787,7 @@ mod tests {
 
     #[test]
     fn test_show_channel_none() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
         let _ = device_view.update(ShowChannel(None));
@@ -1801,7 +1796,7 @@ mod tests {
 
     #[test]
     fn test_subscription_connection_error() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.connection_state = Connecting("device1".into());
 
         let _ = device_view.update(SubscriptionMessage(ConnectionError(
@@ -1818,7 +1813,7 @@ mod tests {
 
     #[test]
     fn test_add_multiple_channels() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
@@ -1845,14 +1840,14 @@ mod tests {
 
     #[test]
     fn test_message_ack_no_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(SubscriptionMessage(MessageACK(ChannelId::Channel(0), 123)));
     }
 
     #[test]
     fn test_channel_msg_no_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(ChannelMsg(
             ChannelId::Channel(0),
@@ -1862,7 +1857,7 @@ mod tests {
 
     #[test]
     fn test_text_input_clear_button_enabled() {
-        // When enabled (has content), button should have on_press handler
+        // When enabled (has content), the button should have on_press handler
         let button = text_input_clear_button(true);
         // We can't directly test on_press, but we verify the button is created
         drop(button);
@@ -1870,14 +1865,14 @@ mod tests {
 
     #[test]
     fn test_text_input_clear_button_disabled() {
-        // When disabled (no content), button should not have on_press handler
+        // When disabled (no content), the button should not have on_press handler
         let button = text_input_clear_button(false);
         drop(button);
     }
 
     #[test]
     fn test_set_channel_name_existing_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.channels.push(MCChannel {
             index: 0,
             name: "Original".into(),
@@ -1889,7 +1884,7 @@ mod tests {
 
     #[test]
     fn test_set_channel_name_nonexistent_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         // No channels exist, should not panic
         device_view.set_channel_name(5, "Test".into());
         assert!(device_view.channels.is_empty());
@@ -1897,7 +1892,7 @@ mod tests {
 
     #[test]
     fn test_set_channel_name_multiple_channels() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.channels.push(MCChannel {
             index: 0,
             name: "Channel0".into(),
@@ -1920,17 +1915,17 @@ mod tests {
 
     #[test]
     fn test_channel_change_no_change() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
-        // Same channel, should return Task::none equivalent behavior
+        // The same channel should return Task::none equivalent behavior
         let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
         assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
     }
 
     #[test]
     fn test_channel_change_to_different_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
         let _task = device_view.channel_change(Some(ChannelId::Channel(1)));
@@ -1939,7 +1934,7 @@ mod tests {
 
     #[test]
     fn test_channel_change_to_none() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
         let _task = device_view.channel_change(None);
@@ -1948,7 +1943,7 @@ mod tests {
 
     #[test]
     fn test_channel_change_from_none() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = None;
 
         let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
@@ -1957,7 +1952,7 @@ mod tests {
 
     #[test]
     fn test_channel_change_to_node() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
         let _task = device_view.channel_change(Some(Node(12345)));
@@ -1966,7 +1961,7 @@ mod tests {
 
     #[test]
     fn test_subscription_channel_name() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.channels.push(MCChannel {
             index: 0,
             name: "Original".into(),
@@ -1978,7 +1973,7 @@ mod tests {
 
     #[test]
     fn test_subscription_channel_name_invalid_index() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         // No channels exist, should not panic
         let _ = device_view.update(SubscriptionMessage(ChannelName(5, "Test".into())));
         assert!(device_view.channels.is_empty());
@@ -1986,7 +1981,7 @@ mod tests {
 
     #[test]
     fn test_subscription_radio_notification() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let _ = device_view.update(SubscriptionMessage(RadioNotification(
             "Test notification".into(),
             1234567890,
@@ -1996,14 +1991,14 @@ mod tests {
 
     #[test]
     fn test_subscription_not_ready() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let _ = device_view.update(SubscriptionMessage(NotReady));
         // Should not panic
     }
 
     #[test]
     fn test_mc_message_received_no_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(SubscriptionMessage(MCMessageReceived(
             ChannelId::Channel(0),
@@ -2016,7 +2011,7 @@ mod tests {
 
     #[test]
     fn test_new_node_info_with_show_user_updates() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         device_view.show_user_updates = true;
 
@@ -2079,7 +2074,7 @@ mod tests {
 
     #[test]
     fn test_new_node_position_with_show_position_updates() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         device_view.show_position_updates = true;
 
@@ -2117,15 +2112,15 @@ mod tests {
 
     #[test]
     fn test_update_node_position_unknown_node() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let position = test_position(40.7128, -74.0060);
-        // Should not panic when updating position for unknown node
+        // Should not panic when updating the position for an unknown node
         device_view.update_node_position(99999, &position);
     }
 
     #[test]
     fn test_update_node_user_unknown_node() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         let user = MCUser {
             id: "test".into(),
             long_name: "Test".into(),
@@ -2138,13 +2133,13 @@ mod tests {
             public_key: vec![],
             is_unmessagable: false,
         };
-        // Should not panic when updating user for unknown node
+        // Should not panic when updating the user for an unknown node
         device_view.update_node_user(99999, &user);
     }
 
     #[test]
     fn test_forward_message_no_forwarding_message() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.forwarding_message.is_none());
 
         let _ = device_view.update(ForwardMessage(ChannelId::Channel(0)));
@@ -2153,7 +2148,7 @@ mod tests {
 
     #[test]
     fn test_send_position_message_no_position() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.my_position.is_none());
 
         let _ = device_view.update(SendPositionMessage(ChannelId::Channel(0)));
@@ -2162,7 +2157,7 @@ mod tests {
 
     #[test]
     fn test_send_info_message_no_user() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.my_user.is_none());
 
         let _ = device_view.update(SendInfoMessage(ChannelId::Channel(0)));
@@ -2171,7 +2166,7 @@ mod tests {
 
     #[test]
     fn test_disconnect_request_with_exit() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(!device_view.exit_pending);
 
         let _ = device_view.update(DisconnectRequest(true));
@@ -2180,7 +2175,7 @@ mod tests {
 
     #[test]
     fn test_disconnect_request_without_exit() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(!device_view.exit_pending);
 
         let _ = device_view.update(DisconnectRequest(false));
@@ -2189,7 +2184,7 @@ mod tests {
 
     #[test]
     fn test_channel_msg_with_valid_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add a channel
@@ -2209,7 +2204,7 @@ mod tests {
 
     #[test]
     fn test_message_ack_with_valid_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add a channel
@@ -2248,7 +2243,7 @@ mod tests {
 
     #[test]
     fn test_add_channel_without_my_node_num() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         assert!(device_view.my_node_num.is_none());
 
         let channel = MCChannel {
@@ -2257,13 +2252,13 @@ mod tests {
         };
         device_view.add_channel(channel);
 
-        // Channel should not be added without my_node_num set
+        // Channel should not be added without a my_node_num set
         assert!(device_view.channels.is_empty());
     }
 
     #[test]
     fn test_subscription_disconnected_clears_state() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         device_view.connection_state = Connected("device1".into());
 
@@ -2285,10 +2280,10 @@ mod tests {
 
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
-        // Don't set exit_pending so we don't actually exit
+        // Don't set exit_pending so we don't exit
         device_view.exit_pending = false;
 
-        // Disconnect - this would call std::process::exit if exit_pending was true
+        // Disconnect - this would call std::process::exit if exit_pending was true,
         // so we can't test that path, but we can test the state clearing
         // We need to manually do what the disconnected event does without exiting
         device_view.connection_state = Disconnected(Some("device1".into()), None);
@@ -2323,7 +2318,7 @@ mod tests {
 
     #[test]
     fn test_cancel_interactive_with_viewing_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         device_view.editing_alias = Some(123);
         device_view.alias = "test".into();
@@ -2345,7 +2340,7 @@ mod tests {
 
     #[test]
     fn test_channel_change_connected_with_channel_view() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         device_view.connection_state = Connected("device1".into());
 
@@ -2363,7 +2358,7 @@ mod tests {
 
     #[test]
     fn test_connected_event_with_viewing_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
         let _ = device_view.update(SubscriptionMessage(ConnectedEvent("device1".into())));
@@ -2372,7 +2367,7 @@ mod tests {
 
     #[test]
     fn test_connected_event_without_viewing_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.viewing_channel = None;
 
         let _ = device_view.update(SubscriptionMessage(ConnectedEvent("device1".into())));
@@ -2383,7 +2378,7 @@ mod tests {
 
     #[test]
     fn test_view_no_viewing_channel_empty() {
-        let device_view = DeviceView::default();
+        let device_view = Device::default();
         let config = Config::default();
         let _element = device_view.view(&config);
         // Should show the channel/node list view
@@ -2391,7 +2386,7 @@ mod tests {
 
     #[test]
     fn test_view_with_channels_and_nodes() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add channels
@@ -2426,12 +2421,12 @@ mod tests {
 
         let config = Config::default();
         let _element = device_view.view(&config);
-        // Should show list of channels and nodes
+        // Should show the list of channels and nodes
     }
 
     #[test]
     fn test_view_with_viewing_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add a channel
@@ -2450,7 +2445,7 @@ mod tests {
 
     #[test]
     fn test_view_with_filter() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add channels
@@ -2473,7 +2468,7 @@ mod tests {
 
     #[test]
     fn test_view_with_favourite_nodes() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add nodes
@@ -2497,16 +2492,16 @@ mod tests {
         })));
 
         let mut config = Config::default();
-        // Mark node as favourite
+        // Mark the node as favourite
         config.fav_nodes.insert(12345);
 
         let _element = device_view.view(&config);
-        // Should show favourite section with the node
+        // Should show the favourite section with the node
     }
 
     #[test]
     fn test_view_with_node_alias() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add node
@@ -2533,12 +2528,12 @@ mod tests {
         config.aliases.insert(12345, "Aliased Name".into());
 
         let _element = device_view.view(&config);
-        // Should show alias instead of original name
+        // Should show alias instead of the original name
     }
 
     #[test]
     fn test_view_with_editing_node_alias() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add node
@@ -2572,10 +2567,10 @@ mod tests {
 
     #[test]
     fn test_view_with_node_position() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
-        // Add node with position
+        // Add a node with a position
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
             num: 12345,
             user: Some(MCUser {
@@ -2597,15 +2592,15 @@ mod tests {
 
         let config = Config::default();
         let _element = device_view.view(&config);
-        // Should show location button for node with position
+        // Should show the location button for the node with position
     }
 
     #[test]
     fn test_header_all_connection_states() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
-        let device_list_view = DeviceListView::default();
+        let device_list_view = DeviceList::default();
         let config = Config::default();
 
         // Test all connection states
@@ -2626,7 +2621,7 @@ mod tests {
 
     #[test]
     fn test_header_with_viewing_channel() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         device_view.connection_state = Connected("device1".into());
 
@@ -2638,17 +2633,17 @@ mod tests {
 
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
-        let device_list_view = DeviceListView::default();
+        let device_list_view = DeviceList::default();
         let config = Config::default();
         let state = Connected("device1".into());
 
         let _element = device_view.header(&config, &state, &device_list_view);
-        // Should include channel name in header
+        // Should include the channel name in the header
     }
 
     #[test]
     fn test_header_with_viewing_node() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
         device_view.connection_state = Connected("device1".into());
 
@@ -2674,45 +2669,45 @@ mod tests {
 
         device_view.viewing_channel = Some(Node(12345));
 
-        let device_list_view = DeviceListView::default();
+        let device_list_view = DeviceList::default();
         let config = Config::default();
         let state = Connected("device1".into());
 
         let _element = device_view.header(&config, &state, &device_list_view);
-        // Should include node name in header
+        // Should include the node name in the header
     }
 
     #[test]
     fn test_battery_level_display_none() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.battery_level = None;
         let _element = device_view.battery_level();
     }
 
     #[test]
     fn test_battery_level_display_zero() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.battery_level = Some(0);
         let _element = device_view.battery_level();
     }
 
     #[test]
     fn test_battery_level_display_fifty() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.battery_level = Some(50);
         let _element = device_view.battery_level();
     }
 
     #[test]
     fn test_battery_level_display_hundred() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.battery_level = Some(100);
         let _element = device_view.battery_level();
     }
 
     #[test]
     fn test_battery_level_display_charging() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.battery_level = Some(101); // Charging indicator
         let _element = device_view.battery_level();
     }
@@ -2720,15 +2715,15 @@ mod tests {
     #[test]
     fn test_unread_counter_display() {
         // Test unread counter element
-        let _element = DeviceView::unread_counter(0);
-        let _element = DeviceView::unread_counter(1);
-        let _element = DeviceView::unread_counter(10);
-        let _element = DeviceView::unread_counter(100);
+        let _element = Device::unread_counter(0);
+        let _element = Device::unread_counter(1);
+        let _element = Device::unread_counter(10);
+        let _element = Device::unread_counter(100);
     }
 
     #[test]
     fn test_settings_button() {
-        let _element = DeviceView::settings_button();
+        let _element = Device::settings_button();
         // Should create a settings button element
     }
 
@@ -2736,10 +2731,9 @@ mod tests {
     fn test_channel_row() {
         let select = |channel_id: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_id)));
 
-        let _element =
-            DeviceView::channel_row("Test Channel".into(), 0, ChannelId::Channel(0), select);
+        let _element = Device::channel_row("Test Channel".into(), 0, ChannelId::Channel(0), select);
 
-        let _element = DeviceView::channel_row(
+        let _element = Device::channel_row(
             "Channel with unread".into(),
             5,
             ChannelId::Channel(1),
@@ -2749,18 +2743,18 @@ mod tests {
 
     #[test]
     fn test_search_box() {
-        let device_view = DeviceView::default();
+        let device_view = Device::default();
         let _element = device_view.search_box();
 
         // With filter text
-        let mut device_view_with_filter = DeviceView::default();
+        let mut device_view_with_filter = Device::default();
         let _ = device_view_with_filter.update(SearchInput("test filter".into()));
         let _element = device_view_with_filter.search_box();
     }
 
     #[test]
     fn test_channel_and_node_list() {
-        let mut device_view = DeviceView::default();
+        let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
 
         // Add channels and nodes
@@ -2797,7 +2791,7 @@ mod tests {
 
     #[test]
     fn test_section_header() {
-        let device_view = DeviceView::default();
+        let device_view = Device::default();
         let _element = device_view.section_header("Test Section".into());
         let _element = device_view.section_header("Channels (5)".into());
         let _element = device_view.section_header("".into());

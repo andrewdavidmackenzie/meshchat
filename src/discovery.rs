@@ -1,10 +1,10 @@
-use crate::device_list_view::DeviceListEvent;
+use crate::device_list::DeviceListEvent;
 #[cfg(feature = "meshcore")]
-use crate::device_list_view::DeviceListEvent::BLEMeshCoreRadioFound;
+use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
-use crate::device_list_view::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list_view::DeviceListEvent::{BLERadioLost, Error};
-use crate::device_list_view::RadioType;
+use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
+use crate::device_list::DeviceListEvent::{BLERadioLost, Error};
+use crate::device_list::RadioType;
 #[cfg(feature = "meshcore")]
 use crate::meshc::MESHCORE_SERVICE_UUID;
 #[cfg(feature = "meshtastic")]
