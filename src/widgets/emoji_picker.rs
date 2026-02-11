@@ -262,10 +262,11 @@ mod tests {
     fn test_picker_message_clone() {
         let msg: PickerMessage<String> = PickerMessage::GroupSelected(Group::FoodAndDrink);
         let cloned = msg.clone();
-        match cloned {
-            PickerMessage::GroupSelected(g) => assert_eq!(g, Group::FoodAndDrink),
-            _ => panic!("Expected GroupSelected"),
-        }
+        assert!(
+            matches!(cloned, PickerMessage::GroupSelected(g) if g == Group::FoodAndDrink),
+            "Clone of GroupSelected(FoodAndDrink) should preserve the group, got {:?}",
+            cloned
+        );
     }
 
     #[test]

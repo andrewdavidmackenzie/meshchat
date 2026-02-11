@@ -1019,15 +1019,14 @@ mod tests {
         let event = receiver
             .try_next()
             .expect("Failed to receive MCMessageReceived event for new text message");
-        match event {
-            Some(MCMessageReceived(channel_id, id, from, msg, _rx_time)) => {
-                assert_eq!(channel_id, ChannelId::Channel(0));
-                assert_eq!(id, 123);
-                assert_eq!(from, 2000);
-                assert!(matches!(msg, NewTextMessage(text) if text == "Hello world"));
-            }
-            _ => panic!("Expected MCMessageReceived event"),
-        }
+        let event = event.expect("Should receive Some event for new text message");
+        assert!(
+            matches!(&event, MCMessageReceived(channel_id, id, from, msg, _rx_time)
+                if *channel_id == ChannelId::Channel(0) && *id == 123 && *from == 2000
+                && matches!(msg, NewTextMessage(text) if text == "Hello world")),
+            "Expected MCMessageReceived with channel 0, id 123, from 2000, NewTextMessage('Hello world'), got {:?}",
+            event
+        );
     }
 
     #[tokio::test]
@@ -1043,14 +1042,13 @@ mod tests {
         let event = receiver
             .try_next()
             .expect("Failed to receive MCMessageReceived event for text reply");
-        match event {
-            Some(MCMessageReceived(_, _, _, msg, _)) => {
-                assert!(
-                    matches!(msg, TextMessageReply(reply_id, text) if reply_id == 456 && text == "Reply text")
-                );
-            }
-            _ => panic!("Expected MCMessageReceived event"),
-        }
+        let event = event.expect("Should receive Some event for text reply");
+        assert!(
+            matches!(&event, MCMessageReceived(_, _, _, msg, _)
+                if matches!(msg, TextMessageReply(reply_id, text) if *reply_id == 456 && text == "Reply text")),
+            "Expected MCMessageReceived with TextMessageReply(456, 'Reply text'), got {:?}",
+            event
+        );
     }
 
     #[tokio::test]
@@ -1066,14 +1064,13 @@ mod tests {
         let event = receiver
             .try_next()
             .expect("Failed to receive MCMessageReceived event for emoji reply");
-        match event {
-            Some(MCMessageReceived(_, _, _, msg, _)) => {
-                assert!(
-                    matches!(msg, EmojiReply(reply_id, emoji) if reply_id == 456 && emoji == "👍")
-                );
-            }
-            _ => panic!("Expected MCMessageReceived event"),
-        }
+        let event = event.expect("Should receive Some event for emoji reply");
+        assert!(
+            matches!(&event, MCMessageReceived(_, _, _, msg, _)
+                if matches!(msg, EmojiReply(reply_id, emoji) if *reply_id == 456 && emoji == "👍")),
+            "Expected MCMessageReceived with EmojiReply(456, '👍'), got {:?}",
+            event
+        );
     }
 
     #[tokio::test]
@@ -1089,13 +1086,13 @@ mod tests {
         let event = receiver
             .try_next()
             .expect("Failed to receive MessageACK event for broadcast");
-        match event {
-            Some(MessageACK(channel_id, request_id)) => {
-                assert_eq!(channel_id, ChannelId::Channel(0));
-                assert_eq!(request_id, 789);
-            }
-            _ => panic!("Expected MessageACK event"),
-        }
+        let event = event.expect("Should receive Some event for broadcast ACK");
+        assert!(
+            matches!(&event, MessageACK(channel_id, request_id)
+                if *channel_id == ChannelId::Channel(0) && *request_id == 789),
+            "Expected MessageACK(Channel(0), 789), got {:?}",
+            event
+        );
     }
 
     #[tokio::test]
@@ -1111,13 +1108,13 @@ mod tests {
         let event = receiver
             .try_next()
             .expect("Failed to receive MessageACK event for DM");
-        match event {
-            Some(MessageACK(channel_id, request_id)) => {
-                assert_eq!(channel_id, Node(2000));
-                assert_eq!(request_id, 789);
-            }
-            _ => panic!("Expected MessageACK event"),
-        }
+        let event = event.expect("Should receive Some event for DM ACK");
+        assert!(
+            matches!(&event, MessageACK(channel_id, request_id)
+                if *channel_id == Node(2000) && *request_id == 789),
+            "Expected MessageACK(Node(2000), 789), got {:?}",
+            event
+        );
     }
 
     #[tokio::test]

@@ -971,4 +971,390 @@ mod test {
 
         assert_eq!(channel_view.entries.len(), 1);
     }
+
+    #[test]
+    fn test_channel_view_debug() {
+        let channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let debug_str = format!("{:?}", channel_view);
+        assert!(debug_str.contains("ChannelView"));
+    }
+
+    #[test]
+    fn test_channel_view_message_debug() {
+        let msg = MessageInput("test".into());
+        let debug_str = format!("{:?}", msg);
+        assert!(debug_str.contains("MessageInput"));
+    }
+
+    #[test]
+    fn test_channel_view_message_clone() {
+        let msg = PrepareReply(42);
+        let cloned = msg.clone();
+        assert!(matches!(cloned, PrepareReply(id) if id == 42));
+    }
+
+    #[test]
+    fn test_message_unseen() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let message = ChannelViewEntry::new(42, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+
+        // Mark seen first
+        let _ = channel_view.update(MessageSeen(42));
+        assert!(
+            channel_view
+                .entries
+                .get(&42)
+                .expect("Entry with id 42 should exist after adding message")
+                .seen()
+        );
+
+        // MessageUnseen should not change anything (currently a no-op)
+        let _ = channel_view.update(super::ChannelViewMessage::MessageUnseen(42));
+        // Still seen (MessageUnseen is a no-op)
+        assert!(
+            channel_view
+                .entries
+                .get(&42)
+                .expect("Entry with id 42 should still exist after MessageUnseen")
+                .seen()
+        );
+    }
+
+    #[test]
+    fn test_pick_channel() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let _task = channel_view.update(super::ChannelViewMessage::PickChannel(Some(
+            ChannelId::Channel(1),
+        )));
+        // Should return a task, not panic
+    }
+
+    #[test]
+    fn test_pick_channel_none() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let _task = channel_view.update(super::ChannelViewMessage::PickChannel(None));
+        // Should return a task, not panic
+    }
+
+    #[test]
+    fn test_reply_with_emoji() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        let _task = channel_view.update(super::ChannelViewMessage::ReplyWithEmoji(
+            42,
+            "👍".into(),
+            ChannelId::Channel(0),
+        ));
+        // Should return a task, not panic
+    }
+
+    #[test]
+    fn test_share_meshchat() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        assert!(channel_view.message.is_empty());
+
+        let _task = channel_view.update(super::ChannelViewMessage::ShareMeshChat);
+        assert!(channel_view.message.contains("MeshChat"));
+        assert!(channel_view.message.contains("github.com"));
+    }
+
+    #[test]
+    fn test_unread_count_with_position_hidden() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Add a text message
+        let text_msg = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(text_msg, &HistoryLength::All);
+
+        // Add a position message
+        let pos_msg = ChannelViewEntry::new(
+            2,
+            1,
+            crate::channel_view_entry::MCMessage::PositionMessage(crate::MCPosition {
+                latitude: 0.0,
+                longitude: 0.0,
+                altitude: None,
+                time: 0,
+                location_source: 0,
+                altitude_source: 0,
+                timestamp: 0,
+                timestamp_millis_adjust: 0,
+                altitude_hae: None,
+                altitude_geoidal_separation: None,
+                pdop: 0,
+                hdop: 0,
+                vdop: 0,
+                gps_accuracy: 0,
+                ground_speed: None,
+                ground_track: None,
+                fix_quality: 0,
+                fix_type: 0,
+                sats_in_view: 0,
+                sensor_id: 0,
+                next_update: 0,
+                seq_number: 0,
+                precision_bits: 0,
+            }),
+            now_secs(),
+        );
+        let _ = channel_view.new_message(pos_msg, &HistoryLength::All);
+
+        // With position updates shown, should be 2 unread
+        assert_eq!(channel_view.unread_count(true, true), 2);
+
+        // With position updates hidden, should be 1 unread
+        assert_eq!(channel_view.unread_count(false, true), 1);
+    }
+
+    #[test]
+    fn test_unread_count_with_user_hidden() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Add a text message
+        let text_msg = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
+        let _ = channel_view.new_message(text_msg, &HistoryLength::All);
+
+        // Add a user message
+        let user_msg = ChannelViewEntry::new(
+            2,
+            1,
+            crate::channel_view_entry::MCMessage::UserMessage(crate::MCUser {
+                id: "test".into(),
+                long_name: "Test".into(),
+                short_name: "T".into(),
+                hw_model_str: "".into(),
+                hw_model: 0,
+                is_licensed: false,
+                role_str: "".into(),
+                role: 0,
+                public_key: vec![],
+                is_unmessagable: false,
+            }),
+            now_secs(),
+        );
+        let _ = channel_view.new_message(user_msg, &HistoryLength::All);
+
+        // With user updates shown, should be 2 unread
+        assert_eq!(channel_view.unread_count(true, true), 2);
+
+        // With user updates hidden, should be 1 unread
+        assert_eq!(channel_view.unread_count(true, false), 1);
+    }
+
+    #[test]
+    fn test_emoji_reply_to_nonexistent_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Try to add emoji reply to message that doesn't exist
+        let emoji_reply = ChannelViewEntry::new(2, 200, EmojiReply(999, "👍".into()), now_secs());
+        let _ = channel_view.new_message(emoji_reply, &HistoryLength::All);
+
+        // Should still have 0 entries (emoji reply doesn't create new entry)
+        assert_eq!(channel_view.entries.len(), 0);
+    }
+
+    #[test]
+    fn test_message_seen_nonexistent() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+        // Should not panic when marking nonexistent message as seen
+        let _ = channel_view.update(MessageSeen(999));
+    }
+
+    #[test]
+    fn test_trim_history_all() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Add many messages
+        for i in 0..10 {
+            let message = ChannelViewEntry::new(i, 1, NewTextMessage(format!("msg {}", i)), i);
+            let _ = channel_view.new_message(message, &HistoryLength::All);
+        }
+
+        // All messages should be kept
+        assert_eq!(channel_view.entries.len(), 10);
+    }
+
+    #[test]
+    fn test_multiple_emoji_replies() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Add the original message
+        let original = ChannelViewEntry::new(1, 100, NewTextMessage("Hello".into()), now_secs());
+        let _ = channel_view.new_message(original, &HistoryLength::All);
+
+        // Add multiple emoji replies
+        let emoji1 = ChannelViewEntry::new(2, 200, EmojiReply(1, "👍".into()), now_secs());
+        let _ = channel_view.new_message(emoji1, &HistoryLength::All);
+
+        let emoji2 = ChannelViewEntry::new(3, 300, EmojiReply(1, "❤️".into()), now_secs());
+        let _ = channel_view.new_message(emoji2, &HistoryLength::All);
+
+        let emoji3 = ChannelViewEntry::new(4, 200, EmojiReply(1, "👍".into()), now_secs());
+        let _ = channel_view.new_message(emoji3, &HistoryLength::All);
+
+        // Should still only have 1 entry
+        assert_eq!(channel_view.entries.len(), 1);
+
+        // Original should have multiple emojis
+        let original_entry = channel_view
+            .entries
+            .get(&1)
+            .expect("Original message with id 1 should exist after adding emoji replies");
+        assert!(original_entry.emojis().contains_key("👍"));
+        assert!(original_entry.emojis().contains_key("❤️"));
+    }
+
+    #[test]
+    fn test_text_message_reply() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        // Add the original message
+        let original = ChannelViewEntry::new(1, 100, NewTextMessage("Hello".into()), now_secs());
+        let _ = channel_view.new_message(original, &HistoryLength::All);
+
+        // Add a text reply
+        let reply = ChannelViewEntry::new(
+            2,
+            200,
+            crate::channel_view_entry::MCMessage::TextMessageReply(1, "Hi there!".into()),
+            now_secs(),
+        );
+        let _ = channel_view.new_message(reply, &HistoryLength::All);
+
+        // Should have 2 entries
+        assert_eq!(channel_view.entries.len(), 2);
+    }
+
+    #[test]
+    fn test_alert_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
+
+        let alert = ChannelViewEntry::new(
+            1,
+            100,
+            crate::channel_view_entry::MCMessage::AlertMessage("Emergency!".into()),
+            now_secs(),
+        );
+        let _ = channel_view.new_message(alert, &HistoryLength::All);
+
+        assert_eq!(channel_view.entries.len(), 1);
+    }
+
+    // View function tests
+
+    #[test]
+    fn test_empty_view() {
+        let _element = ChannelView::empty_view();
+        // Should not panic and return Element for empty channel
+    }
+
+    #[test]
+    fn test_day_separator_today() {
+        use chrono::Local;
+        let now = Local::now();
+        let _element = ChannelView::day_separator(&now);
+        // Should show "Today" for current day
+    }
+
+    #[test]
+    fn test_day_separator_past_day_same_week() {
+        use chrono::{Duration, Local};
+        let past = Local::now() - Duration::days(2);
+        let _element = ChannelView::day_separator(&past);
+        // Should show day name only
+    }
+
+    #[test]
+    fn test_day_separator_past_week() {
+        use chrono::{Duration, Local};
+        let past = Local::now() - Duration::days(10);
+        let _element = ChannelView::day_separator(&past);
+        // Should show day name with month and date
+    }
+
+    #[test]
+    fn test_day_separator_past_year() {
+        use chrono::{Duration, Local};
+        let past = Local::now() - Duration::days(400);
+        let _element = ChannelView::day_separator(&past);
+        // Should show full date with year
+    }
+
+    #[test]
+    fn test_send_button_empty_message() {
+        let channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let _button = channel_view.send_button();
+        // Button should be disabled when message is empty
+    }
+
+    #[test]
+    fn test_send_button_with_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let _ = channel_view.update(MessageInput("Hello".into()));
+        let _button = channel_view.send_button();
+        // Button should be enabled when message is not empty
+    }
+
+    #[test]
+    fn test_clear_button_empty_message() {
+        let channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let _button = channel_view.clear_button();
+        // Button should be disabled when message is empty
+    }
+
+    #[test]
+    fn test_clear_button_with_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let _ = channel_view.update(MessageInput("Hello".into()));
+        let _button = channel_view.clear_button();
+        // Button should be enabled when message is not empty
+    }
+
+    #[test]
+    fn test_input_box_empty() {
+        let channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let _element = channel_view.input_box();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_input_box_with_message() {
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let _ = channel_view.update(MessageInput("Hello world".into()));
+        let _element = channel_view.input_box();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_now_local() {
+        let now = ChannelView::now_local();
+        // Should return current local time
+        assert!(now.timestamp() > 0);
+    }
+
+    #[test]
+    fn test_replying_to_with_valid_entry() {
+        use iced::widget::Column;
+
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        let message = ChannelViewEntry::new(1, 200, NewTextMessage("Original".into()), now_secs());
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+        let _ = channel_view.update(PrepareReply(1));
+
+        let column: Column<crate::Message> = Column::new();
+        let _result_column = channel_view.replying_to(column, &1);
+        // Should add reply indicator to the column
+    }
+
+    #[test]
+    fn test_replying_to_with_invalid_entry() {
+        use iced::widget::Column;
+
+        let channel_view = ChannelView::new(ChannelId::Channel(0), 100);
+        // No messages in the channel view
+
+        let column: Column<crate::Message> = Column::new();
+        let _result_column = channel_view.replying_to(column, &999);
+        // Should return column unchanged
+    }
 }

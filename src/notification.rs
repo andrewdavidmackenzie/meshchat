@@ -13,6 +13,7 @@ use iced::{Bottom, Element, Fill, Renderer, Right, Task, Theme};
 /// A [Notification] can be one of two notification types:
 /// - Error(summary, detail)
 /// - Info(summary, detail)
+#[derive(Debug)]
 pub enum Notification {
     Error(String, String, u32), // Message, Detail, rx_time
     Info(String, String, u32),  // Message, Detail, rx_time
@@ -236,5 +237,402 @@ mod tests {
     fn test_default_next_id_is_zero() {
         let notifications = Notifications::default();
         assert_eq!(notifications.next_id, 0);
+    }
+
+    #[test]
+    fn test_notification_with_empty_strings() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("".into(), "".into(), 0));
+        assert_eq!(notifications.inner.len(), 1);
+    }
+
+    #[test]
+    fn test_notification_with_long_strings() {
+        let mut notifications = Notifications::default();
+        let long_summary = "A".repeat(1000);
+        let long_detail = "B".repeat(5000);
+        let _ = notifications.add(Notification::Error(long_summary, long_detail, 0));
+        assert_eq!(notifications.inner.len(), 1);
+    }
+
+    #[test]
+    fn test_notification_with_unicode() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info(
+            "⚠️ Warning".into(),
+            "日本語のテキスト".into(),
+            0,
+        ));
+        assert_eq!(notifications.inner.len(), 1);
+    }
+
+    #[test]
+    fn test_add_many_notifications() {
+        let mut notifications = Notifications::default();
+        for i in 0..100 {
+            let _ = notifications.add(Notification::Info(
+                format!("Notification {}", i),
+                format!("Detail {}", i),
+                i as u32,
+            ));
+        }
+        assert_eq!(notifications.inner.len(), 100);
+        assert_eq!(notifications.next_id, 100);
+    }
+
+    #[test]
+    fn test_remove_first_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+        let _ = notifications.add(Notification::Info("2".into(), "2".into(), 0));
+        let _ = notifications.add(Notification::Info("3".into(), "3".into(), 0));
+
+        let _ = notifications.remove(0);
+
+        assert_eq!(notifications.inner.len(), 2);
+        assert_eq!(notifications.inner[0].0, 1);
+    }
+
+    #[test]
+    fn test_remove_last_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+        let _ = notifications.add(Notification::Info("2".into(), "2".into(), 0));
+        let _ = notifications.add(Notification::Info("3".into(), "3".into(), 0));
+
+        let _ = notifications.remove(2);
+
+        assert_eq!(notifications.inner.len(), 2);
+        assert_eq!(notifications.inner[0].0, 0);
+        assert_eq!(notifications.inner[1].0, 1);
+    }
+
+    #[test]
+    fn test_notification_rx_time_preserved() {
+        let mut notifications = Notifications::default();
+        let rx_time = 1234567890;
+        let _ = notifications.add(Notification::Info("test".into(), "detail".into(), rx_time));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Info(_, _, time) if *time == rx_time),
+            "Info notification should preserve rx_time {}, got {:?}",
+            rx_time,
+            notification
+        );
+    }
+
+    #[test]
+    fn test_error_notification_rx_time_preserved() {
+        let mut notifications = Notifications::default();
+        let rx_time = 1234567890;
+        let _ = notifications.add(Notification::Error(
+            "error".into(),
+            "detail".into(),
+            rx_time,
+        ));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Error(_, _, time) if *time == rx_time),
+            "Error notification should preserve rx_time {}, got {:?}",
+            rx_time,
+            notification
+        );
+    }
+
+    #[test]
+    fn test_ids_continue_after_remove() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+        let _ = notifications.add(Notification::Info("2".into(), "2".into(), 0));
+
+        let _ = notifications.remove(0);
+        let _ = notifications.remove(1);
+
+        // Add a new notification - ID should continue from where it left off
+        let _ = notifications.add(Notification::Info("3".into(), "3".into(), 0));
+        assert_eq!(notifications.inner[0].0, 2);
+        assert_eq!(notifications.next_id, 3);
+    }
+
+    #[test]
+    fn test_notification_summary_and_detail_preserved() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("Summary".into(), "Detail".into(), 0));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Info(s, d, _) if s == "Summary" && d == "Detail"),
+            "Info notification should preserve summary 'Summary' and detail 'Detail', got {:?}",
+            notification
+        );
+    }
+
+    #[test]
+    fn test_error_summary_and_detail_preserved() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Error(
+            "Error Summary".into(),
+            "Error Detail".into(),
+            0,
+        ));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Error(s, d, _) if s == "Error Summary" && d == "Error Detail"),
+            "Error notification should preserve summary 'Error Summary' and detail 'Error Detail', got {:?}",
+            notification
+        );
+    }
+
+    // Tests for view functions - verify they return Elements without panicking
+
+    #[test]
+    fn test_view_empty_notifications() {
+        let notifications = Notifications::default();
+        let _element = notifications.view();
+        // Should not panic and return an Element
+    }
+
+    #[test]
+    fn test_view_single_info_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info(
+            "Info Summary".into(),
+            "Info Detail".into(),
+            1234567890,
+        ));
+        let _element = notifications.view();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_view_single_error_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Error(
+            "Error Summary".into(),
+            "Error Detail".into(),
+            1234567890,
+        ));
+        let _element = notifications.view();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_view_multiple_notifications() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("Info 1".into(), "Detail 1".into(), 0));
+        let _ = notifications.add(Notification::Error(
+            "Error 1".into(),
+            "Detail 2".into(),
+            100,
+        ));
+        let _ = notifications.add(Notification::Info("Info 2".into(), "Detail 3".into(), 200));
+        let _element = notifications.view();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_view_with_empty_strings() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("".into(), "".into(), 0));
+        let _element = notifications.view();
+        // Should not panic with empty strings
+    }
+
+    #[test]
+    fn test_view_with_long_strings() {
+        let mut notifications = Notifications::default();
+        let long_summary = "A".repeat(1000);
+        let long_detail = "B".repeat(5000);
+        let _ = notifications.add(Notification::Info(long_summary, long_detail, 0));
+        let _element = notifications.view();
+        // Should not panic with long strings
+    }
+
+    #[test]
+    fn test_view_with_unicode() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info(
+            "⚠️ 警告 Warning".into(),
+            "日本語 中文 한국어".into(),
+            0,
+        ));
+        let _element = notifications.view();
+        // Should not panic with unicode
+    }
+
+    #[test]
+    fn test_view_with_special_characters() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info(
+            "Line1\nLine2\tTabbed".into(),
+            "Detail with\r\nnewlines".into(),
+            0,
+        ));
+        let _element = notifications.view();
+        // Should not panic with special characters
+    }
+
+    #[test]
+    fn test_view_with_zero_rx_time() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("Test".into(), "Detail".into(), 0));
+        let _element = notifications.view();
+        // Should not panic with zero time (Unix epoch)
+    }
+
+    #[test]
+    fn test_view_with_max_rx_time() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("Test".into(), "Detail".into(), u32::MAX));
+        let _element = notifications.view();
+        // Should not panic with max time value
+    }
+
+    #[test]
+    fn test_view_with_current_time() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info(
+            "Test".into(),
+            "Detail".into(),
+            MeshChat::now(),
+        ));
+        let _element = notifications.view();
+        // Should not panic with current time
+    }
+
+    #[test]
+    fn test_time_to_text_zero() {
+        let _text = Notifications::time_to_text(0);
+        // Should not panic and return a Text element
+    }
+
+    #[test]
+    fn test_time_to_text_current() {
+        let _text = Notifications::time_to_text(MeshChat::now());
+        // Should not panic
+    }
+
+    #[test]
+    fn test_time_to_text_max() {
+        let _text = Notifications::time_to_text(u32::MAX);
+        // Should not panic with max value
+    }
+
+    #[test]
+    fn test_time_to_text_various_times() {
+        // Test various timestamps
+        let timestamps = [0, 1, 100, 1000, 1000000, 1609459200, 1700000000];
+        for ts in timestamps {
+            let _text = Notifications::time_to_text(ts);
+            // Should not panic
+        }
+    }
+
+    #[test]
+    fn test_notification_box_info_style() {
+        use crate::styles::info_notification_style;
+        let _element = Notifications::notification_box(
+            0,
+            "Summary",
+            "Detail",
+            MeshChat::now(),
+            info_notification_style,
+        );
+        // Should not panic
+    }
+
+    #[test]
+    fn test_notification_box_error_style() {
+        use crate::styles::error_notification_style;
+        let _element = Notifications::notification_box(
+            0,
+            "Summary",
+            "Detail",
+            MeshChat::now(),
+            error_notification_style,
+        );
+        // Should not panic
+    }
+
+    #[test]
+    fn test_notification_box_empty_strings() {
+        use crate::styles::info_notification_style;
+        let _element = Notifications::notification_box(0, "", "", 0, info_notification_style);
+        // Should not panic with empty strings
+    }
+
+    #[test]
+    fn test_notification_box_long_strings() {
+        use crate::styles::info_notification_style;
+        let long_summary = "A".repeat(500);
+        let long_detail = "B".repeat(2000);
+        let _element = Notifications::notification_box(
+            0,
+            &long_summary,
+            &long_detail,
+            0,
+            info_notification_style,
+        );
+        // Should not panic
+    }
+
+    #[test]
+    fn test_notification_box_various_ids() {
+        use crate::styles::info_notification_style;
+        let ids = [0, 1, 100, 1000, usize::MAX];
+        for id in ids {
+            let _element = Notifications::notification_box(
+                id,
+                "Summary",
+                "Detail",
+                0,
+                info_notification_style,
+            );
+            // Should not panic
+        }
+    }
+
+    #[test]
+    fn test_view_after_add_and_remove() {
+        let mut notifications = Notifications::default();
+
+        // Add some
+        let _ = notifications.add(Notification::Info("1".into(), "1".into(), 0));
+        let _ = notifications.add(Notification::Error("2".into(), "2".into(), 0));
+        {
+            let _element = notifications.view();
+            // Element dropped here
+        }
+
+        // Remove one
+        let _ = notifications.remove(0);
+        {
+            let _element = notifications.view();
+        }
+
+        // Remove remaining
+        let _ = notifications.remove(1);
+        {
+            let _element = notifications.view();
+        }
+        // Should not panic at any stage
+    }
+
+    #[test]
+    fn test_view_many_notifications() {
+        let mut notifications = Notifications::default();
+        for i in 0..50 {
+            let _ = notifications.add(Notification::Info(
+                format!("Notification {}", i),
+                format!("Detail {}", i),
+                i as u32,
+            ));
+        }
+        let _element = notifications.view();
+        // Should not panic with many notifications
     }
 }

@@ -826,4 +826,439 @@ mod tests {
 
         assert!(returned.auto_reconnect);
     }
+
+    // Tests for WindowPosition and WindowSize
+    use crate::config::{WindowPosition, WindowSize};
+    use iced::{Point, Size};
+
+    #[test]
+    fn test_window_position_from_point() {
+        let point = Point::new(100.5, 200.7);
+        let window_pos: WindowPosition = point.into();
+        assert_eq!(window_pos.x, 100);
+        assert_eq!(window_pos.y, 200);
+    }
+
+    #[test]
+    fn test_window_position_to_point() {
+        let window_pos = WindowPosition { x: 150, y: 250 };
+        let point = window_pos.point();
+        assert_eq!(point.x, 150.0);
+        assert_eq!(point.y, 250.0);
+    }
+
+    #[test]
+    fn test_window_size_from_size() {
+        let size = Size::new(800.9, 600.1);
+        let window_size: WindowSize = size.into();
+        assert_eq!(window_size.width, 800);
+        assert_eq!(window_size.height, 600);
+    }
+
+    #[test]
+    fn test_window_size_to_size() {
+        let window_size = WindowSize {
+            width: 1024,
+            height: 768,
+        };
+        let size = window_size.size();
+        assert_eq!(size.width, 1024.0);
+        assert_eq!(size.height, 768.0);
+    }
+
+    #[test]
+    fn test_window_position_equality() {
+        let pos1 = WindowPosition { x: 100, y: 200 };
+        let pos2 = WindowPosition { x: 100, y: 200 };
+        let pos3 = WindowPosition { x: 100, y: 300 };
+        assert_eq!(pos1, pos2);
+        assert_ne!(pos1, pos3);
+    }
+
+    #[test]
+    fn test_window_size_equality() {
+        let size1 = WindowSize {
+            width: 800,
+            height: 600,
+        };
+        let size2 = WindowSize {
+            width: 800,
+            height: 600,
+        };
+        let size3 = WindowSize {
+            width: 1024,
+            height: 600,
+        };
+        assert_eq!(size1, size2);
+        assert_ne!(size1, size3);
+    }
+
+    #[test]
+    fn test_window_position_debug() {
+        let pos = WindowPosition { x: 100, y: 200 };
+        let debug_str = format!("{:?}", pos);
+        assert!(debug_str.contains("WindowPosition"));
+        assert!(debug_str.contains("100"));
+        assert!(debug_str.contains("200"));
+    }
+
+    #[test]
+    fn test_window_size_debug() {
+        let size = WindowSize {
+            width: 800,
+            height: 600,
+        };
+        let debug_str = format!("{:?}", size);
+        assert!(debug_str.contains("WindowSize"));
+        assert!(debug_str.contains("800"));
+        assert!(debug_str.contains("600"));
+    }
+
+    #[test]
+    fn test_window_position_clone() {
+        let pos1 = WindowPosition { x: 100, y: 200 };
+        let pos2 = pos1.clone();
+        assert_eq!(pos1, pos2);
+    }
+
+    #[test]
+    fn test_window_size_clone() {
+        let size1 = WindowSize {
+            width: 800,
+            height: 600,
+        };
+        let size2 = size1.clone();
+        assert_eq!(size1, size2);
+    }
+
+    #[tokio::test]
+    async fn test_window_position_saved() {
+        let config = Config {
+            restore_window_position: true,
+            window_position: Some(WindowPosition { x: 100, y: 200 }),
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert!(returned.restore_window_position);
+        assert_eq!(
+            returned.window_position,
+            Some(WindowPosition { x: 100, y: 200 })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_window_size_saved() {
+        let config = Config {
+            restore_window_size: true,
+            window_size: Some(WindowSize {
+                width: 1024,
+                height: 768,
+            }),
+            ..Default::default()
+        };
+
+        let tempfile = tempfile::Builder::new()
+            .prefix("meshchat")
+            .tempdir()
+            .expect("Could not create a temp file for test");
+
+        save(tempfile.path().join("config.toml"), config.clone())
+            .await
+            .expect("Could not save config file");
+
+        let returned = load(tempfile.path().join("config.toml"))
+            .await
+            .expect("Could not load config file");
+
+        assert!(returned.restore_window_size);
+        assert_eq!(
+            returned.window_size,
+            Some(WindowSize {
+                width: 1024,
+                height: 768
+            })
+        );
+    }
+
+    #[test]
+    fn test_config_debug() {
+        let config = Config::default();
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("Config"));
+    }
+
+    #[test]
+    fn test_config_clone() {
+        let config = Config {
+            auto_reconnect: false,
+            show_position_updates: false,
+            ..Default::default()
+        };
+        let cloned = config.clone();
+        assert_eq!(config, cloned);
+    }
+
+    #[test]
+    fn test_history_length_clone() {
+        let hl = HistoryLength::NumberOfMessages(50);
+        // HistoryLength implements Copy, but we test clone() works too
+        #[allow(clippy::clone_on_copy)]
+        let cloned = hl.clone();
+        assert_eq!(hl, cloned);
+    }
+
+    #[test]
+    fn test_history_length_copy() {
+        let hl = HistoryLength::All;
+        let copied = hl;
+        assert_eq!(hl, copied);
+    }
+
+    #[test]
+    fn test_history_length_debug() {
+        let hl = HistoryLength::Duration(Duration::from_secs(3600));
+        let debug_str = format!("{:?}", hl);
+        assert!(debug_str.contains("Duration"));
+    }
+
+    #[test]
+    fn test_default_functions() {
+        // Test that default functions return expected values
+        assert!(super::default_show_position());
+        assert!(super::default_show_user());
+        assert!(super::default_auto_reconnect());
+        assert!(super::default_auto_update_startup());
+    }
+
+    // Tests for view functions and toggle functions
+
+    #[test]
+    fn test_config_view_default() {
+        let config = Config::default();
+        let _element = config.view();
+        // Should not panic and return settings Element
+    }
+
+    #[test]
+    fn test_config_view_with_various_settings() {
+        let config = Config {
+            show_position_updates: false,
+            show_user_updates: false,
+            auto_reconnect: false,
+            auto_update_startup: false,
+            restore_window_position: true,
+            restore_window_size: true,
+            history_length: HistoryLength::NumberOfMessages(50),
+            ..Default::default()
+        };
+        let _element = config.view();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_config_view_all_history_lengths() {
+        for history_length in HistoryLength::ALL {
+            let config = Config {
+                history_length,
+                ..Default::default()
+            };
+            let _element = config.view();
+            // Each history length should produce a valid view
+        }
+    }
+
+    #[test]
+    fn test_show_position_in_chat_setting_true() {
+        let config = Config {
+            show_position_updates: true,
+            ..Default::default()
+        };
+        let _element = config.show_position_in_chat_setting();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_show_position_in_chat_setting_false() {
+        let config = Config {
+            show_position_updates: false,
+            ..Default::default()
+        };
+        let _element = config.show_position_in_chat_setting();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_show_user_updates_view_true() {
+        let config = Config {
+            show_user_updates: true,
+            ..Default::default()
+        };
+        let _element = config.show_user_updates();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_show_user_updates_view_false() {
+        let config = Config {
+            show_user_updates: false,
+            ..Default::default()
+        };
+        let _element = config.show_user_updates();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_auto_reconnect_view_true() {
+        let config = Config {
+            auto_reconnect: true,
+            ..Default::default()
+        };
+        let _element = config.auto_reconnect();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_auto_reconnect_view_false() {
+        let config = Config {
+            auto_reconnect: false,
+            ..Default::default()
+        };
+        let _element = config.auto_reconnect();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_history_length_view() {
+        let config = Config::default();
+        let _element = config.history_length();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_auto_update_view_true() {
+        let config = Config {
+            auto_update_startup: true,
+            ..Default::default()
+        };
+        let _element = config.auto_update();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_auto_update_view_false() {
+        let config = Config {
+            auto_update_startup: false,
+            ..Default::default()
+        };
+        let _element = config.auto_update();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_save_window_position_view_true() {
+        let config = Config {
+            restore_window_position: true,
+            ..Default::default()
+        };
+        let _element = config.save_window_position();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_save_window_position_view_false() {
+        let config = Config {
+            restore_window_position: false,
+            ..Default::default()
+        };
+        let _element = config.save_window_position();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_save_window_size_view_true() {
+        let config = Config {
+            restore_window_size: true,
+            ..Default::default()
+        };
+        let _element = config.save_window_size();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_save_window_size_view_false() {
+        let config = Config {
+            restore_window_size: false,
+            ..Default::default()
+        };
+        let _element = config.save_window_size();
+        // Should not panic
+    }
+
+    // Test toggle functions
+    #[test]
+    fn test_toggle_show_position_updates() {
+        let msg = Config::toggle_show_position_updates(true);
+        assert!(matches!(msg, crate::Message::ToggleShowPositionUpdates));
+
+        let msg = Config::toggle_show_position_updates(false);
+        assert!(matches!(msg, crate::Message::ToggleShowPositionUpdates));
+    }
+
+    #[test]
+    fn test_toggle_show_user_updates() {
+        let msg = Config::toggle_show_user_updates(true);
+        assert!(matches!(msg, crate::Message::ToggleShowUserUpdates));
+
+        let msg = Config::toggle_show_user_updates(false);
+        assert!(matches!(msg, crate::Message::ToggleShowUserUpdates));
+    }
+
+    #[test]
+    fn test_toggle_auto_reconnects() {
+        let msg = Config::toggle_auto_reconnects(true);
+        assert!(matches!(msg, crate::Message::ToggleAutoReconnect));
+
+        let msg = Config::toggle_auto_reconnects(false);
+        assert!(matches!(msg, crate::Message::ToggleAutoReconnect));
+    }
+
+    #[test]
+    fn test_toggle_auto_update() {
+        let msg = Config::toggle_auto_update(true);
+        assert!(matches!(msg, crate::Message::ToggleAutoUpdate));
+
+        let msg = Config::toggle_auto_update(false);
+        assert!(matches!(msg, crate::Message::ToggleAutoUpdate));
+    }
+
+    #[test]
+    fn test_toggle_save_window_position() {
+        let msg = Config::toggle_save_window_position(true);
+        assert!(matches!(msg, crate::Message::ToggleSaveWindowPosition));
+
+        let msg = Config::toggle_save_window_position(false);
+        assert!(matches!(msg, crate::Message::ToggleSaveWindowPosition));
+    }
+
+    #[test]
+    fn test_toggle_save_window_size() {
+        let msg = Config::toggle_save_window_size(true);
+        assert!(matches!(msg, crate::Message::ToggleSaveWindowSize));
+
+        let msg = Config::toggle_save_window_size(false);
+        assert!(matches!(msg, crate::Message::ToggleSaveWindowSize));
+    }
 }
