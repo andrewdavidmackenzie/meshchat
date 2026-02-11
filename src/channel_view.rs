@@ -8,11 +8,11 @@ use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::config::{Config, HistoryLength};
-use crate::device_view::DeviceViewMessage::{
+use crate::device::DeviceViewMessage::{
     ChannelMsg, ForwardMessage, SendInfoMessage, SendPositionMessage, ShowChannel,
     StopForwardingMessage,
 };
-use crate::device_view::{DeviceView, DeviceViewMessage};
+use crate::device::{Device, DeviceViewMessage};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
     text_input_button_style, text_input_container_style, text_input_style, tooltip_style,
@@ -248,7 +248,7 @@ impl ChannelView {
         nodes: &'a HashMap<u32, MCNodeInfo>,
         enable_position: bool,
         enable_my_user: bool,
-        device_view: &'a DeviceView,
+        device_view: &'a Device,
         config: &'a Config,
         show_position_updates: bool,
         show_user_updates: bool,
@@ -401,7 +401,7 @@ impl ChannelView {
     fn channel_picker<'a>(
         &'a self,
         content: Element<'a, Message>,
-        device_view: &'a DeviceView,
+        device_view: &'a Device,
         config: &'a Config,
     ) -> Element<'a, Message> {
         let select = |channel_number: ChannelId| DeviceViewEvent(ForwardMessage(channel_number));
