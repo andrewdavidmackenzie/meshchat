@@ -12,7 +12,6 @@ use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
 use crate::device_list::DeviceListEvent::{AliasInput, BLERadioLost, Error, StartEditingAlias};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
 use crate::{MeshChat, Message, View};
-use iced::Bottom;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Id, Row, Space, button, container, image, operation, scrollable, text,
@@ -137,34 +136,39 @@ impl DeviceList {
     ) -> Element<'a, Message> {
         let mut header = Row::new()
             .padding(4)
-            .align_y(Bottom)
+            .align_y(Center)
             .push(button("Devices").style(button_chip_style));
 
-        header = header.push(match state {
-            Disconnected(_, _) => Row::new()
+        header = match state {
+            Disconnected(_, _) => header
                 .push(Space::new().width(Fill))
                 .push(iced::widget::button("Disconnected").style(button_chip_style)),
-            Connecting(device) => Row::new().push(Space::new().width(Fill)).push(
-                iced::widget::button(text(format!(
+            Connecting(device) => {
+                let name_button = iced::widget::button(text(format!(
                     "Connecting to {}",
                     self.device_name_or_alias(device, config)
                 )))
-                .style(button_chip_style),
-            ),
-            Connected(mac_address) => Row::new().push(
-                button(text(self.device_name_or_alias(mac_address, config)))
-                    .style(button_chip_style)
-                    .on_press(Navigation(View::DeviceView(None))),
-            ),
-            Disconnecting(mac_address) => Row::new().push(
-                text(format!(
-                    "Disconnecting from {}",
-                    self.device_name_or_alias(mac_address, config)
-                ))
-                .width(Fill)
-                .align_x(alignment::Horizontal::Right),
-            ),
-        });
+                .style(button_chip_style);
+                header.push(Space::new().width(Fill)).push(name_button)
+            }
+            Connected(mac_address) => header
+                .push(
+                    button(text(self.device_name_or_alias(mac_address, config)))
+                        .style(button_chip_style)
+                        .on_press(Navigation(View::DeviceView(None))),
+                )
+                .push(Space::new().width(Fill)),
+            Disconnecting(device_name) => header
+                .push(
+                    button(text(format!(
+                        "📱 {}",
+                        self.device_name_or_alias(device_name, config)
+                    )))
+                    .style(button_chip_style),
+                )
+                .push(Space::new().width(Fill))
+                .push(iced::widget::button("Disconnecting").style(button_chip_style)),
+        };
 
         // Add a disconnect button on the right if we are connected
         if let Connected(_) = state {

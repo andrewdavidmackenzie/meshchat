@@ -499,14 +499,11 @@ impl Device {
                 .push(button("Disconnected").style(button_chip_style)),
             Connecting(ble_device) => {
                 let name_button = button(text(format!(
-                    "📱 {}",
+                    "Connecting to {}",
                     device_list_view.device_name_or_alias(ble_device, config)
                 )))
                 .style(button_chip_style);
-                header = header.push(name_button);
-                header
-                    .push(Space::new().width(Fill))
-                    .push(button("Connecting").style(button_chip_style))
+                header.push(Space::new().width(Fill)).push(name_button)
             }
             Connected(device) => {
                 let name_row = Row::new()
@@ -530,17 +527,16 @@ impl Device {
                     .push(Space::new().width(4))
                     .push(self.battery_level())
             }
-            Disconnecting(device) => {
-                let button = button(text(format!(
-                    "📱 {}",
-                    device_list_view.device_name_or_alias(device, config)
-                )))
-                .style(button_chip_style);
-                header = header.push(button);
-                header
-                    .push(Space::new().width(Fill))
-                    .push(iced::widget::button("Disconnecting").style(button_chip_style))
-            }
+            Disconnecting(device_name) => header
+                .push(
+                    button(text(format!(
+                        "📱 {}",
+                        device_list_view.device_name_or_alias(device_name, config)
+                    )))
+                    .style(button_chip_style),
+                )
+                .push(Space::new().width(Fill))
+                .push(iced::widget::button("Disconnecting").style(button_chip_style)),
         };
 
         // possibly add a node/channel name button next
