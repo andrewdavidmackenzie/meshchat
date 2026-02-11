@@ -91,7 +91,7 @@ where
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum State {
     Expanding { start: Instant, progress: f32 },
     Contracting { start: Instant, progress: f32 },
@@ -422,13 +422,12 @@ mod tests {
         let elapsed = Duration::from_millis(500);
         let new_state = state.with_elapsed(cycle_duration, elapsed);
 
-        match new_state {
-            State::Expanding { start, progress } => {
-                assert_eq!(start, start_time);
-                assert!((progress - 0.5).abs() < 0.01);
-            }
-            _ => panic!("Expected Expanding state"),
-        }
+        assert!(
+            matches!(new_state, State::Expanding { start, progress } if start == start_time && (progress - 0.5).abs() < 0.01),
+            "State should be Expanding with start={:?} and progress near 0.5, got {:?}",
+            start_time,
+            new_state
+        );
     }
 
     #[test]
@@ -442,13 +441,12 @@ mod tests {
         let elapsed = Duration::from_millis(250);
         let new_state = state.with_elapsed(cycle_duration, elapsed);
 
-        match new_state {
-            State::Contracting { start, progress } => {
-                assert_eq!(start, start_time);
-                assert!((progress - 0.25).abs() < 0.01);
-            }
-            _ => panic!("Expected Contracting state"),
-        }
+        assert!(
+            matches!(new_state, State::Contracting { start, progress } if start == start_time && (progress - 0.25).abs() < 0.01),
+            "State should be Contracting with start={:?} and progress near 0.25, got {:?}",
+            start_time,
+            new_state
+        );
     }
 
     #[test]

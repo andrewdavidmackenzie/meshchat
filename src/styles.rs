@@ -690,3 +690,363 @@ pub fn battery_style(_theme: &Theme, _state: BatteryState) -> battery::Style {
         ..Default::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::widget::button::Status;
+    use iced::widget::scrollable;
+    use iced::widget::text_input;
+
+    #[test]
+    fn test_text_input_style_all_statuses() {
+        let theme = Theme::Dark;
+        for status in [
+            text_input::Status::Active,
+            text_input::Status::Hovered,
+            text_input::Status::Focused { is_hovered: false },
+            text_input::Status::Focused { is_hovered: true },
+            text_input::Status::Disabled,
+        ] {
+            let _style = text_input_style(&theme, status);
+        }
+    }
+
+    #[test]
+    fn test_text_input_container_style() {
+        let theme = Theme::Dark;
+        let _style = text_input_container_style(&theme);
+
+        let theme = Theme::Light;
+        let _style = text_input_container_style(&theme);
+    }
+
+    #[test]
+    fn test_tooltip_style_dark() {
+        let theme = Theme::Dark;
+        let style = tooltip_style(&theme);
+        assert!(style.text_color.is_some());
+        assert!(style.background.is_some());
+    }
+
+    #[test]
+    fn test_tooltip_style_light() {
+        let theme = Theme::Light;
+        let style = tooltip_style(&theme);
+        assert!(style.text_color.is_some());
+        assert!(style.background.is_some());
+    }
+
+    #[test]
+    fn test_picker_header_style() {
+        let theme = Theme::Dark;
+        let style = picker_header_style(&theme);
+        assert_eq!(style.text_color, Some(Color::WHITE));
+    }
+
+    #[test]
+    fn test_count_style() {
+        let theme = Theme::Dark;
+        let style = count_style(&theme);
+        assert_eq!(style.text_color, Some(Color::WHITE));
+    }
+
+    #[test]
+    fn test_fav_button_style_all_statuses() {
+        let theme = Theme::Dark;
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let _style = fav_button_style(&theme, status);
+        }
+    }
+
+    #[test]
+    fn test_button_chip_style_all_statuses() {
+        let theme = Theme::Dark;
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let _style = button_chip_style(&theme, status);
+        }
+    }
+
+    #[test]
+    fn test_text_input_button_style_all_statuses() {
+        let theme = Theme::Dark;
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let _style = text_input_button_style(&theme, status);
+        }
+
+        let theme = Theme::Light;
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let _style = text_input_button_style(&theme, status);
+        }
+    }
+
+    #[test]
+    fn test_container_style() {
+        let theme = Theme::Dark;
+        let style = container_style(&theme);
+        assert_eq!(style.text_color, Some(Color::WHITE));
+    }
+
+    #[test]
+    fn test_emoji_tooltip_style() {
+        let theme = Theme::Dark;
+        let style = emoji_tooltip_style(&theme);
+        assert!(style.background.is_some());
+
+        let theme = Theme::Light;
+        let style = emoji_tooltip_style(&theme);
+        assert!(style.background.is_some());
+    }
+
+    #[test]
+    fn test_bubble_style_mine() {
+        let theme = Theme::Dark;
+        let style = bubble_style(&theme, true);
+        assert_eq!(style, MY_MESSAGE_BUBBLE_STYLE);
+    }
+
+    #[test]
+    fn test_bubble_style_others() {
+        let theme = Theme::Dark;
+        let style = bubble_style(&theme, false);
+        assert_eq!(style, OTHERS_MESSAGE_BUBBLE_STYLE);
+    }
+
+    #[test]
+    fn test_emoji_tab_style_all_statuses_selected() {
+        let theme = Theme::Dark;
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let _style = emoji_tab_style(&theme, status, true);
+        }
+    }
+
+    #[test]
+    fn test_emoji_tab_style_all_statuses_not_selected() {
+        let theme = Theme::Dark;
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let _style = emoji_tab_style(&theme, status, false);
+        }
+    }
+
+    #[test]
+    fn test_message_text_style() {
+        let theme = Theme::Dark;
+        let style = message_text_style(&theme);
+        assert_eq!(style.color, Some(Color::WHITE));
+    }
+
+    #[test]
+    fn test_alert_message_style() {
+        let theme = Theme::Dark;
+        let style = alert_message_style(&theme);
+        assert_eq!(style.color, Some(RED));
+    }
+
+    #[test]
+    fn test_name_box_style() {
+        let theme = Theme::Dark;
+        let style = name_box_style(&theme);
+        assert_eq!(style, NAME_BOX_STYLE);
+    }
+
+    #[test]
+    fn test_reply_to_style() {
+        let theme = Theme::Dark;
+        let style = reply_to_style(&theme);
+        assert_eq!(style.text_color, Some(Color::WHITE));
+    }
+
+    #[test]
+    fn test_channel_row_style_hovered() {
+        let theme = Theme::Dark;
+        let style = channel_row_style(&theme, Status::Hovered);
+        assert_eq!(style.text_color, Color::BLACK);
+    }
+
+    #[test]
+    fn test_channel_row_style_not_hovered() {
+        let theme = Theme::Dark;
+        for status in [Status::Active, Status::Pressed, Status::Disabled] {
+            let _style = channel_row_style(&theme, status);
+        }
+
+        let theme = Theme::Light;
+        for status in [Status::Active, Status::Pressed, Status::Disabled] {
+            let _style = channel_row_style(&theme, status);
+        }
+    }
+
+    #[test]
+    fn test_error_notification_style() {
+        let theme = Theme::Dark;
+        let style = error_notification_style(&theme);
+        assert_eq!(style.text_color, Some(Color::WHITE));
+    }
+
+    #[test]
+    fn test_info_notification_style() {
+        let theme = Theme::Dark;
+        let style = info_notification_style(&theme);
+        assert_eq!(style.text_color, Some(Color::WHITE));
+    }
+
+    #[test]
+    fn test_menu_button_style() {
+        let theme = Theme::Dark;
+        let _style = menu_button_style(&theme, iced_aw::style::Status::Active);
+        let _style = menu_button_style(&theme, iced_aw::style::Status::Hovered);
+        let _style = menu_button_style(&theme, iced_aw::style::Status::Pressed);
+        let _style = menu_button_style(&theme, iced_aw::style::Status::Disabled);
+    }
+
+    #[test]
+    fn test_scrollbar_style_all_statuses() {
+        let theme = Theme::Dark;
+        let statuses = [
+            scrollable::Status::Active {
+                is_horizontal_scrollbar_disabled: false,
+                is_vertical_scrollbar_disabled: false,
+            },
+            scrollable::Status::Hovered {
+                is_horizontal_scrollbar_hovered: false,
+                is_vertical_scrollbar_hovered: true,
+                is_horizontal_scrollbar_disabled: false,
+                is_vertical_scrollbar_disabled: false,
+            },
+            scrollable::Status::Dragged {
+                is_horizontal_scrollbar_dragged: false,
+                is_vertical_scrollbar_dragged: true,
+                is_horizontal_scrollbar_disabled: false,
+                is_vertical_scrollbar_disabled: false,
+            },
+        ];
+        for status in statuses {
+            let _style = scrollbar_style(&theme, status);
+        }
+    }
+
+    #[test]
+    fn test_modal_style_dark() {
+        let theme = Theme::Dark;
+        let style = modal_style(&theme);
+        assert!(style.background.is_some());
+    }
+
+    #[test]
+    fn test_modal_style_light() {
+        let theme = Theme::Light;
+        let style = modal_style(&theme);
+        assert!(style.background.is_some());
+    }
+
+    #[test]
+    fn test_emoji_scrollbar_style_all_statuses() {
+        let theme = Theme::Dark;
+        let statuses = [
+            scrollable::Status::Active {
+                is_horizontal_scrollbar_disabled: false,
+                is_vertical_scrollbar_disabled: false,
+            },
+            scrollable::Status::Hovered {
+                is_horizontal_scrollbar_hovered: false,
+                is_vertical_scrollbar_hovered: true,
+                is_horizontal_scrollbar_disabled: false,
+                is_vertical_scrollbar_disabled: false,
+            },
+            scrollable::Status::Dragged {
+                is_horizontal_scrollbar_dragged: false,
+                is_vertical_scrollbar_dragged: true,
+                is_horizontal_scrollbar_disabled: false,
+                is_vertical_scrollbar_disabled: false,
+            },
+        ];
+        for status in statuses {
+            let _style = emoji_scrollbar_style(&theme, status);
+        }
+    }
+
+    #[test]
+    fn test_battery_style() {
+        let theme = Theme::Dark;
+        let style = battery_style(&theme, BatteryState::Charged(50));
+        assert_eq!(style.border_color, COLOR_CYAN);
+
+        let style = battery_style(&theme, BatteryState::Charging);
+        assert_eq!(style.border_color, COLOR_CYAN);
+
+        let style = battery_style(&theme, BatteryState::Unknown);
+        assert_eq!(style.border_color, COLOR_CYAN);
+    }
+
+    // Test color constants
+    #[test]
+    fn test_color_constants() {
+        // Just verify they're defined correctly by accessing them
+        assert_eq!(COLOR_RED.r, 0.9);
+        assert_eq!(COLOR_GREEN.g, 0.8);
+        assert_eq!(COLOR_BLUE.b, 0.9);
+        assert_eq!(CYAN.a, 1.0);
+    }
+
+    #[test]
+    fn test_color_dictionary_length() {
+        assert_eq!(COLOR_DICTIONARY.len(), 15);
+    }
+
+    #[test]
+    fn test_time_text_constants() {
+        assert_eq!(TIME_TEXT_SIZE, 11.0);
+        assert_eq!(TIME_TEXT_WIDTH, 30.0);
+    }
+
+    #[test]
+    fn test_text_input_border_all_statuses() {
+        let palette = Theme::Dark.palette();
+        for status in [
+            text_input::Status::Active,
+            text_input::Status::Hovered,
+            text_input::Status::Focused { is_hovered: false },
+            text_input::Status::Disabled,
+        ] {
+            let _border = text_input_border(&palette, status);
+        }
+    }
+
+    #[test]
+    fn test_tooltip_border() {
+        let palette = Theme::Dark.palette();
+        let border = tooltip_border(&palette);
+        assert_eq!(border.width, 1.0);
+        assert_eq!(border.radius, RADIUS_12);
+    }
+}

@@ -174,11 +174,11 @@ mod test {
     fn test_to_channel() {
         let channel_id = Channel(0);
         let (destination, channel) = channel_id.to_destination();
-        match destination {
-            PacketDestination::Local => panic!("Should not be local"),
-            PacketDestination::Broadcast => {}
-            PacketDestination::Node(_) => panic!("Should not be node"),
-        };
+        assert!(
+            matches!(destination, PacketDestination::Broadcast),
+            "Channel destination should be Broadcast, got {:?}",
+            destination
+        );
         assert_eq!(channel, MeshChannel::from(0));
     }
 
@@ -186,13 +186,11 @@ mod test {
     fn test_to_node_destination() {
         let channel_id = Node(12345);
         let (destination, channel) = channel_id.to_destination();
-        match destination {
-            PacketDestination::Local => panic!("Should not be local"),
-            PacketDestination::Broadcast => panic!("Should not be broadcast"),
-            PacketDestination::Node(_node_id) => {
-                // Node destination was created correctly
-            }
-        };
+        assert!(
+            matches!(destination, PacketDestination::Node(_)),
+            "Node destination should be Node variant, got {:?}",
+            destination
+        );
         assert_eq!(channel, MeshChannel::default());
     }
 
