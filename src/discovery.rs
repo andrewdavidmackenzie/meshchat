@@ -31,9 +31,6 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
     stream::channel(
         100,
         move |mut gui_sender: Sender<DeviceListEvent>| async move {
-            // Device name -> (unseen count, radio type)
-            let mut mesh_radio_devices: HashMap<String, (i32, RadioType)> = HashMap::new();
-
             match Manager::new().await {
                 Ok(manager) => {
                     // get the first bluetooth adapter
@@ -47,14 +44,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                                     })
                                     .await
                                 {
-                                    Ok(()) => {
-                                        scan_for_devices(
-                                            &mut gui_sender,
-                                            &adapter,
-                                            &mut mesh_radio_devices,
-                                        )
-                                        .await
-                                    }
+                                    Ok(()) => scan_for_devices(&mut gui_sender, &adapter).await,
                                     Err(e) => {
                                         gui_sender.send(Error(e.to_string())).await.unwrap_or_else(
                                             |e| eprintln!("Discovery gui send error: {e}"),
@@ -92,16 +82,15 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
     )
 }
 
-async fn scan_for_devices(
-    gui_sender: &mut Sender<DeviceListEvent>,
-    adapter: &Adapter,
-    mesh_radio_devices: &mut HashMap<String, (i32, RadioType)>,
-) {
+async fn scan_for_devices(gui_sender: &mut Sender<DeviceListEvent>, adapter: &Adapter) {
+    // Device name -> (unseen count, radio type)
+    let mut mesh_radio_devices: HashMap<String, (i32, RadioType)> = HashMap::new();
+
     // loop scanning for devices
     loop {
         match adapter.peripherals().await {
             Ok(peripherals) => {
-                announce_device_changes(gui_sender, &peripherals, mesh_radio_devices).await;
+                announce_device_changes(gui_sender, &peripherals, &mut mesh_radio_devices).await;
             }
             Err(e) => {
                 gui_sender
@@ -236,7 +225,7 @@ mod tests {
             .collect()
     }
 
-    /// Helper to create a tracked devices HashMap
+    /// Helper to create a tracked device's HashMap entry
     fn tracked_device(name: &str, unseen_count: i32) -> (String, (i32, RadioType)) {
         (name.to_string(), (unseen_count, RadioType::default()))
     }
