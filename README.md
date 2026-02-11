@@ -31,16 +31,6 @@ with your messages on the right and others on the left.
   </tr>
 </table>
 
-## Disclaimer
-
-*** WARNING: Alpha quality, and few automated tests! ***
-
-Since the app doesn't try to change the configuration of any attached radio, at most it tries to send
-messages, the risk of "damage" from any bug is kind of low.
-
-Here is the list
-of [Known Bugs](https://github.com/andrewdavidmackenzie/meshchat/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug)
-
 ## The Thinking
 
 My thinking was to keep the app as simple to look at and use as possible.
@@ -102,9 +92,10 @@ many Operating Systems, including macOS, Windows and Linux.
 So far, it has been confirmed to run correctly on:
 
 * macOS (Tahoe, Apple Silicon / ARM)
-* Linux (Pop OS!)
-    * Known [bug](https://github.com/andrewdavidmackenzie/meshchat/issues/16) in BLE device discovery—it detects all
-      BlueTooth devices, not just Meshtastic radios
+* Linux (x86 and ARM)
+    * Pi500 running PiOS (there are still problems with Pi4/400 I am working on)
+    * There is a known [bug](https://github.com/andrewdavidmackenzie/meshchat/issues/16) in BLE device discovery—it
+      detects all BlueTooth devices, not just Meshtastic radios
 * Windows (both x86 and ARM)
 
 If you successfully run it on other OS or variants of the above, drop me a message in the repo's
@@ -113,14 +104,14 @@ of known working OS.
 
 ## CI Testing
 
-Tests are run in GitHub actions on macos-15, ubuntu-latest and window-latest. Coverage is still low, but now
-at least I am measuring it and working to increase it gradually.
+Tests are run in GitHub actions on macos-15 (arm64), ubuntu-latest (x86), ubuntu-arm, window-latest (x86)
+and windows-11-arm.
 
 ## Supported Radios
 
 It should work with all Meshtastic radios that are supported by the Meshtastic rust crate.
 
-So far, I have tested with a LillyGo T-ECHO and a T-Deck Pro
+So far, I have tested with a LillyGo T-ECHO, a T-Deck Pro and Heltec V3.
 
 Again, if you get it working successfully with other radios, drop me a message in
 [discussions](https://github.com/andrewdavidmackenzie/meshchat/discussions) and I will create some list of known working
@@ -204,9 +195,14 @@ a [discussion](https://github.com/andrewdavidmackenzie/meshchat/discussions) or 
 
 ### MeshCore Support
 
-I keep an eye on MeshCore too, and if there was a reasonable rust crate to talk to MeshCore radios, I would
-consider working on supporting both simultaneously. That would force cleaning up MeshTastic code that has
-leaked into the MeshChat code, abstracting away the radio specifics.
+I have started work on a MeshCore radio crate at https://github.com/andrewdavidmackenzie/meshcore-rs, and will
+now start improving it and adapting for use here. I will be working on supporting both mesh technologies
+simultaneously in this app.
+
+### Known Issues
+
+Here is the list
+of [Known Bugs](https://github.com/andrewdavidmackenzie/meshchat/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug)
 
 ## Licensing
 
