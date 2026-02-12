@@ -357,7 +357,13 @@ impl DeviceList {
 
     /// SHow a message when there are no devices found
     fn empty_view(&self) -> Element<'static, Message> {
-        Container::new(text("Searching for compatible Meshtastic radios").size(20))
+        let empty_text = if self.scanning {
+            "Searching for compatible Meshtastic radios"
+        } else {
+            "No compatible Meshtastic radios found."
+        };
+
+        Container::new(iced::widget::text(empty_text).size(20))
             .padding(10)
             .width(Fill)
             .align_y(Center)
@@ -1217,5 +1223,89 @@ mod tests {
         let connection_state = Disconnected(None, None);
         let _element = view.view(&config, &connection_state);
         // Exercises the icon_path matching for different radio types
+    }
+
+    // Tests for empty_view() - exercised through view() when device_list is empty
+
+    #[test]
+    fn test_empty_view_not_scanning() {
+        let view = DeviceList::default();
+        // scanning is false by default, device_list is empty
+        assert!(!view.scanning);
+        assert!(view.device_list.is_empty());
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Exercises empty_view() with scanning = false
+        // Should show "No compatible Meshtastic radios found."
+    }
+
+    #[test]
+    fn test_empty_view_while_scanning() {
+        let mut view = DeviceList::default();
+        // Set scanning to true
+        let _ = view.update(Scanning(true));
+        assert!(view.scanning);
+        assert!(view.device_list.is_empty());
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Exercises empty_view() with scanning = true
+        // Should show "Searching for compatible Meshtastic radios"
+    }
+
+    #[test]
+    fn test_scanning_state_toggle() {
+        let mut view = DeviceList::default();
+        assert!(!view.scanning);
+
+        // Start scanning
+        let _ = view.update(Scanning(true));
+        assert!(view.scanning);
+
+        // Stop scanning
+        let _ = view.update(Scanning(false));
+        assert!(!view.scanning);
+    }
+
+    #[test]
+    fn test_empty_view_after_all_devices_lost_while_scanning() {
+        let mut view = DeviceList::default();
+
+        // Start scanning and find a device
+        let _ = view.update(Scanning(true));
+        let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
+        assert_eq!(view.device_list.len(), 1);
+
+        // Lose the device while still scanning
+        let _ = view.update(BLERadioLost("device1".into()));
+        assert!(view.device_list.is_empty());
+        assert!(view.scanning);
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Should show "Searching..." message since scanning is still true
+    }
+
+    #[test]
+    fn test_empty_view_after_scanning_stops() {
+        let mut view = DeviceList::default();
+
+        // Start scanning
+        let _ = view.update(Scanning(true));
+        assert!(view.scanning);
+
+        // Stop scanning without finding any devices
+        let _ = view.update(Scanning(false));
+        assert!(!view.scanning);
+        assert!(view.device_list.is_empty());
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Should show "No compatible Meshtastic radios found." message
     }
 }
