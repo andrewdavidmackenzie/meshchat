@@ -1,9 +1,10 @@
 use crate::SubscriberMessage::{
-    Connect, Disconnect, SendEmojiReply, SendPosition, SendText, SendUser,
+    Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
 };
 use crate::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
 };
+use crate::device_list::RadioType;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
 use crate::{SubscriberMessage, SubscriptionEvent};
 use futures::{SinkExt, Stream};
@@ -29,7 +30,10 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
             let _ = gui_sender
-                .send(SubscriptionEvent::Ready(subscriber_sender.clone()))
+                .send(SubscriptionEvent::Ready(
+                    subscriber_sender,
+                    RadioType::MeshCore,
+                ))
                 .await;
 
             // Convert the channels to a `Stream`.
@@ -56,7 +60,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     device_state = Connected(ble_device.clone(), meshcore);
 
                                     gui_sender
-                                        .send(ConnectedEvent(ble_device))
+                                        .send(ConnectedEvent(ble_device, RadioType::MeshCore))
                                         .await
                                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                                 }
@@ -74,16 +78,13 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
                     }
                     Connected(ble_device, meshcore) => {
-                        /*
-                        let from_radio_stream =
-                            UnboundedReceiverStream::from(meshcore).map(|from_radio_packet| {
-                                MeshCoreRadioPacket(Box::new(from_radio_packet))
-                            });
+                        let from_radio_stream = meshcore.event_stream().map(|from_radio_packet| {
+                            MeshCoreRadioPacket(Box::new(from_radio_packet))
+                        });
 
                         let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
-                         */
 
-                        while let Some(message) = StreamExt::next(&mut gui_stream).await {
+                        while let Some(message) = StreamExt::next(&mut merged_stream).await {
                             let result = match message {
                                 Connect(_) => {
                                     eprintln!("Cannot connect while already connected");
@@ -148,7 +149,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                      */
                                     Ok(())
                                 }
-                                SubscriberMessage::MeshCoreRadioPacket => {
+                                MeshCoreRadioPacket(_) => {
                                     // my_router.handle_a_packet_from_radio(packet).await;
                                     Ok(())
                                 }

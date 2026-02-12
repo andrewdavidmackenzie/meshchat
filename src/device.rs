@@ -29,7 +29,7 @@ use crate::View::DeviceListView;
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
-use crate::device_list::DeviceList;
+use crate::device_list::{DeviceList, RadioType};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
     fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
@@ -49,7 +49,7 @@ use tokio::sync::mpsc::Sender;
 pub enum ConnectionState {
     Disconnected(Option<String>, Option<String>),
     Connecting(String),
-    Connected(String),
+    Connected(String, RadioType),
     Disconnecting(String),
 }
 
@@ -61,7 +61,7 @@ impl Default for ConnectionState {
 
 #[derive(Debug, Clone)]
 pub enum DeviceViewMessage {
-    ConnectRequest(String, Option<ChannelId>),
+    ConnectRequest(String, RadioType, Option<ChannelId>),
     DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(SubscriptionEvent),
     ShowChannel(Option<ChannelId>),
@@ -82,7 +82,10 @@ pub enum DeviceViewMessage {
 #[derive(Default)]
 pub struct Device {
     connection_state: ConnectionState,
-    subscription_sender: Option<Sender<SubscriberMessage>>,
+    #[cfg(feature = "meshtastic")]
+    meshtastic_sender: Option<Sender<SubscriberMessage>>,
+    #[cfg(feature = "meshcore")]
+    meshcore_sender: Option<Sender<SubscriberMessage>>,
     my_node_num: Option<u32>,
     my_position: Option<MCPosition>,
     my_user: Option<MCUser>,
@@ -137,16 +140,23 @@ impl Device {
 
     /// Return a true value to show we can show the device view, false for main to decide
     pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
+        let radio_type = if let Connected(_, radio_type) = self.connection_state {
+            radio_type
+        } else {
+            RadioType::None
+        };
+
         match device_view_message {
-            ConnectRequest(ble_device, channel_id) => {
+            ConnectRequest(ble_device, radio_type, channel_id) => {
                 return self.subscriber_send(
                     Connect(ble_device),
+                    radio_type,
                     Navigation(View::DeviceView(channel_id)),
                 );
             }
             DisconnectRequest(exit) => {
                 self.exit_pending = exit;
-                return self.subscriber_send(Disconnect, Navigation(DeviceListView));
+                return self.subscriber_send(Disconnect, radio_type, Navigation(DeviceListView));
             }
             ForwardMessage(channel_id) => {
                 if let Some(entry) = self.forwarding_message.take() {
@@ -158,6 +168,7 @@ impl Device {
 
                     return self.subscriber_send(
                         SendText(message_text, channel_id, None),
+                        radio_type,
                         DeviceViewEvent(ShowChannel(Some(channel_id))),
                     );
                 }
@@ -165,24 +176,33 @@ impl Device {
             SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
                 return self.subscriber_send(
                     SendEmojiReply(emoji, channel_id, reply_to_id),
+                    radio_type,
                     Message::None,
                 );
             }
             SendTextMessage(message, channel_id, reply_to_id) => {
-                return self
-                    .subscriber_send(SendText(message, channel_id, reply_to_id), Message::None);
+                return self.subscriber_send(
+                    SendText(message, channel_id, reply_to_id),
+                    radio_type,
+                    Message::None,
+                );
             }
             SendPositionMessage(channel_id) => {
                 if let Some(position) = &self.my_position {
                     return self.subscriber_send(
                         SendPosition(channel_id, position.clone()),
+                        radio_type,
                         Message::None,
                     );
                 }
             }
             SendInfoMessage(channel_id) => {
                 if let Some(user) = &self.my_user {
-                    return self.subscriber_send(SendUser(channel_id, user.clone()), Message::None);
+                    return self.subscriber_send(
+                        SendUser(channel_id, user.clone()),
+                        radio_type,
+                        Message::None,
+                    );
                 }
             }
             ShowChannel(channel_id) => {
@@ -216,9 +236,18 @@ impl Device {
     fn subscriber_send(
         &mut self,
         subscriber_message: SubscriberMessage,
+        radio_type: RadioType,
         success_message: Message,
     ) -> Task<Message> {
-        if let Some(sender) = self.subscription_sender.clone() {
+        let subscription_sender = match radio_type {
+            RadioType::None => None,
+            #[cfg(feature = "meshtastic")]
+            RadioType::Meshtastic => self.meshtastic_sender.clone(),
+            #[cfg(feature = "meshcore")]
+            RadioType::MeshCore => self.meshcore_sender.clone(),
+        };
+
+        if let Some(sender) = subscription_sender {
             let future = async move { sender.send(subscriber_message).await };
             Task::perform(future, |result| match result {
                 Ok(()) => success_message,
@@ -233,19 +262,19 @@ impl Device {
         }
     }
 
-    /// ave the new channel (which could be None) and if we are connected to a device
-    /// asynchronously, save the modified config
+    /// Save the new channel (which could be None)
     fn channel_change(&mut self, channel_id: Option<ChannelId>) -> Task<Message> {
         if self.viewing_channel != channel_id {
             self.viewing_channel = channel_id;
 
             if let Some(channel) = &channel_id
-                && let Connected(ble_device) = &self.connection_state
+                && let Connected(ble_device, radio_type) = &self.connection_state
                 && self.channel_views.contains_key(channel)
             {
                 let device = ble_device.clone();
+                let radio = *radio_type;
                 return Task::perform(empty(), move |_| {
-                    Message::DeviceAndChannelChange(Some(device), channel_id)
+                    Message::DeviceAndChannelChange(Some((device, radio)), channel_id)
                 });
             }
         }
@@ -274,15 +303,15 @@ impl Device {
                 self.connection_state = Connecting(mac_address);
                 Task::none()
             },
-            ConnectedEvent(ble_device) => {
-                self.connection_state = Connected(ble_device.clone());
+            ConnectedEvent(ble_device, radio_type) => {
+                self.connection_state = Connected(ble_device.clone(), radio_type);
                 match self.viewing_channel {
                     None => {
                         let channel_id = self.viewing_channel;
                         let device = ble_device.clone();
                         Task::perform(empty(), move |_| {
                             Message::DeviceAndChannelChange(
-                                Some(device),
+                                Some((device, radio_type)),
                                 channel_id,
                             )
                         })
@@ -310,8 +339,14 @@ impl Device {
                 self.viewing_channel = None;
                 Task::perform(empty(), |_| Navigation(DeviceListView))
             }
-            Ready(sender) => {
-                self.subscription_sender = Some(sender);
+            Ready(sender, radio_type) => {
+                match radio_type {
+                    RadioType::None => {}
+                    #[cfg(feature = "meshtastic")]
+                    RadioType::Meshtastic => self.meshtastic_sender = Some(sender),
+                    #[cfg(feature = "meshcore")]
+                    RadioType::MeshCore => self.meshcore_sender = Some(sender),
+                }
                 Task::none()
             }
             ConnectionError(id, summary, detail) => {
@@ -505,7 +540,7 @@ impl Device {
                 .style(button_chip_style);
                 header.push(Space::new().width(Fill)).push(name_button)
             }
-            Connected(device) => {
+            Connected(device, _) => {
                 let name_row = Row::new()
                     .push(text(format!(
                         "📱 {}",
@@ -557,7 +592,7 @@ impl Device {
         }
 
         // Add a disconnect button on the right if we are connected
-        if let Connected(_) = state {
+        if let Connected(_, _) = state {
             header = header.push(Space::new().width(Fill)).push(
                 button("Disconnect")
                     .on_press(DeviceViewEvent(DisconnectRequest(false)))
@@ -1104,6 +1139,7 @@ mod tests {
         // Subscription won't be ready
         let _task = meshchat.device.subscriber_send(
             Connect(BDAddr::from([0, 0, 0, 0, 0, 0]).to_string()),
+            RadioType::None,
             Navigation(DeviceListView),
         );
 
@@ -1114,9 +1150,11 @@ mod tests {
     async fn test_disconnect_request_fail() {
         let mut meshchat = test_helper::test_app();
         // Subscription won't be ready
-        let _task = meshchat
-            .device
-            .subscriber_send(Disconnect, Navigation(DeviceListView));
+        let _task = meshchat.device.subscriber_send(
+            Disconnect,
+            RadioType::None,
+            Navigation(DeviceListView),
+        );
         assert_eq!(meshchat.device.connection_state, Disconnected(None, None));
     }
 
@@ -1130,7 +1168,7 @@ mod tests {
     fn test_connection_state_variants() {
         let disconnected = Disconnected(Some("device1".into()), Some("error".into()));
         let connecting = Connecting("device1".into());
-        let connected = Connected("device1".into());
+        let connected = Connected("device1".into(), RadioType::None);
         let disconnecting = Disconnecting("device1".into());
 
         // Test equality
@@ -1139,7 +1177,7 @@ mod tests {
             Disconnected(Some("device1".into()), Some("error".into()))
         );
         assert_eq!(connecting, Connecting("device1".into()));
-        assert_eq!(connected, Connected("device1".into()));
+        assert_eq!(connected, Connected("device1".into(), RadioType::None,));
         assert_eq!(disconnecting, Disconnecting("device1".into()));
 
         // Test inequality
@@ -1387,14 +1425,20 @@ mod tests {
     #[test]
     fn test_subscription_connected_event() {
         let mut device_view = Device::default();
-        let _ = device_view.update(SubscriptionMessage(ConnectedEvent("device1".into())));
-        assert_eq!(device_view.connection_state, Connected("device1".into()));
+        let _ = device_view.update(SubscriptionMessage(ConnectedEvent(
+            "device1".into(),
+            RadioType::None,
+        )));
+        assert_eq!(
+            device_view.connection_state,
+            Connected("device1".into(), RadioType::None,)
+        );
     }
 
     #[test]
     fn test_subscription_disconnecting_event() {
         let mut device_view = Device::default();
-        device_view.connection_state = Connected("device1".into());
+        device_view.connection_state = Connected("device1".into(), RadioType::None);
         let _ = device_view.update(SubscriptionMessage(DisconnectingEvent("device1".into())));
         assert_eq!(
             device_view.connection_state,
@@ -1411,14 +1455,15 @@ mod tests {
         assert_eq!(device_view.my_node_num, Some(12345));
     }
 
+    #[cfg(feature = "meshtastic")]
     #[test]
     fn test_subscription_ready() {
         let mut device_view = Device::default();
-        assert!(device_view.subscription_sender.is_none());
+        assert!(device_view.meshtastic_sender.is_none());
 
         let (sender, _receiver) = tokio::sync::mpsc::channel::<SubscriberMessage>(10);
-        let _ = device_view.update(SubscriptionMessage(Ready(sender)));
-        assert!(device_view.subscription_sender.is_some());
+        let _ = device_view.update(SubscriptionMessage(Ready(sender, RadioType::Meshtastic)));
+        assert!(device_view.meshtastic_sender.is_some());
     }
 
     #[test]
@@ -2225,7 +2270,7 @@ mod tests {
 
     #[test]
     fn test_device_view_message_debug() {
-        let msg = ConnectRequest("device1".into(), None);
+        let msg = ConnectRequest("device1".into(), RadioType::None, None);
         let debug_str = format!("{:?}", msg);
         assert!(debug_str.contains("ConnectRequest"));
     }
@@ -2256,7 +2301,7 @@ mod tests {
     fn test_subscription_disconnected_clears_state() {
         let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
-        device_view.connection_state = Connected("device1".into());
+        device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add some data
         let channel = MCChannel {
@@ -2338,7 +2383,7 @@ mod tests {
     fn test_channel_change_connected_with_channel_view() {
         let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
-        device_view.connection_state = Connected("device1".into());
+        device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add a channel
         let channel = MCChannel {
@@ -2357,8 +2402,14 @@ mod tests {
         let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
-        let _ = device_view.update(SubscriptionMessage(ConnectedEvent("device1".into())));
-        assert_eq!(device_view.connection_state, Connected("device1".into()));
+        let _ = device_view.update(SubscriptionMessage(ConnectedEvent(
+            "device1".into(),
+            RadioType::None,
+        )));
+        assert_eq!(
+            device_view.connection_state,
+            Connected("device1".into(), RadioType::None,)
+        );
     }
 
     #[test]
@@ -2366,8 +2417,14 @@ mod tests {
         let mut device_view = Device::default();
         device_view.viewing_channel = None;
 
-        let _ = device_view.update(SubscriptionMessage(ConnectedEvent("device1".into())));
-        assert_eq!(device_view.connection_state, Connected("device1".into()));
+        let _ = device_view.update(SubscriptionMessage(ConnectedEvent(
+            "device1".into(),
+            RadioType::None,
+        )));
+        assert_eq!(
+            device_view.connection_state,
+            Connected("device1".into(), RadioType::None,)
+        );
     }
 
     // View function tests - verify Element creation and logic branches
@@ -2604,7 +2661,7 @@ mod tests {
             Disconnected(None, None),
             Disconnected(Some("device1".into()), Some("error".into())),
             Connecting("device1".into()),
-            Connected("device1".into()),
+            Connected("device1".into(), RadioType::None),
             Disconnecting("device1".into()),
         ];
 
@@ -2619,7 +2676,7 @@ mod tests {
     fn test_header_with_viewing_channel() {
         let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
-        device_view.connection_state = Connected("device1".into());
+        device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add a channel
         let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
@@ -2631,7 +2688,7 @@ mod tests {
 
         let device_list_view = DeviceList::default();
         let config = Config::default();
-        let state = Connected("device1".into());
+        let state = Connected("device1".into(), RadioType::None);
 
         let _element = device_view.header(&config, &state, &device_list_view);
         // Should include the channel name in the header
@@ -2641,7 +2698,7 @@ mod tests {
     fn test_header_with_viewing_node() {
         let mut device_view = Device::default();
         device_view.my_node_num = Some(999);
-        device_view.connection_state = Connected("device1".into());
+        device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add a node
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
@@ -2667,7 +2724,7 @@ mod tests {
 
         let device_list_view = DeviceList::default();
         let config = Config::default();
-        let state = Connected("device1".into());
+        let state = Connected("device1".into(), RadioType::None);
 
         let _element = device_view.header(&config, &state, &device_list_view);
         // Should include the node name in the header

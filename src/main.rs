@@ -21,7 +21,7 @@ use crate::device::Device;
 use crate::device::DeviceViewMessage;
 #[allow(unused_imports)] // TODO remove later
 use crate::device::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
-use crate::device_list::{DeviceList, DeviceListEvent};
+use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
@@ -31,6 +31,7 @@ use iced::widget::{Column, center, container, mouse_area, opaque, operation, sta
 use iced::window::icon;
 use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
+use meshcore_rs::MeshCoreEvent;
 #[cfg(feature = "meshtastic")]
 use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
@@ -163,8 +164,8 @@ pub struct MCChannel {
 #[derive(Debug, Clone)]
 pub enum SubscriptionEvent {
     /// The subscription is ready to receive [SubscriberMessage] from the GUI
-    Ready(Sender<SubscriberMessage>),
-    ConnectedEvent(String),
+    Ready(Sender<SubscriberMessage>, RadioType),
+    ConnectedEvent(String, RadioType),
     ConnectingEvent(String),
     DisconnectingEvent(String),
     DisconnectedEvent(String),
@@ -193,7 +194,7 @@ pub enum SubscriberMessage {
     #[cfg(feature = "meshtastic")]
     MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
     #[cfg(feature = "meshcore")]
-    MeshCoreRadioPacket, // Sent from the radio to the subscription, not GUI
+    MeshCoreRadioPacket(Box<MeshCoreEvent>), // Sent from the radio to the subscription, not GUI
 }
 
 /// These are the messages that MeshChat responds to
@@ -204,7 +205,7 @@ pub enum Message {
     DeviceViewEvent(DeviceViewMessage),
     Exit,
     ConfigLoaded(Config),
-    DeviceAndChannelChange(Option<String>, Option<ChannelId>),
+    DeviceAndChannelChange(Option<(String, RadioType)>, Option<ChannelId>),
     ShowLocation(MCPosition),
     ShowUserInfo(MCUser),
     CloseShowUser,
@@ -367,11 +368,12 @@ impl MeshChat {
 
                 // If the config requests to re-connect to a device, ask the device view to do so
                 // optionally on a specific Node/Channel also
-                if let Some(ble_device) = &self.config.ble_device
+                if let Some((ble_device_name, radio_type)) = &self.config.ble_device
                     && self.config.auto_reconnect
                 {
                     tasks.push(self.device.update(DeviceViewMessage::ConnectRequest(
-                        ble_device.clone(),
+                        ble_device_name.clone(),
+                        *radio_type,
                         self.config.channel_id,
                     )))
                 }
@@ -572,7 +574,7 @@ impl MeshChat {
                 }
             }
             Event::Window(window::Event::CloseRequested) => {
-                if let Connected(_) = self.device.connection_state() {
+                if let Connected(_, _) = self.device.connection_state() {
                     self.device.update(DisconnectRequest(true))
                 } else {
                     window::latest().and_then(window::close)

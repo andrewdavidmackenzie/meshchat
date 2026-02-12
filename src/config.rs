@@ -3,6 +3,7 @@ use crate::Message::{
     ToggleSaveWindowSize, ToggleShowPositionUpdates, ToggleShowUserUpdates,
 };
 use crate::channel_id::ChannelId;
+use crate::device_list::RadioType;
 use crate::styles::{picker_header_style, tooltip_style};
 use crate::{MeshChat, Message};
 use directories::ProjectDirs;
@@ -24,7 +25,7 @@ const ONE_DAY_IN_SECONDS: u64 = 60 * 60 * 24;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
-    pub ble_device: Option<String>,
+    pub ble_device: Option<(String, RadioType)>,
     #[serde(default, rename = "channel", skip_serializing_if = "Option::is_none")]
     pub channel_id: Option<ChannelId>,
     #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]
@@ -450,7 +451,10 @@ mod tests {
     #[tokio::test]
     async fn mac_address_saved() {
         let config = Config {
-            ble_device: Some(BDAddr::from([0, 1, 2, 3, 4, 6]).to_string()),
+            ble_device: Some((
+                BDAddr::from([0, 1, 2, 3, 4, 5]).to_string(),
+                RadioType::None,
+            )),
             ..Default::default()
         };
 
@@ -467,7 +471,10 @@ mod tests {
             .expect("Could not load config file");
         assert_eq!(
             returned.ble_device.expect("BLE device address not saved"),
-            BDAddr::from([0, 1, 2, 3, 4, 6]).to_string()
+            (
+                BDAddr::from([0, 1, 2, 3, 4, 5]).to_string(),
+                RadioType::None
+            )
         );
     }
 
@@ -829,6 +836,7 @@ mod tests {
 
     // Tests for WindowPosition and WindowSize
     use crate::config::{WindowPosition, WindowSize};
+    use crate::device_list::RadioType;
     use iced::{Point, Size};
 
     #[test]

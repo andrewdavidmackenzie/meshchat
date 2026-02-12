@@ -13,6 +13,7 @@ use crate::SubscriptionEvent::{
     DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
 };
+use crate::device_list::RadioType;
 use crate::{MCChannel, MCNodeInfo, MCPosition, SubscriberMessage, SubscriptionEvent};
 use futures::SinkExt;
 use futures::executor::block_on;
@@ -297,7 +298,10 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
             let _ = gui_sender
-                .send(SubscriptionEvent::Ready(subscriber_sender.clone()))
+                .send(SubscriptionEvent::Ready(
+                    subscriber_sender,
+                    RadioType::Meshtastic,
+                ))
                 .await;
 
             // Convert the channels to a `Stream`.
@@ -325,7 +329,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     stream_api = Some(stream);
 
                                     gui_sender
-                                        .send(ConnectedEvent(ble_device))
+                                        .send(ConnectedEvent(ble_device, RadioType::Meshtastic))
                                         .await
                                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                                 }
