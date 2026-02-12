@@ -23,8 +23,6 @@ use crate::device::DeviceViewMessage;
 use crate::device::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::device_list::{DeviceList, DeviceListEvent};
 use crate::discovery::ble_discovery;
-#[cfg(feature = "meshtastic")]
-use crate::mesht::device_subscription;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
 use iced::font::Weight;
@@ -194,6 +192,8 @@ pub enum SubscriberMessage {
     SendUser(ChannelId, MCUser),
     #[cfg(feature = "meshtastic")]
     MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
+    #[cfg(feature = "meshcore")]
+    MeshCoreRadioPacket, // Sent from the radio to the subscription, not GUI
 }
 
 /// These are the messages that MeshChat responds to
@@ -680,7 +680,10 @@ impl MeshChat {
         let subscriptions = vec![
             Subscription::run(ble_discovery).map(DeviceListViewEvent),
             #[cfg(feature = "meshtastic")]
-            Subscription::run(device_subscription::subscribe)
+            Subscription::run(mesht::subscription::subscribe)
+                .map(|m| DeviceViewEvent(SubscriptionMessage(m))),
+            #[cfg(feature = "meshcore")]
+            Subscription::run(meshc::subscription::subscribe)
                 .map(|m| DeviceViewEvent(SubscriptionMessage(m))),
             event::listen().map(Message::Event),
         ];

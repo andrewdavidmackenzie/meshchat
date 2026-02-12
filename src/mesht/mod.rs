@@ -6,7 +6,7 @@ use meshtastic::protobufs::{NodeInfo, Position, User};
 use meshtastic::types::{MeshChannel, NodeId};
 use uuid::Uuid;
 
-pub mod device_subscription;
+pub mod subscription;
 
 pub const MESHTASTIC_SERVICE_UUID: Uuid = Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd);
 
