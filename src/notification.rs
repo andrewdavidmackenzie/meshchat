@@ -664,4 +664,159 @@ mod tests {
         let _element = notifications.view();
         // Should not panic with many notifications
     }
+
+    // Tests for Critical notification type
+
+    #[test]
+    fn test_add_critical_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical(
+            "Critical summary".into(),
+            "Critical detail".into(),
+            MeshChat::now(),
+        ));
+        assert_eq!(notifications.inner.len(), 1);
+        assert_eq!(notifications.inner[0].0, 0);
+    }
+
+    #[test]
+    fn test_critical_notification_rx_time_preserved() {
+        let mut notifications = Notifications::default();
+        let rx_time = 1234567890;
+        let _ = notifications.add(Notification::Critical(
+            "critical".into(),
+            "detail".into(),
+            rx_time,
+        ));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Critical(_, _, time) if *time == rx_time),
+            "Critical notification should preserve rx_time {}, got {:?}",
+            rx_time,
+            notification
+        );
+    }
+
+    #[test]
+    fn test_critical_summary_and_detail_preserved() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical(
+            "Critical Summary".into(),
+            "Critical Detail".into(),
+            0,
+        ));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Critical(s, d, _) if s == "Critical Summary" && d == "Critical Detail"),
+            "Critical notification should preserve summary 'Critical Summary' and detail 'Critical Detail', got {:?}",
+            notification
+        );
+    }
+
+    #[test]
+    fn test_view_single_critical_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical(
+            "Critical Summary".into(),
+            "Critical Detail".into(),
+            1234567890,
+        ));
+        let _element = notifications.view();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_view_mixed_with_critical() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("Info".into(), "Detail".into(), 0));
+        let _ = notifications.add(Notification::Critical(
+            "Critical".into(),
+            "Detail".into(),
+            100,
+        ));
+        let _ = notifications.add(Notification::Error("Error".into(), "Detail".into(), 200));
+        let _element = notifications.view();
+        // Should not panic with mixed notification types including Critical
+    }
+
+    // Tests for cancellable parameter
+
+    #[test]
+    fn test_notification_box_not_cancellable() {
+        use crate::styles::permanent_notification_style;
+        let _element = Notifications::notification_box(
+            0,
+            "Summary",
+            "Detail",
+            MeshChat::now(),
+            permanent_notification_style,
+            false,
+        );
+        // Should not panic with cancellable = false
+    }
+
+    #[test]
+    fn test_notification_box_permanent_style_not_cancellable() {
+        use crate::styles::permanent_notification_style;
+        let _element = Notifications::notification_box(
+            42,
+            "Permanent notification",
+            "This cannot be dismissed",
+            0,
+            permanent_notification_style,
+            false,
+        );
+        // Should not panic
+    }
+
+    #[test]
+    fn test_notification_box_cancellable_false_empty_strings() {
+        use crate::styles::info_notification_style;
+        let _element =
+            Notifications::notification_box(0, "", "", 0, info_notification_style, false);
+        // Should not panic with empty strings and cancellable = false
+    }
+
+    #[test]
+    fn test_notification_box_cancellable_false_long_strings() {
+        use crate::styles::permanent_notification_style;
+        let long_summary = "A".repeat(500);
+        let long_detail = "B".repeat(2000);
+        let _element = Notifications::notification_box(
+            0,
+            &long_summary,
+            &long_detail,
+            0,
+            permanent_notification_style,
+            false,
+        );
+        // Should not panic
+    }
+
+    #[test]
+    fn test_mixed_notification_types_including_critical() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("info".into(), "detail".into(), 0));
+        let _ = notifications.add(Notification::Error("error".into(), "detail".into(), 0));
+        let _ = notifications.add(Notification::Critical(
+            "critical".into(),
+            "detail".into(),
+            0,
+        ));
+
+        assert_eq!(notifications.inner.len(), 3);
+    }
+
+    #[test]
+    fn test_view_only_critical_notifications() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical("C1".into(), "D1".into(), 0));
+        let _ = notifications.add(Notification::Critical("C2".into(), "D2".into(), 100));
+        let _ = notifications.add(Notification::Critical("C3".into(), "D3".into(), 200));
+        let _element = notifications.view();
+        // Should not panic with multiple critical notifications
+    }
 }
