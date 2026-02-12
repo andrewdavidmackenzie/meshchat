@@ -3,7 +3,7 @@ use crate::device_list::DeviceListEvent;
 use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
 use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list::DeviceListEvent::{BLERadioLost, Error};
+use crate::device_list::DeviceListEvent::{BLERadioLost, CriticalError, Error};
 use crate::device_list::RadioType;
 #[cfg(feature = "meshcore")]
 use crate::meshc::MESHCORE_SERVICE_UUID;
@@ -54,7 +54,9 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                             }
                             None => {
                                 gui_sender
-                                    .send(Error("Discovery could not get a BT Adapter".into()))
+                                    .send(CriticalError(
+                                        "Discovery could not get a BT Adapter".into(),
+                                    ))
                                     .await
                                     .unwrap_or_else(|e| {
                                         eprintln!("Discovery could not find a BT adapters: {e}")
@@ -63,7 +65,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                         },
                         Err(e) => {
                             gui_sender
-                                .send(Error(e.to_string()))
+                                .send(CriticalError(e.to_string()))
                                 .await
                                 .unwrap_or_else(|e| {
                                     eprintln!("Discovery could not get first BT adapter: {e}")
@@ -73,7 +75,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                 }
                 Err(e) => {
                     gui_sender
-                        .send(Error(e.to_string()))
+                        .send(CriticalError(e.to_string()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Discovery could not get BT manager: {e}"));
                 }

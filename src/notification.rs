@@ -2,7 +2,7 @@ use crate::Message;
 use crate::Message::RemoveNotification;
 use crate::styles::{
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, error_notification_style,
-    info_notification_style,
+    info_notification_style, permanent_notification_style,
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
@@ -15,8 +15,9 @@ use iced::{Bottom, Element, Fill, Renderer, Right, Task, Theme};
 /// - Info(summary, detail)
 #[derive(Debug)]
 pub enum Notification {
-    Error(String, String, u32), // Message, Detail, rx_time
-    Info(String, String, u32),  // Message, Detail, rx_time
+    Critical(String, String, u32), // Message, Detail, rx_time
+    Error(String, String, u32),    // Message, Detail, rx_time
+    Info(String, String, u32),     // Message, Detail, rx_time
 }
 
 /// A collection of notifications that should be shown on screen
@@ -32,18 +33,38 @@ impl Notifications {
         let mut notifications = Column::new().padding(10);
 
         for (id, notification) in &self.inner {
-            notifications = notifications.push(match notification {
-                Notification::Error(summary, details, rx_time) => Self::notification_box(
-                    *id,
-                    summary,
-                    details,
-                    *rx_time,
-                    error_notification_style,
+            let (style, cancellable, summary, details, rx_time) = match notification {
+                Notification::Critical(s, d, t) => (
+                    permanent_notification_style as fn(&Theme) -> Style,
+                    false,
+                    s,
+                    d,
+                    t,
                 ),
-                Notification::Info(summary, details, rx_time) => {
-                    Self::notification_box(*id, summary, details, *rx_time, info_notification_style)
-                }
-            });
+                Notification::Error(s, d, t) => (
+                    error_notification_style as fn(&Theme) -> Style,
+                    true,
+                    s,
+                    d,
+                    t,
+                ),
+                Notification::Info(s, d, t) => (
+                    info_notification_style as fn(&Theme) -> Style,
+                    true,
+                    s,
+                    d,
+                    t,
+                ),
+            };
+
+            notifications = notifications.push(Self::notification_box(
+                *id,
+                summary,
+                details,
+                *rx_time,
+                style,
+                cancellable,
+            ));
         }
 
         notifications.into()
@@ -55,14 +76,18 @@ impl Notifications {
         detail: &'a str,
         rx_time: u32,
         style: impl Fn(&Theme) -> Style + 'static,
+        cancellable: bool,
     ) -> Element<'a, Message> {
-        let top_row = Row::new().width(Fill).push(text(summary).size(20)).push(
-            Column::new().width(Fill).align_x(Right).push(
-                button("OK")
-                    .style(button_chip_style)
-                    .on_press(RemoveNotification(id)),
-            ),
-        );
+        let mut top_row = Row::new().width(Fill).push(text(summary).size(20));
+        if cancellable {
+            top_row = top_row.push(
+                Column::new().width(Fill).align_x(Right).push(
+                    button("OK")
+                        .style(button_chip_style)
+                        .on_press(RemoveNotification(id)),
+                ),
+            );
+        }
 
         let bottom_row = Row::new()
             .push(text(detail).size(14))
@@ -461,7 +486,7 @@ mod tests {
             0,
         ));
         let _element = notifications.view();
-        // Should not panic with unicode
+        // Should not panic with Unicode
     }
 
     #[test]
@@ -541,6 +566,7 @@ mod tests {
             "Detail",
             MeshChat::now(),
             info_notification_style,
+            true,
         );
         // Should not panic
     }
@@ -554,6 +580,7 @@ mod tests {
             "Detail",
             MeshChat::now(),
             error_notification_style,
+            true,
         );
         // Should not panic
     }
@@ -561,7 +588,7 @@ mod tests {
     #[test]
     fn test_notification_box_empty_strings() {
         use crate::styles::info_notification_style;
-        let _element = Notifications::notification_box(0, "", "", 0, info_notification_style);
+        let _element = Notifications::notification_box(0, "", "", 0, info_notification_style, true);
         // Should not panic with empty strings
     }
 
@@ -576,6 +603,7 @@ mod tests {
             &long_detail,
             0,
             info_notification_style,
+            true,
         );
         // Should not panic
     }
@@ -591,6 +619,7 @@ mod tests {
                 "Detail",
                 0,
                 info_notification_style,
+                true,
             );
             // Should not panic
         }

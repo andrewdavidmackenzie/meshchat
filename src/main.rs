@@ -5,10 +5,10 @@
 use crate::Message::UpdateChecked;
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
-    ConfigLoaded, CopyToClipBoard, DeviceAndChannelChange, DeviceListViewEvent, DeviceViewEvent,
-    Exit, HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl, RemoveDeviceAlias,
-    RemoveNodeAlias, RemoveNotification, SetWindowPosition, SetWindowSize, ShowLocation,
-    ShowUserInfo, ToggleAutoReconnect, ToggleAutoUpdate, ToggleNodeFavourite,
+    ConfigLoaded, CopyToClipBoard, CriticalAppError, DeviceAndChannelChange, DeviceListViewEvent,
+    DeviceViewEvent, Exit, HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl,
+    RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification, SetWindowPosition, SetWindowSize,
+    ShowLocation, ShowUserInfo, ToggleAutoReconnect, ToggleAutoUpdate, ToggleNodeFavourite,
     ToggleSaveWindowPosition, ToggleSaveWindowSize, ToggleShowPositionUpdates,
     ToggleShowUserUpdates,
 };
@@ -213,6 +213,7 @@ pub enum Message {
     OpenUrl(String),
     AppNotification(String, String, u32), // Message, detail, rx_time
     AppError(String, String, u32),        // Message, detail, rx_time
+    CriticalAppError(String, String, u32), // Message, detail, rx_time
     RemoveNotification(usize),
     ToggleNodeFavourite(u32),
     CopyToClipBoard(String),
@@ -348,6 +349,9 @@ impl MeshChat {
             AppError(summary, detail, rx_time) => self
                 .notifications
                 .add(Notification::Error(summary, detail, rx_time)),
+            CriticalAppError(summary, detail, rx_time) => self
+                .notifications
+                .add(Notification::Critical(summary, detail, rx_time)),
             Message::None => Task::none(),
             ConfigLoaded(config) => {
                 self.device.set_history_length(config.history_length);

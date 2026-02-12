@@ -10,7 +10,7 @@ use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
 use iced::widget::{button, scrollable, text, text_input};
 use iced::{Background, Border, Color, Shadow, Theme};
 use iced_aw::menu;
-use iced_aw::style::colors::RED;
+use iced_aw::style::colors::{BLACK, RED};
 
 // Basic Colors
 pub const COLOR_RED: Color = Color::from_rgb(0.9, 0.2, 0.2);
@@ -538,6 +538,19 @@ pub fn channel_row_style(theme: &Theme, status: Status) -> button::Style {
             shadow: NO_SHADOW,
             snap: false,
         }
+    }
+}
+
+pub fn permanent_notification_style(_theme: &Theme) -> Style {
+    Style {
+        text_color: Some(Color::WHITE),
+        background: Some(Background::Color(BLACK)),
+        border: Border {
+            radius: Radius::from(12.0), // rounded corners
+            width: 2.0,
+            color: COLOR_YELLOW,
+        },
+        ..Default::default()
     }
 }
 

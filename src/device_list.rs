@@ -9,7 +9,9 @@ use crate::device::{ConnectionState, Device};
 use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
 use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list::DeviceListEvent::{AliasInput, BLERadioLost, Error, StartEditingAlias};
+use crate::device_list::DeviceListEvent::{
+    AliasInput, BLERadioLost, CriticalError, Error, StartEditingAlias,
+};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
 use crate::{MeshChat, Message, View};
 use iced::widget::scrollable::Scrollbar;
@@ -39,6 +41,7 @@ pub enum DeviceListEvent {
     #[cfg(feature = "meshcore")]
     BLEMeshCoreRadioFound(String),
     BLERadioLost(String),
+    CriticalError(String),
     Error(String),
     StartEditingAlias(String),
     AliasInput(String), // From text_input
@@ -93,6 +96,15 @@ impl DeviceList {
             Error(e) => {
                 return Task::perform(empty(), move |_| {
                     Message::AppError(
+                        "Discovery Error".to_string(),
+                        e.to_string(),
+                        MeshChat::now(),
+                    )
+                });
+            }
+            CriticalError(e) => {
+                return Task::perform(empty(), move |_| {
+                    Message::CriticalAppError(
                         "Discovery Error".to_string(),
                         e.to_string(),
                         MeshChat::now(),
