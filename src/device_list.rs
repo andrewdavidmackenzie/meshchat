@@ -9,8 +9,12 @@ use crate::device::{ConnectionState, Device};
 use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
 use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list::DeviceListEvent::{AliasInput, BLERadioLost, Error, StartEditingAlias};
+use crate::device_list::DeviceListEvent::{
+    AliasInput, BLERadioLost, CriticalError, Error, Scanning, StartEditingAlias,
+};
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
+use crate::widgets::easing;
+use crate::widgets::linear::Linear;
 use crate::{MeshChat, Message, View};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -20,6 +24,7 @@ use iced::widget::{
 use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
 use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
 use std::collections::HashMap;
+use std::time::Duration;
 
 /// The type of radio firmware detected
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -39,9 +44,11 @@ pub enum DeviceListEvent {
     #[cfg(feature = "meshcore")]
     BLEMeshCoreRadioFound(String),
     BLERadioLost(String),
+    CriticalError(String),
     Error(String),
     StartEditingAlias(String),
     AliasInput(String), // From text_input
+    Scanning(bool),
 }
 
 /// Information about a discovered device
@@ -56,6 +63,7 @@ pub struct DeviceList {
     device_list: HashMap<String, DeviceInfo>, // BLE address -> DeviceInfo
     alias: String,
     editing_alias: Option<String>,
+    scanning: bool,
 }
 
 async fn empty() {}
@@ -99,8 +107,18 @@ impl DeviceList {
                     )
                 });
             }
+            CriticalError(e) => {
+                return Task::perform(empty(), move |_| {
+                    Message::CriticalAppError(
+                        "Discovery Error".to_string(),
+                        e.to_string(),
+                        MeshChat::now(),
+                    )
+                });
+            }
             StartEditingAlias(device) => return self.start_editing_alias(device),
             AliasInput(alias) => self.alias = alias,
+            Scanning(scanning) => self.scanning = scanning,
         };
 
         Task::none()
@@ -132,15 +150,15 @@ impl DeviceList {
     pub fn header<'a>(
         &'a self,
         config: &'a Config,
-        state: &'a ConnectionState,
+        connection_state: &'a ConnectionState,
     ) -> Element<'a, Message> {
-        let mut header = Row::new()
+        let mut header_row = Row::new()
             .padding(4)
             .align_y(Center)
             .push(button("Devices").style(button_chip_style));
 
-        header = match state {
-            Disconnected(_, _) => header
+        header_row = match connection_state {
+            Disconnected(_, _) => header_row
                 .push(Space::new().width(Fill))
                 .push(iced::widget::button("Disconnected").style(button_chip_style)),
             Connecting(device) => {
@@ -149,16 +167,16 @@ impl DeviceList {
                     self.device_name_or_alias(device, config)
                 )))
                 .style(button_chip_style);
-                header.push(Space::new().width(Fill)).push(name_button)
+                header_row.push(Space::new().width(Fill)).push(name_button)
             }
-            Connected(mac_address) => header
+            Connected(mac_address) => header_row
                 .push(
                     button(text(self.device_name_or_alias(mac_address, config)))
                         .style(button_chip_style)
                         .on_press(Navigation(View::DeviceView(None))),
                 )
                 .push(Space::new().width(Fill)),
-            Disconnecting(device_name) => header
+            Disconnecting(device_name) => header_row
                 .push(
                     button(text(format!(
                         "📱 {}",
@@ -171,15 +189,31 @@ impl DeviceList {
         };
 
         // Add a disconnect button on the right if we are connected
-        if let Connected(_) = state {
-            header = header.push(Space::new().width(Fill)).push(
+        if let Connected(_) = connection_state {
+            header_row = header_row.push(Space::new().width(Fill)).push(
                 button("Disconnect")
                     .on_press(DeviceViewEvent(DisconnectRequest(false)))
                     .style(button_chip_style),
             )
         }
 
-        header.push(Device::settings_button()).into()
+        header_row = header_row.push(Device::settings_button());
+
+        // If busy of connecting or disconnecting, add a busy bar to the header
+        if self.scanning || matches!(connection_state, Connecting(_) | Disconnecting(_)) {
+            Column::new()
+                .push(header_row)
+                .push(Space::new().width(Fill))
+                .push(
+                    Linear::new()
+                        .easing(easing::emphasized_accelerate())
+                        .cycle_duration(Duration::from_secs_f32(2.0))
+                        .width(Fill),
+                )
+                .into()
+        } else {
+            header_row.into()
+        }
     }
 
     pub fn view<'a>(
@@ -188,7 +222,7 @@ impl DeviceList {
         connection_state: &'a ConnectionState,
     ) -> Element<'a, Message> {
         if self.device_list.is_empty() {
-            return empty_view();
+            return self.empty_view();
         }
 
         let mut main_col = Column::new();
@@ -320,6 +354,23 @@ impl DeviceList {
         .close_on_item_click(true)
         .style(menu_button_style)
     }
+
+    /// SHow a message when there are no devices found
+    fn empty_view(&self) -> Element<'static, Message> {
+        let empty_text = if self.scanning {
+            "Searching for compatible Meshtastic radios"
+        } else {
+            "No compatible Meshtastic radios found."
+        };
+
+        Container::new(iced::widget::text(empty_text).size(20))
+            .padding(10)
+            .width(Fill)
+            .align_y(Center)
+            .height(Fill)
+            .align_x(Center)
+            .into()
+    }
 }
 
 fn menu_button(
@@ -338,17 +389,6 @@ fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer>
         .padding([0, 4])
         .style(button_chip_style)
         .on_press(Message::None) // Needed for styling to work
-}
-
-/// SHow a message when there are no devices found
-fn empty_view() -> Element<'static, Message> {
-    Container::new(text("Searching for compatible Meshtastic radios").size(20))
-        .padding(10)
-        .width(Fill)
-        .align_y(Center)
-        .height(Fill)
-        .align_x(Center)
-        .into()
 }
 
 #[cfg(test)]
@@ -1183,5 +1223,89 @@ mod tests {
         let connection_state = Disconnected(None, None);
         let _element = view.view(&config, &connection_state);
         // Exercises the icon_path matching for different radio types
+    }
+
+    // Tests for empty_view() - exercised through view() when device_list is empty
+
+    #[test]
+    fn test_empty_view_not_scanning() {
+        let view = DeviceList::default();
+        // scanning is false by default, device_list is empty
+        assert!(!view.scanning);
+        assert!(view.device_list.is_empty());
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Exercises empty_view() with scanning = false
+        // Should show "No compatible Meshtastic radios found."
+    }
+
+    #[test]
+    fn test_empty_view_while_scanning() {
+        let mut view = DeviceList::default();
+        // Set scanning to true
+        let _ = view.update(Scanning(true));
+        assert!(view.scanning);
+        assert!(view.device_list.is_empty());
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Exercises empty_view() with scanning = true
+        // Should show "Searching for compatible Meshtastic radios"
+    }
+
+    #[test]
+    fn test_scanning_state_toggle() {
+        let mut view = DeviceList::default();
+        assert!(!view.scanning);
+
+        // Start scanning
+        let _ = view.update(Scanning(true));
+        assert!(view.scanning);
+
+        // Stop scanning
+        let _ = view.update(Scanning(false));
+        assert!(!view.scanning);
+    }
+
+    #[test]
+    fn test_empty_view_after_all_devices_lost_while_scanning() {
+        let mut view = DeviceList::default();
+
+        // Start scanning and find a device
+        let _ = view.update(Scanning(true));
+        let _ = view.update(BLEMeshtasticRadioFound("device1".into()));
+        assert_eq!(view.device_list.len(), 1);
+
+        // Lose the device while still scanning
+        let _ = view.update(BLERadioLost("device1".into()));
+        assert!(view.device_list.is_empty());
+        assert!(view.scanning);
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Should show "Searching..." message since scanning is still true
+    }
+
+    #[test]
+    fn test_empty_view_after_scanning_stops() {
+        let mut view = DeviceList::default();
+
+        // Start scanning
+        let _ = view.update(Scanning(true));
+        assert!(view.scanning);
+
+        // Stop scanning without finding any devices
+        let _ = view.update(Scanning(false));
+        assert!(!view.scanning);
+        assert!(view.device_list.is_empty());
+
+        let config = Config::default();
+        let connection_state = Disconnected(None, None);
+        let _element = view.view(&config, &connection_state);
+        // Should show "No compatible Meshtastic radios found." message
     }
 }

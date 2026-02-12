@@ -3,7 +3,7 @@ use crate::device_list::DeviceListEvent;
 use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
 use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list::DeviceListEvent::{BLERadioLost, Error};
+use crate::device_list::DeviceListEvent::{BLERadioLost, CriticalError, Error, Scanning};
 use crate::device_list::RadioType;
 #[cfg(feature = "meshcore")]
 use crate::meshc::MESHCORE_SERVICE_UUID;
@@ -54,7 +54,9 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                             }
                             None => {
                                 gui_sender
-                                    .send(Error("Discovery could not get a BT Adapter".into()))
+                                    .send(CriticalError(
+                                        "Discovery could not get a BT Adapter".into(),
+                                    ))
                                     .await
                                     .unwrap_or_else(|e| {
                                         eprintln!("Discovery could not find a BT adapters: {e}")
@@ -63,7 +65,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                         },
                         Err(e) => {
                             gui_sender
-                                .send(Error(e.to_string()))
+                                .send(CriticalError(e.to_string()))
                                 .await
                                 .unwrap_or_else(|e| {
                                     eprintln!("Discovery could not get first BT adapter: {e}")
@@ -73,7 +75,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                 }
                 Err(e) => {
                     gui_sender
-                        .send(Error(e.to_string()))
+                        .send(CriticalError(e.to_string()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Discovery could not get BT manager: {e}"));
                 }
@@ -85,6 +87,11 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
 async fn scan_for_devices(gui_sender: &mut Sender<DeviceListEvent>, adapter: &Adapter) {
     // Device name -> (unseen count, radio type)
     let mut mesh_radio_devices: HashMap<String, (i32, RadioType)> = HashMap::new();
+
+    gui_sender
+        .send(Scanning(true))
+        .await
+        .unwrap_or_else(|e| eprintln!("Discovery could not send Scanning(true): {e}"));
 
     // loop scanning for devices
     loop {
@@ -968,7 +975,7 @@ mod tests {
         assert_eq!(lost, vec!["UniqueDeviceName123".to_string()]);
     }
 
-    // Test unicode device names
+    // Test Unicode device names
     #[test]
     fn test_device_with_unicode_name() {
         let mut current: HashMap<String, RadioType> = HashMap::new();
@@ -986,7 +993,7 @@ mod tests {
         assert!(tracked.contains_key("📱Device"));
     }
 
-    // Test device with empty name
+    // Test device with an empty name
     #[test]
     fn test_device_with_empty_name() {
         let mut current: HashMap<String, RadioType> = HashMap::new();

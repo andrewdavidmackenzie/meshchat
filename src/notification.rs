@@ -2,7 +2,7 @@ use crate::Message;
 use crate::Message::RemoveNotification;
 use crate::styles::{
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, error_notification_style,
-    info_notification_style,
+    info_notification_style, permanent_notification_style,
 };
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
@@ -15,8 +15,9 @@ use iced::{Bottom, Element, Fill, Renderer, Right, Task, Theme};
 /// - Info(summary, detail)
 #[derive(Debug)]
 pub enum Notification {
-    Error(String, String, u32), // Message, Detail, rx_time
-    Info(String, String, u32),  // Message, Detail, rx_time
+    Critical(String, String, u32), // Message, Detail, rx_time
+    Error(String, String, u32),    // Message, Detail, rx_time
+    Info(String, String, u32),     // Message, Detail, rx_time
 }
 
 /// A collection of notifications that should be shown on screen
@@ -32,18 +33,38 @@ impl Notifications {
         let mut notifications = Column::new().padding(10);
 
         for (id, notification) in &self.inner {
-            notifications = notifications.push(match notification {
-                Notification::Error(summary, details, rx_time) => Self::notification_box(
-                    *id,
-                    summary,
-                    details,
-                    *rx_time,
-                    error_notification_style,
+            let (style, cancellable, summary, details, rx_time) = match notification {
+                Notification::Critical(s, d, t) => (
+                    permanent_notification_style as fn(&Theme) -> Style,
+                    false,
+                    s,
+                    d,
+                    t,
                 ),
-                Notification::Info(summary, details, rx_time) => {
-                    Self::notification_box(*id, summary, details, *rx_time, info_notification_style)
-                }
-            });
+                Notification::Error(s, d, t) => (
+                    error_notification_style as fn(&Theme) -> Style,
+                    true,
+                    s,
+                    d,
+                    t,
+                ),
+                Notification::Info(s, d, t) => (
+                    info_notification_style as fn(&Theme) -> Style,
+                    true,
+                    s,
+                    d,
+                    t,
+                ),
+            };
+
+            notifications = notifications.push(Self::notification_box(
+                *id,
+                summary,
+                details,
+                *rx_time,
+                style,
+                cancellable,
+            ));
         }
 
         notifications.into()
@@ -55,14 +76,18 @@ impl Notifications {
         detail: &'a str,
         rx_time: u32,
         style: impl Fn(&Theme) -> Style + 'static,
+        cancellable: bool,
     ) -> Element<'a, Message> {
-        let top_row = Row::new().width(Fill).push(text(summary).size(20)).push(
-            Column::new().width(Fill).align_x(Right).push(
-                button("OK")
-                    .style(button_chip_style)
-                    .on_press(RemoveNotification(id)),
-            ),
-        );
+        let mut top_row = Row::new().width(Fill).push(text(summary).size(20));
+        if cancellable {
+            top_row = top_row.push(
+                Column::new().width(Fill).align_x(Right).push(
+                    button("OK")
+                        .style(button_chip_style)
+                        .on_press(RemoveNotification(id)),
+                ),
+            );
+        }
 
         let bottom_row = Row::new()
             .push(text(detail).size(14))
@@ -461,7 +486,7 @@ mod tests {
             0,
         ));
         let _element = notifications.view();
-        // Should not panic with unicode
+        // Should not panic with Unicode
     }
 
     #[test]
@@ -541,6 +566,7 @@ mod tests {
             "Detail",
             MeshChat::now(),
             info_notification_style,
+            true,
         );
         // Should not panic
     }
@@ -554,6 +580,7 @@ mod tests {
             "Detail",
             MeshChat::now(),
             error_notification_style,
+            true,
         );
         // Should not panic
     }
@@ -561,7 +588,7 @@ mod tests {
     #[test]
     fn test_notification_box_empty_strings() {
         use crate::styles::info_notification_style;
-        let _element = Notifications::notification_box(0, "", "", 0, info_notification_style);
+        let _element = Notifications::notification_box(0, "", "", 0, info_notification_style, true);
         // Should not panic with empty strings
     }
 
@@ -576,6 +603,7 @@ mod tests {
             &long_detail,
             0,
             info_notification_style,
+            true,
         );
         // Should not panic
     }
@@ -591,6 +619,7 @@ mod tests {
                 "Detail",
                 0,
                 info_notification_style,
+                true,
             );
             // Should not panic
         }
@@ -634,5 +663,160 @@ mod tests {
         }
         let _element = notifications.view();
         // Should not panic with many notifications
+    }
+
+    // Tests for Critical notification type
+
+    #[test]
+    fn test_add_critical_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical(
+            "Critical summary".into(),
+            "Critical detail".into(),
+            MeshChat::now(),
+        ));
+        assert_eq!(notifications.inner.len(), 1);
+        assert_eq!(notifications.inner[0].0, 0);
+    }
+
+    #[test]
+    fn test_critical_notification_rx_time_preserved() {
+        let mut notifications = Notifications::default();
+        let rx_time = 1234567890;
+        let _ = notifications.add(Notification::Critical(
+            "critical".into(),
+            "detail".into(),
+            rx_time,
+        ));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Critical(_, _, time) if *time == rx_time),
+            "Critical notification should preserve rx_time {}, got {:?}",
+            rx_time,
+            notification
+        );
+    }
+
+    #[test]
+    fn test_critical_summary_and_detail_preserved() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical(
+            "Critical Summary".into(),
+            "Critical Detail".into(),
+            0,
+        ));
+
+        let notification = &notifications.inner[0].1;
+        assert!(
+            matches!(notification, Notification::Critical(s, d, _) if s == "Critical Summary" && d == "Critical Detail"),
+            "Critical notification should preserve summary 'Critical Summary' and detail 'Critical Detail', got {:?}",
+            notification
+        );
+    }
+
+    #[test]
+    fn test_view_single_critical_notification() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical(
+            "Critical Summary".into(),
+            "Critical Detail".into(),
+            1234567890,
+        ));
+        let _element = notifications.view();
+        // Should not panic
+    }
+
+    #[test]
+    fn test_view_mixed_with_critical() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Info("Info".into(), "Detail".into(), 0));
+        let _ = notifications.add(Notification::Critical(
+            "Critical".into(),
+            "Detail".into(),
+            100,
+        ));
+        let _ = notifications.add(Notification::Error("Error".into(), "Detail".into(), 200));
+        let _element = notifications.view();
+        // Should not panic with mixed notification types including Critical
+    }
+
+    // Tests for cancellable parameter
+
+    #[test]
+    fn test_notification_box_not_cancellable() {
+        use crate::styles::permanent_notification_style;
+        let _element = Notifications::notification_box(
+            0,
+            "Summary",
+            "Detail",
+            MeshChat::now(),
+            permanent_notification_style,
+            false,
+        );
+        // Should not panic with cancellable = false
+    }
+
+    #[test]
+    fn test_notification_box_permanent_style_not_cancellable() {
+        use crate::styles::permanent_notification_style;
+        let _element = Notifications::notification_box(
+            42,
+            "Permanent notification",
+            "This cannot be dismissed",
+            0,
+            permanent_notification_style,
+            false,
+        );
+        // Should not panic
+    }
+
+    #[test]
+    fn test_notification_box_cancellable_false_empty_strings() {
+        use crate::styles::info_notification_style;
+        let _element =
+            Notifications::notification_box(0, "", "", 0, info_notification_style, false);
+        // Should not panic with empty strings and cancellable = false
+    }
+
+    #[test]
+    fn test_notification_box_cancellable_false_long_strings() {
+        use crate::styles::permanent_notification_style;
+        let long_summary = "A".repeat(500);
+        let long_detail = "B".repeat(2000);
+        let _element = Notifications::notification_box(
+            0,
+            &long_summary,
+            &long_detail,
+            0,
+            permanent_notification_style,
+            false,
+        );
+        // Should not panic
+    }
+
+    #[test]
+    fn test_mixed_notification_types_including_critical() {
+        let mut notifications = Notifications::default();
+
+        let _ = notifications.add(Notification::Info("info".into(), "detail".into(), 0));
+        let _ = notifications.add(Notification::Error("error".into(), "detail".into(), 0));
+        let _ = notifications.add(Notification::Critical(
+            "critical".into(),
+            "detail".into(),
+            0,
+        ));
+
+        assert_eq!(notifications.inner.len(), 3);
+    }
+
+    #[test]
+    fn test_view_only_critical_notifications() {
+        let mut notifications = Notifications::default();
+        let _ = notifications.add(Notification::Critical("C1".into(), "D1".into(), 0));
+        let _ = notifications.add(Notification::Critical("C2".into(), "D2".into(), 100));
+        let _ = notifications.add(Notification::Critical("C3".into(), "D3".into(), 200));
+        let _element = notifications.view();
+        // Should not panic with multiple critical notifications
     }
 }
