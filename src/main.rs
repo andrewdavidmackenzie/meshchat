@@ -16,7 +16,7 @@ use crate::View::{DeviceListView, DeviceView};
 use crate::channel_id::ChannelId;
 use crate::channel_view_entry::MCMessage;
 use crate::config::{Config, HistoryLength, load_config};
-use crate::device::ConnectionState::{Connected, Connecting, Disconnecting};
+use crate::device::ConnectionState::Connected;
 use crate::device::Device;
 use crate::device::DeviceViewMessage;
 #[allow(unused_imports)] // TODO remove later
@@ -27,11 +27,9 @@ use crate::discovery::ble_discovery;
 use crate::mesht::device_subscription;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
-use crate::widgets::easing;
-use crate::widgets::linear::Linear;
 use iced::font::Weight;
 use iced::keyboard::key;
-use iced::widget::{Column, Space, center, container, mouse_area, opaque, operation, stack, text};
+use iced::widget::{Column, center, container, mouse_area, opaque, operation, stack, text};
 use iced::window::icon;
 use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
@@ -42,7 +40,7 @@ use self_update::Status;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::Formatter;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 
 mod channel_view;
@@ -589,33 +587,22 @@ impl MeshChat {
     fn view(&self) -> Element<'_, Message> {
         let state = self.device.connection_state();
 
-        // Build the inner view and show busy if in DeviceList which is in discovery mode
-        let (inner, scanning) = match self.current_view {
-            DeviceListView => (self.device_list.view(&self.config, state), true),
-            DeviceView(_) => (self.device.view(&self.config), false),
-        };
-
-        let header = match self.current_view {
+        let header_view = match self.current_view {
             DeviceListView => self.device_list.header(&self.config, state),
             DeviceView(_) => self.device.header(&self.config, state, &self.device_list),
         };
 
+        // Build the inner view and show busy if in DeviceList which is in discovery mode
+        let inner_view = match self.current_view {
+            DeviceListView => self.device_list.view(&self.config, state),
+            DeviceView(_) => self.device.view(&self.config),
+        };
+
         // Create the stack of elements, starting with the header
-        let mut main_content_column = Column::new().push(header);
-
-        // If busy of connecting or disconnecting, add a busy bar to the header
-        if scanning || matches!(state, Connecting(_) | Disconnecting(_)) {
-            main_content_column = main_content_column.push(Space::new().width(Fill)).push(
-                Linear::new()
-                    .easing(easing::emphasized_accelerate())
-                    .cycle_duration(Duration::from_secs_f32(2.0))
-                    .width(Fill),
-            );
-        }
-
-        main_content_column = main_content_column
+        let main_content_column = Column::new()
+            .push(header_view)
             .push(self.notifications.view())
-            .push(inner);
+            .push(inner_view);
 
         // add the notification area and the inner view
         if self.showing_settings {

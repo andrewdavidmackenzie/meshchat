@@ -3,7 +3,7 @@ use crate::device_list::DeviceListEvent;
 use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
 #[cfg(feature = "meshtastic")]
 use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list::DeviceListEvent::{BLERadioLost, CriticalError, Error};
+use crate::device_list::DeviceListEvent::{BLERadioLost, CriticalError, Error, Scanning};
 use crate::device_list::RadioType;
 #[cfg(feature = "meshcore")]
 use crate::meshc::MESHCORE_SERVICE_UUID;
@@ -87,6 +87,11 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
 async fn scan_for_devices(gui_sender: &mut Sender<DeviceListEvent>, adapter: &Adapter) {
     // Device name -> (unseen count, radio type)
     let mut mesh_radio_devices: HashMap<String, (i32, RadioType)> = HashMap::new();
+
+    gui_sender
+        .send(Scanning(true))
+        .await
+        .unwrap_or_else(|e| eprintln!("Discovery could not send Scanning(true): {e}"));
 
     // loop scanning for devices
     loop {
