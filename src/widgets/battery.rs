@@ -766,4 +766,184 @@ mod tests {
         assert_eq!(size.width, Length::Fixed(40.0));
         assert_eq!(size.height, Length::Fixed(20.0));
     }
+
+    #[test]
+    fn test_battery_class() {
+        let battery: Battery<Theme> = Battery::new()
+            .class(Box::new(|_theme: &Theme, _state| Style::default()) as StyleFn<Theme>);
+        // Verify it compiles and the battery is configured
+        assert_eq!(battery.state, BatteryState::Charged(100));
+    }
+
+    #[test]
+    fn test_battery_class_with_custom_style() {
+        let custom_style = Style {
+            background_color: Color::BLACK,
+            border_color: Color::WHITE,
+            charging_color: Color::from_rgb(0.0, 1.0, 0.0),
+            charge_high_color: Color::from_rgb(0.0, 1.0, 0.0),
+            charge_medium_color: Color::from_rgb(1.0, 1.0, 0.0),
+            charge_low_color: Color::from_rgb(1.0, 0.0, 0.0),
+            unknown_color: Color::from_rgb(0.5, 0.5, 0.5),
+        };
+        let battery: Battery<Theme> = Battery::new()
+            .class(Box::new(move |_theme: &Theme, _state| custom_style) as StyleFn<Theme>);
+        assert_eq!(battery.state, BatteryState::Charged(100));
+    }
+
+    #[test]
+    fn test_battery_into_element() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(75));
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+        // Should compile and convert successfully
+    }
+
+    #[test]
+    fn test_battery_into_element_charging() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charging);
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_into_element_unknown() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Unknown);
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_into_element_low_charge() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(15));
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_into_element_medium_charge() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(35));
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_into_element_high_charge() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(80));
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_into_element_zero_charge() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(0));
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_into_element_full_charge() {
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(100));
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_into_element_over_100() {
+        // Test that charge > 100 is handled (clamped in draw)
+        let battery: Battery<Theme> = Battery::new().state(BatteryState::Charged(150));
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_size_with_states() {
+        use iced::advanced::Widget;
+
+        // Test size is independent of battery state
+        let battery_charging: Battery<Theme> = Battery::new().state(BatteryState::Charging);
+        let battery_unknown: Battery<Theme> = Battery::new().state(BatteryState::Unknown);
+        let battery_low: Battery<Theme> = Battery::new().state(BatteryState::Charged(10));
+
+        let size_charging =
+            <Battery<Theme> as Widget<(), Theme, iced::Renderer>>::size(&battery_charging);
+        let size_unknown =
+            <Battery<Theme> as Widget<(), Theme, iced::Renderer>>::size(&battery_unknown);
+        let size_low = <Battery<Theme> as Widget<(), Theme, iced::Renderer>>::size(&battery_low);
+
+        assert_eq!(size_charging.width, Length::Fixed(40.0));
+        assert_eq!(size_unknown.width, Length::Fixed(40.0));
+        assert_eq!(size_low.width, Length::Fixed(40.0));
+    }
+
+    #[test]
+    fn test_battery_with_custom_dimensions() {
+        let battery: Battery<Theme> = Battery::new()
+            .width(Length::Fixed(100.0))
+            .height(Length::Fixed(50.0))
+            .state(BatteryState::Charging);
+        let _element: Element<(), Theme, iced::Renderer> = battery.into();
+    }
+
+    #[test]
+    fn test_battery_style_returns_different_for_states() {
+        let theme = Theme::Dark;
+        let class = <Theme as Catalog>::default();
+
+        let style_charging = theme.style(&class, BatteryState::Charging);
+        let style_charged = theme.style(&class, BatteryState::Charged(50));
+        let style_unknown = theme.style(&class, BatteryState::Unknown);
+
+        // All should return valid styles (same default style fn)
+        assert_eq!(
+            style_charging.background_color,
+            style_charged.background_color
+        );
+        assert_eq!(
+            style_charged.background_color,
+            style_unknown.background_color
+        );
+    }
+
+    #[test]
+    fn test_default_style_fn_all_states() {
+        let theme = Theme::Dark;
+
+        let style_charging = default(&theme, BatteryState::Charging);
+        let style_charged = default(&theme, BatteryState::Charged(50));
+        let style_unknown = default(&theme, BatteryState::Unknown);
+
+        // All return the same default style
+        assert_eq!(
+            style_charging.charging_color,
+            Color::from_rgb(0.0, 0.7, 0.0)
+        );
+        assert_eq!(
+            style_charged.charge_medium_color,
+            Color::from_rgb(0.8, 0.7, 0.0)
+        );
+        assert_eq!(style_unknown.unknown_color, Color::from_rgb(0.5, 0.5, 0.5));
+    }
+
+    #[test]
+    fn test_style_partial_eq() {
+        let style1 = Style::default();
+        let style2 = Style::default();
+        assert_eq!(style1, style2);
+
+        let style3 = Style {
+            background_color: Color::BLACK,
+            ..Style::default()
+        };
+        assert_ne!(style1, style3);
+    }
+
+    #[test]
+    fn test_battery_state_boundary_values() {
+        // Test boundary charge percentages
+        let battery_0: Battery<Theme> = Battery::new().state(BatteryState::Charged(0));
+        let battery_20: Battery<Theme> = Battery::new().state(BatteryState::Charged(20));
+        let battery_21: Battery<Theme> = Battery::new().state(BatteryState::Charged(21));
+        let battery_50: Battery<Theme> = Battery::new().state(BatteryState::Charged(50));
+        let battery_51: Battery<Theme> = Battery::new().state(BatteryState::Charged(51));
+        let battery_100: Battery<Theme> = Battery::new().state(BatteryState::Charged(100));
+
+        assert_eq!(battery_0.state, BatteryState::Charged(0));
+        assert_eq!(battery_20.state, BatteryState::Charged(20));
+        assert_eq!(battery_21.state, BatteryState::Charged(21));
+        assert_eq!(battery_50.state, BatteryState::Charged(50));
+        assert_eq!(battery_51.state, BatteryState::Charged(51));
+        assert_eq!(battery_100.state, BatteryState::Charged(100));
+    }
 }

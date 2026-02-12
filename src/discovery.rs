@@ -970,7 +970,7 @@ mod tests {
         assert_eq!(lost, vec!["UniqueDeviceName123".to_string()]);
     }
 
-    // Test unicode device names
+    // Test Unicode device names
     #[test]
     fn test_device_with_unicode_name() {
         let mut current: HashMap<String, RadioType> = HashMap::new();
@@ -988,7 +988,7 @@ mod tests {
         assert!(tracked.contains_key("📱Device"));
     }
 
-    // Test device with empty name
+    // Test device with an empty name
     #[test]
     fn test_device_with_empty_name() {
         let mut current: HashMap<String, RadioType> = HashMap::new();
