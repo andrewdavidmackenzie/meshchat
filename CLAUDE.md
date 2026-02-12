@@ -27,7 +27,7 @@ In tests, I use `expect()` to not use panic directly and to provide an explanati
 
 Do not commit changes, I will do that manually.
 
-# Project Context
+# Instructions
 
 When working with this codebase, prioritize readability over cleverness.
 Ask clarifying questions before making architectural changes.
