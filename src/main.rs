@@ -31,6 +31,7 @@ use iced::widget::{Column, center, container, mouse_area, opaque, operation, sta
 use iced::window::icon;
 use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
+#[cfg(feature = "meshcore")]
 use meshcore_rs::MeshCoreEvent;
 #[cfg(feature = "meshtastic")]
 use meshtastic::protobufs::FromRadio;

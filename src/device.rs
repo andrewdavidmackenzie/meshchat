@@ -239,7 +239,7 @@ impl Device {
         radio_type: RadioType,
         success_message: Message,
     ) -> Task<Message> {
-        let subscription_sender = match radio_type {
+        let subscription_sender: Option<Sender<SubscriberMessage>> = match radio_type {
             RadioType::None => None,
             #[cfg(feature = "meshtastic")]
             RadioType::Meshtastic => self.meshtastic_sender.clone(),
@@ -339,6 +339,7 @@ impl Device {
                 self.viewing_channel = None;
                 Task::perform(empty(), |_| Navigation(DeviceListView))
             }
+            #[allow(unused_variables)]
             Ready(sender, radio_type) => {
                 match radio_type {
                     RadioType::None => {}
