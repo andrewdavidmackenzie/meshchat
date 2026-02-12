@@ -82,6 +82,11 @@ overflow-checks = false
 unwrap_used = "deny"
 panic = "deny"
 
+
+[package.metadata.cargo-all-features]
+# Exclude certain features from the build matrix
+denylist = ["hot", "debug"]
+
 # For creation of OS bundles
 [package.metadata.bundle]
 identifier = "meshchat.mackenzie-serres.net"
