@@ -1,12 +1,13 @@
-use crate::SubscriberMessage::{
+use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
 };
-use crate::SubscriptionEvent::{
-    ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
+use crate::device::SubscriptionEvent::{
+    ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
+    MyPosition, MyUserInfo,
 };
+use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
-use crate::{SubscriberMessage, SubscriptionEvent};
 use futures::{SinkExt, Stream};
 use iced::stream;
 use meshcore_rs::MeshCore;
@@ -78,90 +79,106 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
                     }
                     Connected(ble_device, meshcore) => {
-                        let from_radio_stream = meshcore.event_stream().map(|from_radio_packet| {
-                            MeshCoreRadioPacket(Box::new(from_radio_packet))
-                        });
+                        match get_my_info(&meshcore, &mut gui_sender).await {
+                            Ok(_) => {
+                                let from_radio_stream =
+                                    meshcore.event_stream().map(|from_radio_packet| {
+                                        MeshCoreRadioPacket(Box::new(from_radio_packet))
+                                    });
 
-                        let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
+                                let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
 
-                        while let Some(message) = StreamExt::next(&mut merged_stream).await {
-                            let result = match message {
-                                Connect(_) => {
-                                    eprintln!("Cannot connect while already connected");
-                                    Ok::<(), meshcore_rs::Error>(())
-                                }
-                                Disconnect => break,
-                                SendText(_text, _channel_id, _reply_to_id) => {
-                                    println!("Send text to meshcore");
-                                    /*
-                                    let r = crate::mesht::subscription::send_text_message(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        reply_to_id,
-                                        text,
-                                    )
-                                    .await;
-                                    r
-                                     */
-                                    Ok(())
-                                }
-                                SendPosition(_channel_id, _mcposition) => {
-                                    println!("Send position to meshcore");
-                                    /*
-                                    let r = crate::mesht::subscription::send_position(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        mcposition.into(),
-                                    )
-                                    .await;
-                                    r
-                                     */
-                                    Ok(())
-                                }
-                                SendUser(_channel_id, _mcuser) => {
-                                    println!("Send user to meshcore");
-                                    /*
-                                    let r = crate::mesht::subscription::send_user(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        mcuser.into(),
-                                    )
-                                    .await;
-                                    r
-                                     */
-                                    Ok(())
-                                }
-                                SendEmojiReply(_emoji, _channel_id, _reply_to_id) => {
-                                    println!("Send emoji reply to meshcore");
-                                    /*
-                                    let r = crate::mesht::subscription::send_emoji_reply(
-                                        &mut api,
-                                        &mut my_router,
-                                        channel_id,
-                                        reply_to_id,
-                                        emoji,
-                                    )
-                                    .await;
-                                    r
-                                     */
-                                    Ok(())
-                                }
-                                MeshCoreRadioPacket(_) => {
-                                    // my_router.handle_a_packet_from_radio(packet).await;
-                                    Ok(())
-                                }
-                                #[allow(unreachable_patterns)]
-                                _ => Ok(()),
-                            };
+                                while let Some(message) = StreamExt::next(&mut merged_stream).await
+                                {
+                                    let result = match message {
+                                        Connect(_) => {
+                                            eprintln!("Cannot connect while already connected");
+                                            Ok::<(), meshcore_rs::Error>(())
+                                        }
+                                        Disconnect => break,
+                                        SendText(_text, _channel_id, _reply_to_id) => {
+                                            println!("Send text to meshcore");
+                                            /*
+                                            let r = crate::mesht::subscription::send_text_message(
+                                                &mut api,
+                                                &mut my_router,
+                                                channel_id,
+                                                reply_to_id,
+                                                text,
+                                            )
+                                            .await;
+                                            r
+                                             */
+                                            Ok(())
+                                        }
+                                        SendPosition(_channel_id, _mcposition) => {
+                                            println!("Send position to meshcore");
+                                            /*
+                                            let r = crate::mesht::subscription::send_position(
+                                                &mut api,
+                                                &mut my_router,
+                                                channel_id,
+                                                mcposition.into(),
+                                            )
+                                            .await;
+                                            r
+                                             */
+                                            Ok(())
+                                        }
+                                        SendUser(_channel_id, _mcuser) => {
+                                            println!("Send user to meshcore");
+                                            /*
+                                            let r = crate::mesht::subscription::send_user(
+                                                &mut api,
+                                                &mut my_router,
+                                                channel_id,
+                                                mcuser.into(),
+                                            )
+                                            .await;
+                                            r
+                                             */
+                                            Ok(())
+                                        }
+                                        SendEmojiReply(_emoji, _channel_id, _reply_to_id) => {
+                                            println!("Send emoji reply to meshcore");
+                                            /*
+                                            let r = crate::mesht::subscription::send_emoji_reply(
+                                                &mut api,
+                                                &mut my_router,
+                                                channel_id,
+                                                reply_to_id,
+                                                emoji,
+                                            )
+                                            .await;
+                                            r
+                                             */
+                                            Ok(())
+                                        }
+                                        MeshCoreRadioPacket(_) => {
+                                            // my_router.handle_a_packet_from_radio(packet).await;
+                                            Ok(())
+                                        }
+                                        #[allow(unreachable_patterns)]
+                                        _ => Ok(()),
+                                    };
 
-                            if let Err(e) = result {
+                                    if let Err(e) = result {
+                                        gui_sender
+                                            .send(ConnectionError(
+                                                ble_device.clone(),
+                                                "Subscription Error".to_string(),
+                                                e.to_string(),
+                                            ))
+                                            .await
+                                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                    }
+                                }
+                            }
+                            Err(e) => {
                                 gui_sender
                                     .send(ConnectionError(
                                         ble_device.clone(),
-                                        "Subscription Error".to_string(),
+                                        "Subscription Could not get SelfInfo".to_string(),
                                         e.to_string(),
                                     ))
                                     .await
@@ -183,60 +200,55 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     )
 }
 
+/// Get information about the connected device
+async fn get_my_info(
+    meshcore: &MeshCore,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) -> meshcore_rs::Result<()> {
+    // Send APPSTART to initialize connection and get device info
+    let self_info = meshcore.commands().lock().await.send_appstart().await?;
+
+    gui_sender
+        .send(MyUserInfo((&self_info).into()))
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
+    gui_sender
+        .send(MyPosition((&self_info).into()))
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
+    // Get battery info
+    if let Ok(battery) = meshcore.commands().lock().await.get_bat().await {
+        println!("Battery: {battery:?}");
+        gui_sender
+            .send(DeviceBatteryLevel(Some(battery.level as u32)))
+            .await
+            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+    }
+
+    Ok(())
+}
+
 /*
-// Send APPSTART to initialize connection and get device info
-let self_info = meshcore.commands().lock().await.send_appstart().await?;
-println!("Connected to device: {}", self_info.name);
-println!("  Public key: {:02x?}", &self_info.public_key[..6]);
-println!("  TX power: {}", self_info.tx_power);
-println!(
-    "  Location: {:.6}, {:.6}",
-    self_info.adv_lat as f64 / 1_000_000.0,
-    self_info.adv_lon as f64 / 1_000_000.0
-);
 
-// Get battery info
-let battery = meshcore.commands().lock().await.get_bat().await?;
-println!("  Battery: {}%", battery.level);
+   // Get contacts (use longer timeout for BLE - contacts can take a while)
+   println!("\nFetching contacts...");
+   let contacts = meshcore
+       .commands()
+       .lock()
+       .await
+       .get_contacts_with_timeout(0, std::time::Duration::from_secs(30))
+       .await?;
+   println!("Found {} contacts:", contacts.len());
 
-// Get contacts (use longer timeout for BLE - contacts can take a while)
-println!("\nFetching contacts...");
-let contacts = meshcore
-.commands()
-.lock()
-.await
-.get_contacts_with_timeout(0, std::time::Duration::from_secs(30))
-.await?;
-println!("Found {} contacts:", contacts.len());
-
-for contact in &contacts {
-println!(
-    "  - {} (prefix: {})",
-    contact.adv_name,
-    contact.prefix_hex()
-);
-}
-
-// Subscribe to incoming messages
-println!("\nListening for messages (press Ctrl+C to exit)...");
-
-let _sub = meshcore
-.subscribe(
-EventType::ContactMsgRecv,
-std::collections::HashMap::new(),
-|event| {
-if let meshcore_rs::events::EventPayload::Message(msg) = event.payload {
-println!(
-"Received message from {:02x?}: {}",
-msg.sender_prefix, msg.text
-);
-}
-},
-)
-.await;
-
-// Start auto-fetching messages
-meshcore.start_auto_message_fetching().await;
+   for contact in &contacts {
+       println!(
+           "  - {} (prefix: {})",
+           contact.adv_name,
+           contact.prefix_hex()
+       );
+   }
 */
 
 /// Connect to a specific BlueTooth device by name and return a [MeshCore] that receives messages

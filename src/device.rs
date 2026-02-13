@@ -1,12 +1,6 @@
-use crate::SubscriberMessage::{
-    Connect, Disconnect, SendEmojiReply, SendPosition, SendText, SendUser,
-};
-use crate::SubscriptionEvent::{
-    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
-    DisconnectingEvent, NotReady, Ready,
-};
+use crate::MeshChat;
 use crate::channel_view::{ChannelView, ChannelViewMessage};
-use crate::channel_view_entry::ChannelViewEntry;
+use crate::channel_view_entry::{ChannelViewEntry, MCMessage};
 use crate::config::{Config, HistoryLength};
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device::DeviceViewMessage::{
@@ -15,20 +9,26 @@ use crate::device::DeviceViewMessage::{
     ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
     SubscriptionMessage,
 };
-use crate::{MeshChat, SubscriberMessage, SubscriptionEvent};
+use crate::device::SubscriberMessage::{
+    Connect, Disconnect, SendEmojiReply, SendPosition, SendText, SendUser,
+};
+use crate::device::SubscriptionEvent::{
+    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
+    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready,
+};
 
 use crate::Message::{
     AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, RemoveNodeAlias,
     ShowLocation, ShowUserInfo, ToggleNodeFavourite,
 };
-use crate::SubscriptionEvent::{
-    DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
-    NewNodePosition, RadioNotification,
-};
 use crate::View::DeviceListView;
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
+use crate::device::SubscriptionEvent::{
+    DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
+    NewNodePosition, RadioNotification,
+};
 use crate::device_list::{DeviceList, RadioType};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
@@ -42,6 +42,8 @@ use iced::widget::{
     Button, Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
+use meshcore_rs::MeshCoreEvent;
+use meshtastic::protobufs::FromRadio;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -57,6 +59,45 @@ impl Default for ConnectionState {
     fn default() -> Self {
         Disconnected(None, None)
     }
+}
+
+/// Events are Messages sent from the subscription to the GUI
+#[derive(Debug, Clone)]
+pub enum SubscriptionEvent {
+    /// The subscription is ready to receive [SubscriberMessage] from the GUI
+    Ready(Sender<SubscriberMessage>, RadioType),
+    ConnectedEvent(String, RadioType),
+    ConnectingEvent(String),
+    DisconnectingEvent(String),
+    DisconnectedEvent(String),
+    ConnectionError(String, String, String),
+    NotReady,
+    MyNodeNum(u32),
+    MyUserInfo(MCUser),
+    MyPosition(MCPosition),
+    NewChannel(MCChannel),
+    NewNode(MCNodeInfo),
+    RadioNotification(String, u32), // Message, rx_time
+    MessageACK(ChannelId, u32),
+    MCMessageReceived(ChannelId, u32, u32, MCMessage, u32), // channel, id, from, MCMessage, rx_time
+    NewNodeInfo(ChannelId, u32, u32, MCUser, u32),          // channel_id, id, from, MCUser, rx_time
+    NewNodePosition(ChannelId, u32, u32, MCPosition, u32), // channel_id, id, from, MCPosition, rx_time
+    DeviceBatteryLevel(Option<u32>),
+    ChannelName(i32, String), // channel number, name
+}
+
+/// Messages sent from the GUI to the subscription
+pub enum SubscriberMessage {
+    Connect(String),
+    Disconnect,
+    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
+    SendEmojiReply(String, ChannelId, u32),
+    SendPosition(ChannelId, MCPosition),
+    SendUser(ChannelId, MCUser),
+    #[cfg(feature = "meshtastic")]
+    MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
+    #[cfg(feature = "meshcore")]
+    MeshCoreRadioPacket(Box<MeshCoreEvent>), // Sent from the radio to the subscription, not GUI
 }
 
 #[derive(Debug, Clone)]
@@ -369,6 +410,14 @@ impl Device {
                 self.my_node_num = Some(my_node_num);
                 Task::none()
             },
+            MyUserInfo(my_user_info) => {
+                self.set_my_user(my_user_info);
+                Task::none()
+            }
+            MyPosition(my_position) => {
+                self.set_my_position(my_position);
+                Task::none()
+            }
             NewChannel(channel) => {
                 self.add_channel(channel);
                 Task::none()
@@ -472,6 +521,16 @@ impl Device {
             self.channel_views
                 .insert(channel_id, ChannelView::new(channel_id, my_node_num));
         }
+    }
+
+    /// Set my user info to be the [MCUser] passed in
+    fn set_my_user(&mut self, user: MCUser) {
+        self.my_user = Some(user);
+    }
+
+    /// Set my position to be the [MCPosition] passed in
+    fn set_my_position(&mut self, position: MCPosition) {
+        self.my_position = Some(position);
     }
 
     /// Add a channel from the radio to the list if it is not disabled and has some Settings
@@ -1100,9 +1159,9 @@ pub fn long_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
 mod tests {
     use super::*;
     use crate::Message::Navigation;
-    use crate::SubscriberMessage::{Connect, Disconnect};
     use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
     use crate::device::DeviceViewMessage::{ClearFilter, SearchInput};
+    use crate::device::SubscriberMessage::{Connect, Disconnect};
     use crate::test_helper;
     use btleplug::api::BDAddr;
 
@@ -1381,12 +1440,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.forwarding_message.is_none());
 
-        let entry = ChannelViewEntry::new(
-            1,
-            100,
-            crate::channel_view_entry::MCMessage::NewTextMessage("test".into()),
-            0,
-        );
+        let entry = ChannelViewEntry::new(1, 100, MCMessage::NewTextMessage("test".into()), 0);
         let _ = device_view.update(StartForwardingMessage(entry));
 
         assert!(device_view.forwarding_message.is_some());
@@ -1395,12 +1449,7 @@ mod tests {
     #[test]
     fn test_stop_forwarding_message() {
         let mut device_view = Device::default();
-        let entry = ChannelViewEntry::new(
-            1,
-            100,
-            crate::channel_view_entry::MCMessage::NewTextMessage("test".into()),
-            0,
-        );
+        let entry = ChannelViewEntry::new(1, 100, MCMessage::NewTextMessage("test".into()), 0);
         let _ = device_view.update(StartForwardingMessage(entry));
         assert!(device_view.forwarding_message.is_some());
 
@@ -2046,7 +2095,7 @@ mod tests {
             ChannelId::Channel(0),
             1,
             100,
-            crate::channel_view_entry::MCMessage::NewTextMessage("test".into()),
+            MCMessage::NewTextMessage("test".into()),
             1234567890,
         )));
     }

@@ -1,20 +1,21 @@
-use crate::SubscriberMessage::{
-    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
-};
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
+use crate::device::SubscriberMessage::{
+    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
+};
 use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
 
-use crate::SubscriptionEvent::{
+use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
     DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
 };
+use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
-use crate::{MCChannel, MCNodeInfo, MCPosition, SubscriberMessage, SubscriptionEvent};
+use crate::{MCChannel, MCNodeInfo, MCPosition};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;

@@ -14,7 +14,6 @@ use crate::Message::{
 };
 use crate::View::{DeviceListView, DeviceView};
 use crate::channel_id::ChannelId;
-use crate::channel_view_entry::MCMessage;
 use crate::config::{Config, HistoryLength, load_config};
 use crate::device::ConnectionState::Connected;
 use crate::device::Device;
@@ -31,17 +30,12 @@ use iced::widget::{Column, center, container, mouse_area, opaque, operation, sta
 use iced::window::icon;
 use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
-#[cfg(feature = "meshcore")]
-use meshcore_rs::MeshCoreEvent;
-#[cfg(feature = "meshtastic")]
-use meshtastic::protobufs::FromRadio;
 #[cfg(feature = "auto-update")]
 use self_update::Status;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::mpsc::Sender;
 
 mod channel_view;
 mod channel_view_entry;
@@ -68,7 +62,7 @@ mod mesht;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// A User as represented in the App, maybe a superset of User attributes from different meshes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MCUser {
     pub id: String,
     pub long_name: String,
@@ -103,7 +97,7 @@ pub struct MCNodeInfo {
     pub is_ignored: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MCPosition {
     pub latitude: f64,
     pub longitude: f64,
@@ -159,43 +153,6 @@ struct MeshChat {
 pub struct MCChannel {
     pub index: i32,
     pub name: String,
-}
-
-/// Events are Messages sent from the subscription to the GUI
-#[derive(Debug, Clone)]
-pub enum SubscriptionEvent {
-    /// The subscription is ready to receive [SubscriberMessage] from the GUI
-    Ready(Sender<SubscriberMessage>, RadioType),
-    ConnectedEvent(String, RadioType),
-    ConnectingEvent(String),
-    DisconnectingEvent(String),
-    DisconnectedEvent(String),
-    ConnectionError(String, String, String),
-    NotReady,
-    MyNodeNum(u32),
-    NewChannel(MCChannel),
-    NewNode(MCNodeInfo),
-    RadioNotification(String, u32), // Message, rx_time
-    MessageACK(ChannelId, u32),
-    MCMessageReceived(ChannelId, u32, u32, MCMessage, u32), // channel, id, from, MCMessage, rx_time
-    NewNodeInfo(ChannelId, u32, u32, MCUser, u32),          // channel_id, id, from, MCUser, rx_time
-    NewNodePosition(ChannelId, u32, u32, MCPosition, u32), // channel_id, id, from, MCPosition, rx_time
-    DeviceBatteryLevel(Option<u32>),
-    ChannelName(i32, String), // channel number, name
-}
-
-/// Messages sent from the GUI to the subscription
-pub enum SubscriberMessage {
-    Connect(String),
-    Disconnect,
-    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
-    SendEmojiReply(String, ChannelId, u32),
-    SendPosition(ChannelId, MCPosition),
-    SendUser(ChannelId, MCUser),
-    #[cfg(feature = "meshtastic")]
-    MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
-    #[cfg(feature = "meshcore")]
-    MeshCoreRadioPacket(Box<MeshCoreEvent>), // Sent from the radio to the subscription, not GUI
 }
 
 /// These are the messages that MeshChat responds to
