@@ -1,9 +1,9 @@
-use crate::SubscriptionEvent::MyNodeNum;
 use crate::channel_id::ChannelId;
 use crate::channel_view_entry::MCMessage;
 use crate::config::HistoryLength;
 use crate::device::Device;
 use crate::device::DeviceViewMessage::SubscriptionMessage;
+use crate::device::SubscriptionEvent::MyNodeNum;
 use crate::{MCChannel, MeshChat, channel_view_entry};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
