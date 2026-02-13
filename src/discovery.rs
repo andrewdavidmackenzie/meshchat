@@ -1,9 +1,7 @@
 use crate::device_list::DeviceListEvent;
-#[cfg(feature = "meshcore")]
-use crate::device_list::DeviceListEvent::BLEMeshCoreRadioFound;
-#[cfg(feature = "meshtastic")]
-use crate::device_list::DeviceListEvent::BLEMeshtasticRadioFound;
-use crate::device_list::DeviceListEvent::{BLERadioLost, CriticalError, Error, Scanning};
+use crate::device_list::DeviceListEvent::{
+    BLEMeshRadioFound, BLERadioLost, CriticalError, Error, Scanning,
+};
 use crate::device_list::RadioType;
 #[cfg(feature = "meshcore")]
 use crate::meshc::MESHCORE_SERVICE_UUID;
@@ -142,27 +140,10 @@ async fn announce_device_changes(
     // Send found events with the appropriate radio type
     #[allow(unused_variables)]
     for (device, radio_type) in found {
-        match radio_type {
-            #[cfg(feature = "meshtastic")]
-            RadioType::Meshtastic => {
-                gui_sender
-                    .send(BLEMeshtasticRadioFound(device))
-                    .await
-                    .unwrap_or_else(|e| {
-                        eprintln!("Discovery could not send BLEMeshtasticRadioFound: {e}")
-                    });
-            }
-            #[cfg(feature = "meshcore")]
-            RadioType::MeshCore => {
-                gui_sender
-                    .send(BLEMeshCoreRadioFound(device))
-                    .await
-                    .unwrap_or_else(|e| {
-                        eprintln!("Discovery could not send BLEMeshCoreRadioFound: {e}")
-                    });
-            }
-            RadioType::None => {}
-        }
+        gui_sender
+            .send(BLEMeshRadioFound(device, radio_type))
+            .await
+            .unwrap_or_else(|e| eprintln!("Discovery could not send BLEMeshtasticRadioFound: {e}"));
     }
 }
 

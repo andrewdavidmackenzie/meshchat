@@ -1,18 +1,21 @@
-use crate::SubscriberMessage::{
-    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
-};
-use crate::SubscriptionEvent::{
-    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
-    DisconnectedEvent, DisconnectingEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel,
-    NewNode, NewNodeInfo, NewNodePosition, RadioNotification,
-};
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
-use crate::mesht::device_subscription::DeviceState::{Connected, Disconnected};
-use crate::{MCChannel, MCNodeInfo, MCPosition, SubscriberMessage, SubscriptionEvent};
+use crate::device::SubscriberMessage::{
+    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
+};
+use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
+
+use crate::device::SubscriptionEvent::{
+    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
+    DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
+    NewNodePosition, RadioNotification,
+};
+use crate::device::{SubscriberMessage, SubscriptionEvent};
+use crate::device_list::RadioType;
+use crate::{MCChannel, MCNodeInfo, MCPosition};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -283,7 +286,7 @@ impl PacketRouter<(), Error> for MyRouter {
     }
 }
 
-/// A stream of [DeviceViewMessage] announcing the discovery or loss of devices via BLE
+/// A stream of [SubscriptionEvent] for comms between the app and the radio
 ///
 pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     stream::channel(
@@ -296,7 +299,10 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
             let _ = gui_sender
-                .send(SubscriptionEvent::Ready(subscriber_sender.clone()))
+                .send(SubscriptionEvent::Ready(
+                    subscriber_sender,
+                    RadioType::Meshtastic,
+                ))
                 .await;
 
             // Convert the channels to a `Stream`.
@@ -324,7 +330,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     stream_api = Some(stream);
 
                                     gui_sender
-                                        .send(ConnectedEvent(ble_device))
+                                        .send(ConnectedEvent(ble_device, RadioType::Meshtastic))
                                         .await
                                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                                 }
@@ -445,6 +451,8 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     my_router.handle_a_packet_from_radio(packet).await;
                                     Ok(())
                                 }
+                                #[allow(unreachable_patterns)]
+                                _ => Ok(()),
                             };
 
                             if let Err(e) = result {
@@ -460,11 +468,6 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         }
 
                         // Disconnect
-                        gui_sender
-                            .send(DisconnectingEvent(ble_device.clone()))
-                            .await
-                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-
                         #[allow(clippy::unwrap_used)]
                         let api = stream_api.take().unwrap();
                         device_state = Disconnected;
