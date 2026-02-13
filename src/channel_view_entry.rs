@@ -1089,7 +1089,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1119,7 +1118,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1140,7 +1138,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1180,7 +1177,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1200,7 +1196,6 @@ mod tests {
                 num: 50,
                 user: None, // No user info
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1406,7 +1401,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1572,7 +1566,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );

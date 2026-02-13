@@ -1027,14 +1027,14 @@ mod test {
         let _task = channel_view.update(super::ChannelViewMessage::PickChannel(Some(
             ChannelId::Channel(1),
         )));
-        // Should return a task, not panic
+        // Should return a Task, not panic
     }
 
     #[test]
     fn test_pick_channel_none() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
         let _task = channel_view.update(super::ChannelViewMessage::PickChannel(None));
-        // Should return a task, not panic
+        // Should return a Task, not panic
     }
 
     #[test]
@@ -1045,7 +1045,7 @@ mod test {
             "👍".into(),
             ChannelId::Channel(0),
         ));
-        // Should return a task, not panic
+        // Should return a Task, not panic
     }
 
     #[test]
@@ -1073,27 +1073,7 @@ mod test {
             crate::channel_view_entry::MCMessage::PositionMessage(crate::MCPosition {
                 latitude: 0.0,
                 longitude: 0.0,
-                altitude: None,
-                time: 0,
-                location_source: 0,
-                altitude_source: 0,
-                timestamp: 0,
-                timestamp_millis_adjust: 0,
-                altitude_hae: None,
-                altitude_geoidal_separation: None,
-                pdop: 0,
-                hdop: 0,
-                vdop: 0,
-                gps_accuracy: 0,
-                ground_speed: None,
-                ground_track: None,
-                fix_quality: 0,
-                fix_type: 0,
-                sats_in_view: 0,
-                sensor_id: 0,
-                next_update: 0,
-                seq_number: 0,
-                precision_bits: 0,
+                ..Default::default()
             }),
             now_secs(),
         );
@@ -1145,18 +1125,18 @@ mod test {
     fn test_emoji_reply_to_nonexistent_message() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
 
-        // Try to add emoji reply to message that doesn't exist
+        // Try to add emoji reply to the message that doesn't exist
         let emoji_reply = ChannelViewEntry::new(2, 200, EmojiReply(999, "👍".into()), now_secs());
         let _ = channel_view.new_message(emoji_reply, &HistoryLength::All);
 
-        // Should still have 0 entries (emoji reply doesn't create new entry)
+        // Should still have 0 entries (emoji reply doesn't create the new entry)
         assert_eq!(channel_view.entries.len(), 0);
     }
 
     #[test]
     fn test_message_seen_nonexistent() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 0);
-        // Should not panic when marking nonexistent message as seen
+        // Should not panic when marking a nonexistent message as seen
         let _ = channel_view.update(MessageSeen(999));
     }
 
@@ -1245,7 +1225,7 @@ mod test {
     #[test]
     fn test_empty_view() {
         let _element = ChannelView::empty_view();
-        // Should not panic and return Element for empty channel
+        // Should not panic and return Element for the empty channel
     }
 
     #[test]
@@ -1253,7 +1233,7 @@ mod test {
         use chrono::Local;
         let now = Local::now();
         let _element = ChannelView::day_separator(&now);
-        // Should show "Today" for current day
+        // Should show "Today" for the current day
     }
 
     #[test]
@@ -1277,14 +1257,14 @@ mod test {
         use chrono::{Duration, Local};
         let past = Local::now() - Duration::days(400);
         let _element = ChannelView::day_separator(&past);
-        // Should show full date with year
+        // Should show the full date with year
     }
 
     #[test]
     fn test_send_button_empty_message() {
         let channel_view = ChannelView::new(ChannelId::Channel(0), 100);
         let _button = channel_view.send_button();
-        // Button should be disabled when message is empty
+        // Button should be disabled when the message is empty
     }
 
     #[test]
@@ -1292,14 +1272,14 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
         let _ = channel_view.update(MessageInput("Hello".into()));
         let _button = channel_view.send_button();
-        // Button should be enabled when message is not empty
+        // Button should be enabled when the message is not empty
     }
 
     #[test]
     fn test_clear_button_empty_message() {
         let channel_view = ChannelView::new(ChannelId::Channel(0), 100);
         let _button = channel_view.clear_button();
-        // Button should be disabled when message is empty
+        // Button should be disabled when the message is empty
     }
 
     #[test]
@@ -1307,7 +1287,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0), 100);
         let _ = channel_view.update(MessageInput("Hello".into()));
         let _button = channel_view.clear_button();
-        // Button should be enabled when message is not empty
+        // Button should be enabled when the message is not empty
     }
 
     #[test]
@@ -1343,7 +1323,7 @@ mod test {
 
         let column: Column<crate::Message> = Column::new();
         let _result_column = channel_view.replying_to(column, &1);
-        // Should add reply indicator to the column
+        // Should add a reply indicator to the column
     }
 
     #[test]

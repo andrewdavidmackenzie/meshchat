@@ -52,7 +52,6 @@ impl From<&NodeInfo> for MCNodeInfo {
             num: node_info.num,
             user: node_info.user.as_ref().map(|u| u.into()),
             position: node_info.position.as_ref().map(|p| p.into()),
-            channel: node_info.channel,
             is_ignored: node_info.is_ignored,
         }
     }
@@ -429,6 +428,5 @@ mod test {
         assert!(mc_node_info.user.is_none());
         assert!(mc_node_info.position.is_some());
         assert!(mc_node_info.is_ignored);
-        assert_eq!(mc_node_info.channel, 1);
     }
 }

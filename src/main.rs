@@ -93,7 +93,6 @@ pub struct MCNodeInfo {
     pub num: u32,
     pub user: Option<MCUser>,
     pub position: Option<MCPosition>,
-    pub channel: u32,
     pub is_ignored: bool,
 }
 

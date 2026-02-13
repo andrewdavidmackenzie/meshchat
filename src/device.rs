@@ -42,7 +42,9 @@ use iced::widget::{
     Button, Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
+#[cfg(feature = "meshcore")]
 use meshcore_rs::MeshCoreEvent;
+#[cfg(feature = "meshtastic")]
 use meshtastic::protobufs::FromRadio;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
@@ -1272,7 +1274,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1288,7 +1289,6 @@ mod tests {
                 num: 12345,
                 user: None,
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1321,7 +1321,6 @@ mod tests {
                     is_unmessagable: false,
                 }),
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -1573,7 +1572,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         };
 
@@ -1592,7 +1590,6 @@ mod tests {
             num: 12345,
             user: None,
             position: None,
-            channel: 0,
             is_ignored: true, // Should be ignored
         };
 
@@ -1626,7 +1623,6 @@ mod tests {
             num: 12345,
             user: Some(user.clone()),
             position: Some(position.clone()),
-            channel: 0,
             is_ignored: false,
         };
 
@@ -1666,7 +1662,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -1695,7 +1690,6 @@ mod tests {
             num: 12345,
             user: None,
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -1726,7 +1720,6 @@ mod tests {
             num: 12345,
             user: None,
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -1794,7 +1787,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -1828,7 +1820,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -1850,7 +1841,6 @@ mod tests {
             num: 12345,
             user: None,
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -2122,7 +2112,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -2174,7 +2163,6 @@ mod tests {
             num: 12345,
             user: None,
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -2364,7 +2352,6 @@ mod tests {
             num: 12345,
             user: None,
             position: None,
-            channel: 0,
             is_ignored: false,
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
@@ -2400,7 +2387,6 @@ mod tests {
                 num: 12345,
                 user: None,
                 position: None,
-                channel: 0,
                 is_ignored: false,
             },
         );
@@ -2518,7 +2504,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         })));
 
@@ -2590,7 +2575,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         })));
 
@@ -2623,7 +2607,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         })));
 
@@ -2655,7 +2638,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         })));
 
@@ -2689,7 +2671,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: Some(test_position(37.7749, -122.4194)),
-            channel: 0,
             is_ignored: false,
         })));
 
@@ -2766,7 +2747,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         })));
 
@@ -2881,7 +2861,6 @@ mod tests {
                 is_unmessagable: false,
             }),
             position: None,
-            channel: 0,
             is_ignored: false,
         })));
 
