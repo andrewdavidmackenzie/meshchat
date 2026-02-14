@@ -2,8 +2,12 @@ pub mod subscription;
 
 pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
-use crate::{MCNodeInfo, MCPosition, MCUser};
-use meshcore_rs::events::{AdvertisementData, Contact, SelfInfo};
+use crate::channel_id::ChannelId;
+use crate::channel_view_entry::MCMessage;
+use crate::device::SubscriptionEvent;
+use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
+use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
+use meshcore_rs::events::{AdvertisementData, ChannelInfoData, Contact, ReceivedMessage, SelfInfo};
 use uuid::Uuid;
 
 /// Conversions between [SelfIno] and MeshChat [MCUser]
@@ -71,6 +75,35 @@ impl From<&Contact> for MCNodeInfo {
             }),
             is_ignored: false,
         }
+    }
+}
+
+impl From<ReceivedMessage> for SubscriptionEvent {
+    fn from(message: ReceivedMessage) -> Self {
+        let channel_id = if let Some(channel_index) = message.channel {
+            ChannelId::Channel(channel_index as i32)
+        } else {
+            ChannelId::Node(u32::from_be_bytes(
+                message.sender_prefix[0..4].try_into().unwrap(),
+            )) // TODO
+        };
+
+        MCMessageReceived(
+            channel_id,
+            0, // TODO unique message ID?
+            u32::from_be_bytes(message.sender_prefix[0..4].try_into().unwrap()), // TODO
+            MCMessage::NewTextMessage(message.text.clone()),
+            message.sender_timestamp,
+        )
+    }
+}
+
+impl From<ChannelInfoData> for SubscriptionEvent {
+    fn from(channel: ChannelInfoData) -> Self {
+        NewChannel(MCChannel {
+            index: channel.channel_idx as i32,
+            name: channel.name,
+        })
     }
 }
 

@@ -12,6 +12,7 @@ use futures::{SinkExt, Stream};
 use iced::stream;
 use meshcore_rs::events::{BatteryInfo, Contact, EventPayload, SelfInfo};
 use meshcore_rs::{EventType, MeshCore, MeshCoreEvent};
+use std::collections::HashSet;
 use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
@@ -21,6 +22,11 @@ enum DeviceState {
     Connected(String, MeshCore),
 }
 
+#[derive(Debug, Default)]
+struct RadioCache {
+    known_channels: HashSet<u8>,
+}
+
 /// A stream of [SubscriptionEvent] for comms between the app and the radio
 ///
 pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
@@ -28,6 +34,8 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
         100,
         move |mut gui_sender: futures_channel::mpsc::Sender<SubscriptionEvent>| async move {
             let mut device_state = Disconnected;
+            let mut radio_cache = RadioCache::default();
+
             let (subscriber_sender, mut subscriber_receiver) = channel::<SubscriberMessage>(100);
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
@@ -83,6 +91,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                         match get_my_info(&meshcore, &mut gui_sender).await {
                             Ok(_) => {
                                 let _ = send_advert(&meshcore).await;
+                                // TODO get any pending messages???
                                 let from_radio_stream =
                                     meshcore.event_stream().map(|from_radio_packet| {
                                         MeshCoreRadioPacket(Box::new(from_radio_packet))
@@ -153,8 +162,13 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                             Ok(())
                                         }
                                         MeshCoreRadioPacket(meshcore_event) => {
-                                            handle_radio_event(meshcore_event, &mut gui_sender)
-                                                .await
+                                            handle_radio_event(
+                                                &mut radio_cache,
+                                                &meshcore,
+                                                meshcore_event,
+                                                &mut gui_sender,
+                                            )
+                                            .await
                                         }
                                         #[allow(unreachable_patterns)]
                                         _ => Ok(()),
@@ -199,6 +213,8 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 }
 
 async fn handle_radio_event(
+    radio_cache: &mut RadioCache,
+    meshcore: &MeshCore,
     meshcore_event: Box<MeshCoreEvent>,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
@@ -279,16 +295,29 @@ async fn handle_radio_event(
             }
         }
         EventType::MessagesWaiting => {
-            if let EventPayload::Message(message) = meshcore_event.payload {
-                println!("MessagesWaiting: {message:?}");
+            while let Ok(Some(message)) = meshcore.commands().lock().await.get_msg().await {
+                if let Some(channel_index) = message.channel
+                    && !radio_cache.known_channels.contains(&channel_index)
+                {
+                    if let Ok(channel_info) = meshcore
+                        .commands()
+                        .lock()
+                        .await
+                        .get_channel(channel_index)
+                        .await
+                    {
+                        radio_cache.known_channels.insert(channel_index);
+                        gui_sender
+                            .send(channel_info.into())
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                    }
+                }
 
-                /*
                 gui_sender
                     .send(message.into())
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-
-                 */
             }
         }
         EventType::DiscoverResponse => {
@@ -318,6 +347,14 @@ async fn handle_radio_event(
                     /// Node description (optional)
                     pub node_desc: Option<String>,
                  */
+            }
+        }
+        EventType::ContactMsgRecv | EventType::ChannelMsgRecv => {
+            if let EventPayload::Message(message) = meshcore_event.payload {
+                gui_sender
+                    .send(message.into())
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
         }
         _ => {
