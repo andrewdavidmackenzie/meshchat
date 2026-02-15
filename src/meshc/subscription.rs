@@ -1,3 +1,4 @@
+use crate::channel_id::ChannelId;
 use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
 };
@@ -103,20 +104,31 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 {
                                     let result = match message {
                                         Disconnect => break,
-                                        SendText(_text, _channel_id, _reply_to_id) => {
-                                            println!("Send text to meshcore");
-                                            /*
-                                            let r = crate::mesht::subscription::send_text_message(
-                                                &mut api,
-                                                &mut my_router,
-                                                channel_id,
-                                                reply_to_id,
-                                                text,
-                                            )
-                                            .await;
-                                            r
-                                             */
-                                            Ok::<(), meshcore_rs::Error>(())
+                                        // TODO handle reply to
+                                        SendText(text, channel_id, _reply_to_id) => {
+                                            match channel_id {
+                                                ChannelId::Channel(channel_index) => {
+                                                    let chan_idx: u8 =
+                                                        channel_index.try_into().unwrap_or(0);
+                                                    meshcore
+                                                        .commands()
+                                                        .lock()
+                                                        .await
+                                                        .send_chan_msg(chan_idx, &text, None)
+                                                        .await
+                                                }
+                                                ChannelId::Node(node_id) => meshcore
+                                                    .commands()
+                                                    .lock()
+                                                    .await
+                                                    .send_msg(
+                                                        node_id.to_be_bytes().to_vec(),
+                                                        &text,
+                                                        None,
+                                                    )
+                                                    .await
+                                                    .map(|_| ()),
+                                            }
                                         }
                                         SendPosition(_channel_id, _mcposition) => {
                                             println!("Send position to meshcore");
