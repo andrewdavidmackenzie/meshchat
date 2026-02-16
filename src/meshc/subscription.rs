@@ -539,3 +539,363 @@ async fn handle_radio_event(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device::SubscriptionEvent;
+    use futures::StreamExt;
+    use futures::channel::mpsc;
+    use meshcore_rs::events::{BatteryInfo, SelfInfo};
+
+    // Helper to create a test sender/receiver pair
+    fn create_test_channel() -> (
+        mpsc::Sender<SubscriptionEvent>,
+        mpsc::Receiver<SubscriptionEvent>,
+    ) {
+        mpsc::channel(100)
+    }
+
+    // Helper to create SelfInfo for testing
+    fn create_test_self_info(name: &str, public_key: [u8; 32], lat: i32, lon: i32) -> SelfInfo {
+        SelfInfo {
+            adv_type: 0,
+            tx_power: 20,
+            max_tx_power: 30,
+            public_key,
+            adv_lat: lat,
+            adv_lon: lon,
+            multi_acks: 0,
+            adv_loc_policy: 0,
+            telemetry_mode_base: 0,
+            telemetry_mode_loc: 0,
+            telemetry_mode_env: 0,
+            manual_add_contacts: false,
+            radio_freq: 915_000_000,
+            radio_bw: 250_000,
+            sf: 12,
+            cr: 5,
+            name: name.to_string(),
+        }
+    }
+
+    // Tests for RadioCache
+
+    #[test]
+    fn radio_cache_default() {
+        let cache = RadioCache::default();
+        assert_eq!(cache.self_id, 0);
+        assert!(cache.known_channels.is_empty());
+    }
+
+    #[test]
+    fn radio_cache_known_channels() {
+        let mut cache = RadioCache::default();
+        assert!(!cache.known_channels.contains(&0));
+
+        cache.known_channels.insert(0);
+        assert!(cache.known_channels.contains(&0));
+
+        cache.known_channels.insert(1);
+        cache.known_channels.insert(2);
+        assert_eq!(cache.known_channels.len(), 3);
+    }
+
+    #[test]
+    fn radio_cache_self_id() {
+        let mut cache = RadioCache::default();
+        cache.self_id = 0x0102_0304_0506_0708;
+        assert_eq!(cache.self_id, 0x0102_0304_0506_0708);
+    }
+
+    // Tests for handle_self_info
+
+    #[tokio::test]
+    async fn handle_self_info_sends_events() {
+        let mut public_key = [0u8; 32];
+        public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+        let self_info = create_test_self_info("TestNode", public_key, 37_774_900, -122_419_400);
+
+        let mut radio_cache = RadioCache::default();
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_self_info(&mut radio_cache, &self_info, &mut sender).await;
+
+        // Check radio_cache was updated
+        assert_eq!(radio_cache.self_id, 0x0102_0304_0506_0708);
+
+        // Check MyNodeNum event was sent
+        let event1 = receiver.next().await.expect("Expected MyNodeNum event");
+        let MyNodeNum(node_id) = event1 else {
+            unreachable!("Expected MyNodeNum event")
+        };
+        assert_eq!(node_id, 0x0102_0304_0506_0708);
+
+        // Check MyUserInfo event was sent
+        let event2 = receiver.next().await.expect("Expected MyUserInfo event");
+        let MyUserInfo(user) = event2 else {
+            unreachable!("Expected MyUserInfo event")
+        };
+        assert_eq!(user.long_name, "TestNode");
+
+        // Check MyPosition event was sent
+        let event3 = receiver.next().await.expect("Expected MyPosition event");
+        let MyPosition(position) = event3 else {
+            unreachable!("Expected MyPosition event")
+        };
+        assert!((position.latitude - 37.7749).abs() < 0.0001);
+        assert!((position.longitude - -122.4194).abs() < 0.0001);
+    }
+
+    #[tokio::test]
+    async fn handle_self_info_empty_name() {
+        let public_key = [0u8; 32];
+        let self_info = create_test_self_info("", public_key, 0, 0);
+
+        let mut radio_cache = RadioCache::default();
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_self_info(&mut radio_cache, &self_info, &mut sender).await;
+
+        // Skip MyNodeNum
+        let _ = receiver.next().await;
+
+        // Check MyUserInfo with empty name
+        let event = receiver.next().await.expect("Expected MyUserInfo event");
+        let MyUserInfo(user) = event else {
+            unreachable!("Expected MyUserInfo event")
+        };
+        assert_eq!(user.long_name, "");
+    }
+
+    // Tests for handle_battery_info
+
+    #[tokio::test]
+    async fn handle_battery_info_sends_event() {
+        let battery_info = BatteryInfo {
+            level: 75,
+            storage: 1000,
+        };
+
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_battery_info(&battery_info, &mut sender).await;
+
+        let event = receiver
+            .next()
+            .await
+            .expect("Expected DeviceBatteryLevel event");
+        let DeviceBatteryLevel(level) = event else {
+            unreachable!("Expected DeviceBatteryLevel event")
+        };
+        assert_eq!(level, Some(75));
+    }
+
+    #[tokio::test]
+    async fn handle_battery_info_zero_level() {
+        let battery_info = BatteryInfo {
+            level: 0,
+            storage: 0,
+        };
+
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_battery_info(&battery_info, &mut sender).await;
+
+        let event = receiver
+            .next()
+            .await
+            .expect("Expected DeviceBatteryLevel event");
+        let DeviceBatteryLevel(level) = event else {
+            unreachable!("Expected DeviceBatteryLevel event")
+        };
+        assert_eq!(level, Some(0));
+    }
+
+    #[tokio::test]
+    async fn handle_battery_info_full() {
+        let battery_info = BatteryInfo {
+            level: 100,
+            storage: 5000,
+        };
+
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_battery_info(&battery_info, &mut sender).await;
+
+        let event = receiver
+            .next()
+            .await
+            .expect("Expected DeviceBatteryLevel event");
+        let DeviceBatteryLevel(level) = event else {
+            unreachable!("Expected DeviceBatteryLevel event")
+        };
+        assert_eq!(level, Some(100));
+    }
+
+    // Tests for DeviceState
+
+    #[test]
+    fn device_state_disconnected() {
+        let state = DeviceState::Disconnected;
+        assert!(matches!(state, DeviceState::Disconnected));
+    }
+
+    // Additional edge case tests for handle_self_info
+
+    #[tokio::test]
+    async fn handle_self_info_with_unicode_name() {
+        let public_key = [0xAA; 32];
+        let self_info =
+            create_test_self_info("日本語ノード🎉", public_key, 35_681_400, 139_767_100);
+
+        let mut radio_cache = RadioCache::default();
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_self_info(&mut radio_cache, &self_info, &mut sender).await;
+
+        // Skip MyNodeNum
+        let _ = receiver.next().await;
+
+        // Check MyUserInfo with unicode name
+        let event = receiver.next().await.expect("Expected MyUserInfo event");
+        let MyUserInfo(user) = event else {
+            unreachable!("Expected MyUserInfo event")
+        };
+        assert_eq!(user.long_name, "日本語ノード🎉");
+    }
+
+    #[tokio::test]
+    async fn handle_self_info_extreme_coordinates() {
+        let public_key = [0u8; 32];
+        // Near north pole
+        let self_info = create_test_self_info("ArcticNode", public_key, 89_999_000, 0);
+
+        let mut radio_cache = RadioCache::default();
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_self_info(&mut radio_cache, &self_info, &mut sender).await;
+
+        // Skip MyNodeNum and MyUserInfo
+        let _ = receiver.next().await;
+        let _ = receiver.next().await;
+
+        // Check MyPosition with extreme coordinates
+        let event = receiver.next().await.expect("Expected MyPosition event");
+        let MyPosition(position) = event else {
+            unreachable!("Expected MyPosition event")
+        };
+        assert!((position.latitude - 89.999).abs() < 0.001);
+    }
+
+    #[tokio::test]
+    async fn handle_self_info_negative_coordinates() {
+        let public_key = [0u8; 32];
+        // Sydney, Australia
+        let self_info = create_test_self_info("SydneyNode", public_key, -33_868_800, 151_209_300);
+
+        let mut radio_cache = RadioCache::default();
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_self_info(&mut radio_cache, &self_info, &mut sender).await;
+
+        // Skip MyNodeNum and MyUserInfo
+        let _ = receiver.next().await;
+        let _ = receiver.next().await;
+
+        let event = receiver.next().await.expect("Expected MyPosition event");
+        let MyPosition(position) = event else {
+            unreachable!("Expected MyPosition event")
+        };
+        assert!((position.latitude - -33.8688).abs() < 0.0001);
+        assert!((position.longitude - 151.2093).abs() < 0.0001);
+    }
+
+    // Test RadioCache updates self_id correctly from different public keys
+
+    #[tokio::test]
+    async fn handle_self_info_updates_radio_cache_self_id() {
+        let mut public_key = [0u8; 32];
+        public_key[0..8].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]);
+        let self_info = create_test_self_info("CafeNode", public_key, 0, 0);
+
+        let mut radio_cache = RadioCache::default();
+        assert_eq!(radio_cache.self_id, 0);
+
+        let (mut sender, _receiver) = create_test_channel();
+        handle_self_info(&mut radio_cache, &self_info, &mut sender).await;
+
+        assert_eq!(radio_cache.self_id, 0xDEAD_BEEF_CAFE_BABE);
+    }
+
+    // Test battery info with max u16 value
+
+    #[tokio::test]
+    async fn handle_battery_info_max_level() {
+        let battery_info = BatteryInfo {
+            level: u16::MAX,
+            storage: u16::MAX,
+        };
+
+        let (mut sender, mut receiver) = create_test_channel();
+
+        handle_battery_info(&battery_info, &mut sender).await;
+
+        let event = receiver
+            .next()
+            .await
+            .expect("Expected DeviceBatteryLevel event");
+        let DeviceBatteryLevel(level) = event else {
+            unreachable!("Expected DeviceBatteryLevel event")
+        };
+        assert_eq!(level, Some(u16::MAX as u32));
+    }
+
+    // Test that multiple events can be sent through the channel
+
+    #[tokio::test]
+    async fn multiple_battery_info_events() {
+        let (mut sender, mut receiver) = create_test_channel();
+
+        // Send multiple battery updates
+        handle_battery_info(
+            &BatteryInfo {
+                level: 100,
+                storage: 0,
+            },
+            &mut sender,
+        )
+        .await;
+        handle_battery_info(
+            &BatteryInfo {
+                level: 75,
+                storage: 0,
+            },
+            &mut sender,
+        )
+        .await;
+        handle_battery_info(
+            &BatteryInfo {
+                level: 50,
+                storage: 0,
+            },
+            &mut sender,
+        )
+        .await;
+
+        // Receive all three
+        let DeviceBatteryLevel(level1) = receiver.next().await.expect("event 1") else {
+            unreachable!("Expected DeviceBatteryLevel")
+        };
+        let DeviceBatteryLevel(level2) = receiver.next().await.expect("event 2") else {
+            unreachable!("Expected DeviceBatteryLevel")
+        };
+        let DeviceBatteryLevel(level3) = receiver.next().await.expect("event 3") else {
+            unreachable!("Expected DeviceBatteryLevel")
+        };
+
+        assert_eq!(level1, Some(100));
+        assert_eq!(level2, Some(75));
+        assert_eq!(level3, Some(50));
+    }
+}
