@@ -14,7 +14,7 @@ use crate::device::SubscriberMessage::{
 };
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
-    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready,
+    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
 
 use crate::Message::{
@@ -76,6 +76,7 @@ pub enum SubscriptionEvent {
     DisconnectingEvent(String),
     DisconnectedEvent(String),
     ConnectionError(String, String, String),
+    SendError(String, String),
     NotReady,
     MyNodeNum(NodeId),
     MyUserInfo(MCUser),
@@ -398,6 +399,12 @@ impl Device {
             }
             ConnectionError(id, summary, detail) => {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
+                Task::perform(empty(), |_| Navigation(DeviceListView))
+                    .chain(Task::perform(empty(), move |_| {
+                        AppError(summary.clone(), detail.clone(), MeshChat::now())
+                    }))
+            }
+            SendError(summary, detail) => {
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
                         AppError(summary.clone(), detail.clone(), MeshChat::now())

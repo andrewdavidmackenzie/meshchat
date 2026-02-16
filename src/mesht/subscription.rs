@@ -12,7 +12,7 @@ use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
     DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
-    NewNodePosition, RadioNotification,
+    NewNodePosition, RadioNotification, SendError,
 };
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
@@ -459,8 +459,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
                             if let Err(e) = result {
                                 gui_sender
-                                    .send(ConnectionError(
-                                        ble_device.clone(),
+                                    .send(SendError(
                                         "Subscription Error".to_string(),
                                         e.to_string(),
                                     ))
