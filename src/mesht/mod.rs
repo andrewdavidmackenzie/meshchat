@@ -49,7 +49,7 @@ impl From<MCUser> for User {
 impl From<&NodeInfo> for MCNodeInfo {
     fn from(node_info: &NodeInfo) -> Self {
         MCNodeInfo {
-            num: node_info.num,
+            node_id: node_info.num as u64,
             user: node_info.user.as_ref().map(|u| u.into()),
             position: node_info.position.as_ref().map(|p| p.into()),
             is_ignored: node_info.is_ignored,
@@ -154,7 +154,7 @@ impl ChannelId {
                 MeshChannel::from(channel_number as u32),
             ),
             Node(node_id) => (
-                PacketDestination::Node(NodeId::from(node_id)),
+                PacketDestination::Node(NodeId::new(node_id as u32)),
                 MeshChannel::default(),
             ),
         }
@@ -391,7 +391,7 @@ mod test {
 
         let mc_node_info: MCNodeInfo = (&node_info).into();
 
-        assert_eq!(mc_node_info.num, 12345);
+        assert_eq!(mc_node_info.node_id, 12345);
         assert!(mc_node_info.user.is_some());
         assert_eq!(
             mc_node_info
@@ -424,7 +424,7 @@ mod test {
 
         let mc_node_info: MCNodeInfo = (&node_info).into();
 
-        assert_eq!(mc_node_info.num, 99999);
+        assert_eq!(mc_node_info.node_id, 99999);
         assert!(mc_node_info.user.is_none());
         assert!(mc_node_info.position.is_some());
         assert!(mc_node_info.is_ignored);

@@ -3,10 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
+pub type NodeId = u64;
+pub type MessageId = u32;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum ChannelId {
     Channel(i32), // Channel::index 0..7
-    Node(u32),    // NodeInfo::node number
+    Node(NodeId), // NodeInfo::node number
 }
 
 impl Default for ChannelId {

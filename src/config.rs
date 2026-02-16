@@ -2,7 +2,7 @@ use crate::Message::{
     HistoryLengthSelected, ToggleAutoReconnect, ToggleAutoUpdate, ToggleSaveWindowPosition,
     ToggleSaveWindowSize, ToggleShowPositionUpdates, ToggleShowUserUpdates,
 };
-use crate::channel_id::ChannelId;
+use crate::channel_id::{ChannelId, NodeId};
 use crate::device_list::RadioType;
 use crate::styles::{picker_header_style, tooltip_style};
 use crate::{MeshChat, Message};
@@ -29,9 +29,9 @@ pub struct Config {
     #[serde(default, rename = "channel", skip_serializing_if = "Option::is_none")]
     pub channel_id: Option<ChannelId>,
     #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]
-    pub fav_nodes: HashSet<u32>,
+    pub fav_nodes: HashSet<NodeId>,
     #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
-    pub aliases: HashMap<u32, String>, // node name aliases
+    pub aliases: HashMap<NodeId, String>, // node name aliases
     #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
     pub device_aliases: HashMap<String, String>, // device (as a string) to alias
     #[serde(

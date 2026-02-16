@@ -13,13 +13,13 @@ use crate::Message::{
     ToggleShowUserUpdates,
 };
 use crate::View::{DeviceListView, DeviceView};
-use crate::channel_id::ChannelId;
+use crate::channel_id::{ChannelId, NodeId};
 use crate::config::{Config, HistoryLength, load_config};
 use crate::device::ConnectionState::Connected;
-use crate::device::Device;
 use crate::device::DeviceViewMessage;
 #[allow(unused_imports)] // TODO remove later
 use crate::device::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
+use crate::device::{Device, TimeStamp};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;
 use crate::notification::{Notification, Notifications};
@@ -90,7 +90,7 @@ impl fmt::Display for MCUser {
 /// A Node's Info as represented in the App, maybe a superset of User attributes from different meshes
 #[derive(Clone, Debug)]
 pub struct MCNodeInfo {
-    pub num: u32,
+    pub node_id: NodeId,
     pub user: Option<MCUser>,
     pub position: Option<MCPosition>,
     pub is_ignored: bool,
@@ -104,7 +104,7 @@ pub struct MCPosition {
     pub time: u32,
     pub location_source: i32,
     pub altitude_source: i32,
-    pub timestamp: u32,
+    pub timestamp: TimeStamp,
     pub timestamp_millis_adjust: i32,
     pub altitude_hae: Option<i32>,
     pub altitude_geoidal_separation: Option<i32>,
@@ -167,14 +167,14 @@ pub enum Message {
     ShowUserInfo(MCUser),
     CloseShowUser,
     OpenUrl(String),
-    AppNotification(String, String, u32), // Message, detail, rx_time
-    AppError(String, String, u32),        // Message, detail, rx_time
-    CriticalAppError(String, String, u32), // Message, detail, rx_time
+    AppNotification(String, String, TimeStamp), // Message, detail, rx_time
+    AppError(String, String, TimeStamp),        // Message, detail, rx_time
+    CriticalAppError(String, String, TimeStamp), // Message, detail, rx_time
     RemoveNotification(usize),
-    ToggleNodeFavourite(u32),
+    ToggleNodeFavourite(NodeId),
     CopyToClipBoard(String),
-    AddNodeAlias(u32, String),
-    RemoveNodeAlias(u32),
+    AddNodeAlias(NodeId, String),
+    RemoveNodeAlias(NodeId),
     AddDeviceAlias(String, String),
     RemoveDeviceAlias(String),
     Event(Event),
@@ -245,7 +245,7 @@ impl MeshChat {
     }
 
     /// Get the current time in epoch as u32
-    pub fn now() -> u32 {
+    pub fn now() -> TimeStamp {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()

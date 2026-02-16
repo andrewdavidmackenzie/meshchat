@@ -4,18 +4,19 @@ use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
 use crate::device::SubscriberMessage::{
-    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
+    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo,
+    SendText,
 };
 use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
 
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
     DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
-    NewNodePosition, RadioNotification,
+    NewNodePosition, RadioNotification, SendError,
 };
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
-use crate::{MCChannel, MCNodeInfo, MCPosition};
+use crate::{MCChannel, MCNodeInfo, MCPosition, channel_id};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -69,10 +70,10 @@ impl MyRouter {
             // Destined for a Node
             if Some(mesh_packet.from) == self.my_node_num {
                 // from me to a node - put it in that node's channel
-                Node(mesh_packet.to)
+                Node(channel_id::NodeId::from(mesh_packet.to))
             } else {
                 // from the other node, put it in that node's channel
-                Node(mesh_packet.from)
+                Node(channel_id::NodeId::from(mesh_packet.from))
             }
         }
     }
@@ -104,7 +105,7 @@ impl MyRouter {
                 self.my_node_num = Some(my_node_info.my_node_num);
 
                 self.gui_sender
-                    .send(MyNodeNum(my_node_info.my_node_num))
+                    .send(MyNodeNum(my_node_info.my_node_num as u64))
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
@@ -169,7 +170,7 @@ impl MyRouter {
                         ChannelId::Channel(mesh_packet.channel as i32)
                     } else {
                         // To a DM to a Node
-                        Node(mesh_packet.from)
+                        Node(channel_id::NodeId::from(mesh_packet.from))
                     };
 
                     self.gui_sender
@@ -186,7 +187,7 @@ impl MyRouter {
                             .send(MCMessageReceived(
                                 channel_id,
                                 mesh_packet.id,
-                                mesh_packet.from,
+                                mesh_packet.from as u64,
                                 AlertMessage(message),
                                 mesh_packet.rx_time,
                             ))
@@ -212,7 +213,7 @@ impl MyRouter {
                             .send(MCMessageReceived(
                                 channel_id,
                                 mesh_packet.id,
-                                mesh_packet.from,
+                                mesh_packet.from as u64,
                                 mcmessage,
                                 mesh_packet.rx_time,
                             ))
@@ -229,7 +230,7 @@ impl MyRouter {
                             .send(NewNodePosition(
                                 channel_id,
                                 mesh_packet.id,
-                                mesh_packet.from,
+                                mesh_packet.from as u64,
                                 mcposition,
                                 mesh_packet.rx_time,
                             ))
@@ -256,7 +257,7 @@ impl MyRouter {
                             .send(NewNodeInfo(
                                 channel_id,
                                 mesh_packet.id,
-                                mesh_packet.from,
+                                mesh_packet.from as u64,
                                 (&user).into(),
                                 mesh_packet.rx_time,
                             ))
@@ -405,7 +406,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                         })
                                     }
                                 }
-                                SendUser(channel_id, mcuser) => {
+                                SendSelfInfo(channel_id, mcuser) => {
                                     if let Some(mut api) = stream_api.take() {
                                         let r = send_user(
                                             &mut api,
@@ -458,8 +459,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
                             if let Err(e) = result {
                                 gui_sender
-                                    .send(ConnectionError(
-                                        ble_device.clone(),
+                                    .send(SendError(
                                         "Subscription Error".to_string(),
                                         e.to_string(),
                                     ))
