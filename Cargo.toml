@@ -45,7 +45,7 @@ webbrowser = { version = "1.0", default-features = false }
 iced_aw = { version = "0.13", default-features = false, features = ["menu"] }
 btleplug = { version = "0.11.8", default-features = false }
 emojis = { version = "0.8.0", default-features = false }
-uuid = { version = "1.20.0", default-features = false, features = ["v4"] }
+uuid = { version = "1.21.0", default-features = false, features = ["v4"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
