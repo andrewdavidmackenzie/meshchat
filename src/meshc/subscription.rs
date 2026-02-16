@@ -1,6 +1,6 @@
-use crate::channel_id::ChannelId;
+use crate::channel_id::{ChannelId, MessageId};
 use crate::device::SubscriberMessage::{
-    Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
+    Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
 };
 use crate::device::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
@@ -10,6 +10,7 @@ use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
 use crate::meshc::node_id_from_public_key;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
+use crate::{MCPosition, MCUser};
 use futures::{SinkExt, Stream};
 use iced::stream;
 use meshcore_rs::events::{BatteryInfo, Contact, EventPayload, SelfInfo};
@@ -105,74 +106,24 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 {
                                     let result = match message {
                                         Disconnect => break,
-                                        // TODO handle reply to
-                                        SendText(text, channel_id, _reply_to_id) => {
-                                            match channel_id {
-                                                ChannelId::Channel(channel_index) => {
-                                                    let chan_idx: u8 =
-                                                        channel_index.try_into().unwrap_or(0);
-                                                    meshcore
-                                                        .commands()
-                                                        .lock()
-                                                        .await
-                                                        .send_chan_msg(chan_idx, &text, None)
-                                                        .await
-                                                }
-                                                ChannelId::Node(node_id) => meshcore
-                                                    .commands()
-                                                    .lock()
-                                                    .await
-                                                    .send_msg(
-                                                        node_id.to_be_bytes().to_vec(),
-                                                        &text,
-                                                        None,
-                                                    )
-                                                    .await
-                                                    .map(|_| ()),
-                                            }
+                                        SendText(text, channel_id, reply_to_node_id) => {
+                                            send_text(&meshcore, channel_id, text, reply_to_node_id)
+                                                .await
                                         }
-                                        SendPosition(_channel_id, _mcposition) => {
-                                            println!("Send position to meshcore");
-                                            /*
-                                            let r = crate::mesht::subscription::send_position(
-                                                &mut api,
-                                                &mut my_router,
-                                                channel_id,
-                                                mcposition.into(),
-                                            )
-                                            .await;
-                                            r
-                                             */
-                                            Ok(())
+                                        SendPosition(channel_id, mcposition) => {
+                                            send_position(&meshcore, channel_id, mcposition).await
                                         }
-                                        SendUser(_channel_id, _mcuser) => {
-                                            println!("Send user to meshcore");
-                                            /*
-                                            let r = crate::mesht::subscription::send_user(
-                                                &mut api,
-                                                &mut my_router,
-                                                channel_id,
-                                                mcuser.into(),
-                                            )
-                                            .await;
-                                            r
-                                             */
-                                            Ok(())
+                                        SendSelfInfo(channel_id, mcuser) => {
+                                            send_self_info(&meshcore, channel_id, mcuser).await
                                         }
-                                        SendEmojiReply(_emoji, _channel_id, _reply_to_id) => {
-                                            println!("Send emoji reply to meshcore");
-                                            /*
-                                            let r = crate::mesht::subscription::send_emoji_reply(
-                                                &mut api,
-                                                &mut my_router,
+                                        SendEmojiReply(emoji, channel_id, reply_to_node_id) => {
+                                            send_emoji_reply(
+                                                &meshcore,
                                                 channel_id,
-                                                reply_to_id,
                                                 emoji,
+                                                reply_to_node_id,
                                             )
-                                            .await;
-                                            r
-                                             */
-                                            Ok(())
+                                            .await
                                         }
                                         MeshCoreRadioPacket(meshcore_event) => {
                                             handle_radio_event(
@@ -225,6 +176,171 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     )
 }
 
+/// Send a text message
+// TODO handle reply to
+async fn send_text(
+    meshcore: &MeshCore,
+    channel_id: ChannelId,
+    text: String,
+    _reply_to_node_id: Option<MessageId>,
+) -> meshcore_rs::Result<()> {
+    match channel_id {
+        ChannelId::Channel(channel_index) => {
+            let chan_idx: u8 = channel_index.try_into().unwrap_or(0);
+            meshcore
+                .commands()
+                .lock()
+                .await
+                .send_chan_msg(chan_idx, &text, None)
+                .await
+        }
+        ChannelId::Node(node_id) => meshcore
+            .commands()
+            .lock()
+            .await
+            .send_msg(node_id.to_be_bytes().to_vec(), &text, None)
+            .await
+            .map(|_| ()),
+    }
+}
+
+/// Send am Emoji reply to a message
+async fn send_emoji_reply(
+    _meshcore: &MeshCore,
+    _channel_id: ChannelId,
+    _text: String,
+    _reply_to_node_id: MessageId,
+) -> meshcore_rs::Result<()> {
+    println!("Send emoji reply to meshcore");
+    Ok(())
+}
+
+/// Send a position message
+async fn send_position(
+    _meshcore: &MeshCore,
+    _channel_id: ChannelId,
+    _position: MCPosition,
+) -> meshcore_rs::Result<()> {
+    println!("Send position to meshcore");
+    /*
+    match channel_id {
+        ChannelId::Channel(channel_index) => {
+            let chan_idx: u8 = channel_index.try_into().unwrap_or(0);
+            meshcore
+                .commands()
+                .lock()
+                .await
+                .send_chan_msg(chan_idx, &text, None)
+                .await
+        }
+        ChannelId::Node(node_id) => meshcore
+            .commands()
+            .lock()
+            .await
+            .send_msg(node_id.to_be_bytes().to_vec(), &text, None)
+            .await
+            .map(|_| ()),
+    }
+     */
+    Ok(())
+}
+
+/// Send SelfInfo to a channel or a node
+async fn send_self_info(
+    _meshcore: &MeshCore,
+    _channel_id: ChannelId,
+    _user: MCUser,
+) -> meshcore_rs::Result<()> {
+    println!("Send user to meshcore");
+    Ok(())
+}
+
+/// Handle reception of SelfInfo and send it to the GUI
+async fn handle_self_info(
+    self_info: &SelfInfo,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+    #[allow(clippy::unwrap_used)]
+    gui_sender
+        .send(MyNodeNum(node_id_from_public_key(&self_info.public_key)))
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
+    gui_sender
+        .send(MyUserInfo(self_info.into()))
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+
+    gui_sender
+        .send(MyPosition(self_info.into()))
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+}
+
+/// Handle reception of Battery Info and send it to the GUI
+async fn handle_battery_info(
+    battery_info: &BatteryInfo,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+    println!("Battery: {battery_info:?}");
+    gui_sender
+        .send(DeviceBatteryLevel(Some(battery_info.level as u32)))
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+}
+
+/// Get information about the connected device
+async fn get_my_info(
+    meshcore: &MeshCore,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) -> meshcore_rs::Result<()> {
+    // Send APPSTART to initialize connection and get device info
+    let self_info = meshcore.commands().lock().await.send_appstart().await?;
+    handle_self_info(&self_info, gui_sender).await;
+
+    // Add known nodes
+    let contacts = get_contacts(meshcore).await?;
+    for contact in contacts {
+        gui_sender
+            .send(NewNode((&contact).into()))
+            .await
+            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+    }
+
+    // Get battery info
+    if let Ok(battery) = meshcore.commands().lock().await.get_bat().await {
+        handle_battery_info(&battery, gui_sender).await;
+    }
+
+    Ok(())
+}
+
+/// Advertise my presence on the network to other nodes
+async fn send_advert(meshcore: &MeshCore) -> meshcore_rs::Result<()> {
+    meshcore.commands().lock().await.send_advert(true).await
+}
+
+/// Fetch known contacts from the radio
+async fn get_contacts(meshcore: &MeshCore) -> meshcore_rs::Result<Vec<Contact>> {
+    meshcore
+        .commands()
+        .lock()
+        .await
+        .get_contacts_with_timeout(0, std::time::Duration::from_secs(30))
+        .await
+}
+
+/// Connect to a specific BlueTooth device by name and return a [MeshCore] that receives messages
+/// from the radio and can be used to send messages to the radio.
+async fn do_connect(ble_device: &str) -> meshcore_rs::Result<MeshCore> {
+    MeshCore::ble_connect(ble_device).await
+}
+
+/// Disconnect from the radio we are currently connected to using the [MeshCore]
+async fn do_disconnect(meshcore: MeshCore) -> meshcore_rs::Result<()> {
+    meshcore.disconnect().await
+}
+
 async fn handle_radio_event(
     radio_cache: &mut RadioCache,
     meshcore: &MeshCore,
@@ -258,7 +374,7 @@ async fn handle_radio_event(
         }
         EventType::SelfInfo => {
             if let EventPayload::SelfInfo(self_info) = meshcore_event.payload {
-                send_self_info(&self_info, gui_sender).await;
+                handle_self_info(&self_info, gui_sender).await;
             }
         }
         EventType::DeviceInfo => {
@@ -268,7 +384,7 @@ async fn handle_radio_event(
         }
         EventType::Battery => {
             if let EventPayload::Battery(battery_info) = meshcore_event.payload {
-                send_battery_info(&battery_info, gui_sender).await;
+                handle_battery_info(&battery_info, gui_sender).await;
             }
         }
         EventType::ChannelInfo => {
@@ -376,87 +492,4 @@ async fn handle_radio_event(
         }
     }
     Ok(())
-}
-
-async fn send_self_info(
-    self_info: &SelfInfo,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
-) {
-    #[allow(clippy::unwrap_used)]
-    gui_sender
-        .send(MyNodeNum(node_id_from_public_key(&self_info.public_key)))
-        .await
-        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-
-    gui_sender
-        .send(MyUserInfo(self_info.into()))
-        .await
-        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-
-    gui_sender
-        .send(MyPosition(self_info.into()))
-        .await
-        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-}
-
-async fn send_battery_info(
-    battery_info: &BatteryInfo,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
-) {
-    println!("Battery: {battery_info:?}");
-    gui_sender
-        .send(DeviceBatteryLevel(Some(battery_info.level as u32)))
-        .await
-        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-}
-
-/// Get information about the connected device
-async fn get_my_info(
-    meshcore: &MeshCore,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
-) -> meshcore_rs::Result<()> {
-    // Send APPSTART to initialize connection and get device info
-    let self_info = meshcore.commands().lock().await.send_appstart().await?;
-    send_self_info(&self_info, gui_sender).await;
-
-    // Add known nodes
-    let contacts = get_contacts(meshcore).await?;
-    for contact in contacts {
-        gui_sender
-            .send(NewNode((&contact).into()))
-            .await
-            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-    }
-
-    // Get battery info
-    if let Ok(battery) = meshcore.commands().lock().await.get_bat().await {
-        send_battery_info(&battery, gui_sender).await;
-    }
-
-    Ok(())
-}
-
-/// Advertise my presence on the network to other nodes
-async fn send_advert(meshcore: &MeshCore) -> meshcore_rs::Result<()> {
-    meshcore.commands().lock().await.send_advert(true).await
-}
-
-async fn get_contacts(meshcore: &MeshCore) -> meshcore_rs::Result<Vec<Contact>> {
-    meshcore
-        .commands()
-        .lock()
-        .await
-        .get_contacts_with_timeout(0, std::time::Duration::from_secs(30))
-        .await
-}
-
-/// Connect to a specific BlueTooth device by name and return a [MeshCore] that receives messages
-/// from the radio and can be used to send messages to the radio.
-async fn do_connect(ble_device: &str) -> meshcore_rs::Result<MeshCore> {
-    MeshCore::ble_connect(ble_device).await
-}
-
-/// Disconnect from the radio we are currently connected to using the [MeshCore]
-async fn do_disconnect(meshcore: MeshCore) -> meshcore_rs::Result<()> {
-    meshcore.disconnect().await
 }

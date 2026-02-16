@@ -5,12 +5,12 @@ use crate::config::{Config, HistoryLength};
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device::DeviceViewMessage::{
     AliasInput, ChannelMsg, ClearFilter, ConnectRequest, DisconnectRequest, ForwardMessage,
-    SearchInput, SendEmojiReplyMessage, SendInfoMessage, SendPositionMessage, SendTextMessage,
+    SearchInput, SendEmojiReplyMessage, SendPositionMessage, SendSelfInfoMessage, SendTextMessage,
     ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
     SubscriptionMessage,
 };
 use crate::device::SubscriberMessage::{
-    Connect, Disconnect, SendEmojiReply, SendPosition, SendText, SendUser,
+    Connect, Disconnect, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
 };
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
@@ -23,7 +23,7 @@ use crate::Message::{
 };
 use crate::View::DeviceListView;
 use crate::channel_id::ChannelId::Node;
-use crate::channel_id::{ChannelId, NodeId};
+use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
@@ -63,6 +63,9 @@ impl Default for ConnectionState {
     }
 }
 
+/// Time in EPOC in seconds timestamp
+pub type TimeStamp = u32;
+
 /// Events are Messages sent from the subscription to the GUI
 #[derive(Debug, Clone)]
 pub enum SubscriptionEvent {
@@ -79,11 +82,11 @@ pub enum SubscriptionEvent {
     MyPosition(MCPosition),
     NewChannel(MCChannel),
     NewNode(MCNodeInfo),
-    RadioNotification(String, u32), // Message, rx_time
-    MessageACK(ChannelId, u32),
-    MCMessageReceived(ChannelId, u32, NodeId, MCMessage, u32), // channel_id, id, from, MCMessage, rx_time
-    NewNodeInfo(ChannelId, u32, NodeId, MCUser, u32), // channel_id, id, from, MCUser, rx_time
-    NewNodePosition(ChannelId, u32, NodeId, MCPosition, u32), // channel_id, id, from, MCPosition, rx_time
+    RadioNotification(String, TimeStamp), // Message, rx_time
+    MessageACK(ChannelId, MessageId),
+    MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp), // channel_id, id, from, MCMessage, rx_time
+    NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, rx_time
+    NewNodePosition(ChannelId, MessageId, NodeId, MCPosition, TimeStamp), // channel_id, id, from, MCPosition, rx_time
     DeviceBatteryLevel(Option<u32>),
     ChannelName(i32, String), // channel number, name
 }
@@ -92,10 +95,10 @@ pub enum SubscriptionEvent {
 pub enum SubscriberMessage {
     Connect(String),
     Disconnect,
-    SendText(String, ChannelId, Option<u32>), // Optional reply to message id
-    SendEmojiReply(String, ChannelId, u32),
+    SendText(String, ChannelId, Option<MessageId>), // Optional reply to message id
+    SendEmojiReply(String, ChannelId, MessageId),
     SendPosition(ChannelId, MCPosition),
-    SendUser(ChannelId, MCUser),
+    SendSelfInfo(ChannelId, MCUser),
     #[cfg(feature = "meshtastic")]
     MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
     #[cfg(feature = "meshcore")]
@@ -112,7 +115,7 @@ pub enum DeviceViewMessage {
     SendTextMessage(String, ChannelId, Option<u32>), // optional reply to message id
     SendEmojiReplyMessage(u32, String, ChannelId),   // optional reply to message id
     SendPositionMessage(ChannelId),
-    SendInfoMessage(ChannelId),
+    SendSelfInfoMessage(ChannelId),
     SearchInput(String),
     StartEditingAlias(NodeId),
     AliasInput(String),
@@ -239,10 +242,10 @@ impl Device {
                     );
                 }
             }
-            SendInfoMessage(channel_id) => {
+            SendSelfInfoMessage(channel_id) => {
                 if let Some(user) = &self.my_user {
                     return self.subscriber_send(
-                        SendUser(channel_id, user.clone()),
+                        SendSelfInfo(channel_id, user.clone()),
                         radio_type,
                         Message::None,
                     );
@@ -2239,7 +2242,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.my_user.is_none());
 
-        let _ = device_view.update(SendInfoMessage(ChannelId::Channel(0)));
+        let _ = device_view.update(SendSelfInfoMessage(ChannelId::Channel(0)));
         // Should not panic, no user info available
     }
 

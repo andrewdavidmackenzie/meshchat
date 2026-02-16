@@ -9,7 +9,7 @@ use crate::channel_view_entry::MCMessage::{
 };
 use crate::config::{Config, HistoryLength};
 use crate::device::DeviceViewMessage::{
-    ChannelMsg, ForwardMessage, SendInfoMessage, SendPositionMessage, ShowChannel,
+    ChannelMsg, ForwardMessage, SendPositionMessage, SendSelfInfoMessage, ShowChannel,
     StopForwardingMessage,
 };
 use crate::device::{Device, DeviceViewMessage};
@@ -353,7 +353,7 @@ impl ChannelView {
         let mut send_info_button = button(text("Send Info ⓘ")).style(button_chip_style);
         if enable_my_info {
             send_info_button =
-                send_info_button.on_press(DeviceViewEvent(SendInfoMessage(self.channel_id)));
+                send_info_button.on_press(DeviceViewEvent(SendSelfInfoMessage(self.channel_id)));
         }
 
         // a button to allow easy sharing of this app

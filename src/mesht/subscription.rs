@@ -4,7 +4,8 @@ use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
 use crate::device::SubscriberMessage::{
-    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendText, SendUser,
+    Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo,
+    SendText,
 };
 use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
 
@@ -405,7 +406,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                         })
                                     }
                                 }
-                                SendUser(channel_id, mcuser) => {
+                                SendSelfInfo(channel_id, mcuser) => {
                                     if let Some(mut api) = stream_api.take() {
                                         let r = send_user(
                                             &mut api,
