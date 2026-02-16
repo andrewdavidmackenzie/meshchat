@@ -1,5 +1,5 @@
 use crate::Message::DeviceViewEvent;
-use crate::channel_id::ChannelId;
+use crate::channel_id::{ChannelId, NodeId};
 use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, MessageUnseen,
     PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
@@ -60,7 +60,7 @@ pub struct ChannelView {
     channel_id: ChannelId,
     message: String,                         // text message typed in so far
     entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
-    my_node_num: u32,
+    my_node_num: NodeId,
     preparing_reply: Option<u32>,
     emoji_picker: EmojiPicker,
 }
@@ -69,10 +69,10 @@ async fn empty() {}
 
 // A view of a single channel and its messages, which maybe a Channel or a Node
 impl ChannelView {
-    pub fn new(channel_id: ChannelId, my_node_num: u32) -> Self {
+    pub fn new(channel_id: ChannelId, my_node_id: NodeId) -> Self {
         Self {
             channel_id,
-            my_node_num,
+            my_node_num: my_node_id,
             emoji_picker: EmojiPicker::new().height(400).width(400),
             ..Default::default()
         }
@@ -245,7 +245,7 @@ impl ChannelView {
     #[allow(clippy::too_many_arguments)]
     pub fn view<'a>(
         &'a self,
-        nodes: &'a HashMap<u32, MCNodeInfo>,
+        nodes: &'a HashMap<NodeId, MCNodeInfo>,
         enable_position: bool,
         enable_my_user: bool,
         device_view: &'a Device,
@@ -286,7 +286,7 @@ impl ChannelView {
 
     fn channel_view<'a>(
         &'a self,
-        nodes: &'a HashMap<u32, MCNodeInfo>,
+        nodes: &'a HashMap<NodeId, MCNodeInfo>,
         enable_position: bool,
         enable_my_info: bool,
         show_position_updates: bool,

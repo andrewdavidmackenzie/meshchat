@@ -22,8 +22,8 @@ use crate::Message::{
     ShowLocation, ShowUserInfo, ToggleNodeFavourite,
 };
 use crate::View::DeviceListView;
-use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
+use crate::channel_id::{ChannelId, NodeId};
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
@@ -74,16 +74,16 @@ pub enum SubscriptionEvent {
     DisconnectedEvent(String),
     ConnectionError(String, String, String),
     NotReady,
-    MyNodeNum(u32),
+    MyNodeNum(NodeId),
     MyUserInfo(MCUser),
     MyPosition(MCPosition),
     NewChannel(MCChannel),
     NewNode(MCNodeInfo),
     RadioNotification(String, u32), // Message, rx_time
     MessageACK(ChannelId, u32),
-    MCMessageReceived(ChannelId, u32, u32, MCMessage, u32), // channel, id, from, MCMessage, rx_time
-    NewNodeInfo(ChannelId, u32, u32, MCUser, u32),          // channel_id, id, from, MCUser, rx_time
-    NewNodePosition(ChannelId, u32, u32, MCPosition, u32), // channel_id, id, from, MCPosition, rx_time
+    MCMessageReceived(ChannelId, u32, NodeId, MCMessage, u32), // channel_id, id, from, MCMessage, rx_time
+    NewNodeInfo(ChannelId, u32, NodeId, MCUser, u32), // channel_id, id, from, MCUser, rx_time
+    NewNodePosition(ChannelId, u32, NodeId, MCPosition, u32), // channel_id, id, from, MCPosition, rx_time
     DeviceBatteryLevel(Option<u32>),
     ChannelName(i32, String), // channel number, name
 }
@@ -114,7 +114,7 @@ pub enum DeviceViewMessage {
     SendPositionMessage(ChannelId),
     SendInfoMessage(ChannelId),
     SearchInput(String),
-    StartEditingAlias(u32),
+    StartEditingAlias(NodeId),
     AliasInput(String),
     StartForwardingMessage(ChannelViewEntry),
     ForwardMessage(ChannelId),
@@ -129,18 +129,18 @@ pub struct Device {
     meshtastic_sender: Option<Sender<SubscriberMessage>>,
     #[cfg(feature = "meshcore")]
     meshcore_sender: Option<Sender<SubscriberMessage>>,
-    my_node_num: Option<u32>,
+    my_node_id: Option<NodeId>,
     my_position: Option<MCPosition>,
     my_user: Option<MCUser>,
     viewing_channel: Option<ChannelId>,
     /// Map of ChannelViews, indexed by ChannelId
     pub channel_views: HashMap<ChannelId, ChannelView>,
     channels: Vec<MCChannel>,
-    nodes: HashMap<u32, MCNodeInfo>, // all nodes known to the connected radio
+    nodes: HashMap<NodeId, MCNodeInfo>, // all nodes known to the connected radio
     filter: String,
     exit_pending: bool,
     battery_level: Option<u32>,
-    editing_alias: Option<u32>,
+    editing_alias: Option<NodeId>,
     alias: String,
     pub forwarding_message: Option<ChannelViewEntry>,
     history_length: HistoryLength,
@@ -325,7 +325,7 @@ impl Device {
     }
 
     /// Called when the user selects to alias a node name
-    fn start_editing_alias(&mut self, node_id: u32) {
+    fn start_editing_alias(&mut self, node_id: NodeId) {
         self.editing_alias = Some(node_id);
         self.alias = String::new();
     }
@@ -378,7 +378,7 @@ impl Device {
                 self.channel_views.clear();
                 self.nodes.clear();
                 self.channels.clear();
-                self.my_node_num = None;
+                self.my_node_id = None;
                 self.viewing_channel = None;
                 Task::perform(empty(), |_| Navigation(DeviceListView))
             }
@@ -409,7 +409,7 @@ impl Device {
                     }))
             }
             MyNodeNum(my_node_num) => {
-                self.my_node_num = Some(my_node_num);
+                self.my_node_id = Some(my_node_num);
                 Task::none()
             },
             MyUserInfo(my_user_info) => {
@@ -512,14 +512,14 @@ impl Device {
     fn add_node(&mut self, node_info: MCNodeInfo) {
         if node_info.is_ignored {
             println!("Node is ignored!: {:?}", node_info);
-        } else if let Some(my_node_num) = self.my_node_num {
-            if node_info.num == my_node_num {
+        } else if let Some(my_node_num) = self.my_node_id {
+            if node_info.node_id == my_node_num {
                 self.my_position = node_info.position.clone();
                 self.my_user = node_info.user.clone();
             }
 
-            let channel_id = Node(node_info.num);
-            self.nodes.insert(node_info.num, node_info);
+            let channel_id = Node(node_info.node_id);
+            self.nodes.insert(node_info.node_id, node_info);
             self.channel_views
                 .insert(channel_id, ChannelView::new(channel_id, my_node_num));
         }
@@ -538,7 +538,7 @@ impl Device {
     /// Add a channel from the radio to the list if it is not disabled and has some Settings
     pub fn add_channel(&mut self, channel: MCChannel) {
         {
-            if let Some(my_node_num) = self.my_node_num {
+            if let Some(my_node_num) = self.my_node_id {
                 self.channels.push(channel);
                 let channel_id = ChannelId::Channel((self.channels.len() - 1) as i32);
                 self.channel_views
@@ -559,18 +559,18 @@ impl Device {
     /// NOTE: This position maybe more recent, but it could have less accuracy, as position
     /// accuracy is set per channel. Consider deciding whether to update or not if it has lower
     /// accuracy depending on the age of the previous position?
-    fn update_node_position(&mut self, from: u32, position: &MCPosition) {
+    fn update_node_position(&mut self, from: NodeId, position: &MCPosition) {
         if let Some(node) = self.nodes.get_mut(&from) {
             node.position = Some(position.clone());
 
-            if Some(from) == self.my_node_num {
+            if Some(from) == self.my_node_id {
                 self.my_position = Some(position.clone());
             }
         }
     }
 
     /// If the Node is known already, then update its User with a NodeInfoApp User update
-    fn update_node_user(&mut self, from: u32, user: &MCUser) {
+    fn update_node_user(&mut self, from: NodeId, user: &MCUser) {
         if let Some(node) = self.nodes.get_mut(&from) {
             node.user = Some(user.clone());
         }
@@ -793,7 +793,7 @@ impl Device {
         add_buttons: bool,
         select: fn(ChannelId) -> Message,
     ) -> Column<'a, Message> {
-        let mut fav_nodes: Vec<u32> = vec![];
+        let mut fav_nodes: Vec<NodeId> = vec![];
 
         for fav_node_id in &config.fav_nodes {
             if let Some(node_name) = self.aliased_long_name(config, *fav_node_id) {
@@ -806,7 +806,7 @@ impl Device {
         }
 
         // filter out my own node if the node number is known yet
-        fav_nodes.retain(|fav_node_id| Some(*fav_node_id) != self.my_node_num);
+        fav_nodes.retain(|fav_node_id| Some(*fav_node_id) != self.my_node_id);
 
         // If there are favourite nodes, show the header and list them
         if !fav_nodes.is_empty() {
@@ -848,7 +848,7 @@ impl Device {
             .nodes
             .keys()
             .filter(|node_id| {
-                !config.fav_nodes.contains(node_id) && Some(**node_id) != self.my_node_num
+                !config.fav_nodes.contains(node_id) && Some(**node_id) != self.my_node_id
             })
             .filter(|node_id| {
                 if let Some(node_name) = self.aliased_long_name(config, **node_id) {
@@ -900,7 +900,7 @@ impl Device {
 
     /// Return the long name for the node with id node_id - prefixed with a node/device emoji -
     /// if the node is known and has a name
-    fn aliased_long_name<'a>(&'a self, config: &'a Config, node_id: u32) -> Option<&'a str> {
+    fn aliased_long_name<'a>(&'a self, config: &'a Config, node_id: NodeId) -> Option<&'a str> {
         // Avoid returning an (aliased) name until we have the node info
         let node = self.nodes.get(&node_id)?;
         if let Some(alias) = config.aliases.get(&node_id) {
@@ -957,7 +957,7 @@ impl Device {
     fn node_row<'a>(
         &self,
         num_messages: usize,
-        node_id: u32,
+        node_id: NodeId,
         favourite: bool,
         config: &'a Config,
         add_buttons: bool,
@@ -1020,7 +1020,7 @@ impl Device {
     fn add_buttons<'a>(
         &self,
         mut node_row: Row<'a, Message>,
-        node_id: u32,
+        node_id: NodeId,
         favourite: bool,
         config: &'a Config,
     ) -> Row<'a, Message> {
@@ -1139,7 +1139,7 @@ pub fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
 
 /// Return a short name to display in the message box as the source of a message.
 /// If the message is from myself, then return None.
-pub fn short_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
+pub fn short_name(nodes: &HashMap<NodeId, MCNodeInfo>, from: NodeId) -> &str {
     nodes
         .get(&from)
         .and_then(|node_info: &MCNodeInfo| node_info.user.as_ref())
@@ -1148,7 +1148,7 @@ pub fn short_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
 }
 
 /// Return a long name for the source node
-pub fn long_name(nodes: &HashMap<u32, MCNodeInfo>, from: u32) -> &str {
+pub fn long_name(nodes: &HashMap<NodeId, MCNodeInfo>, from: NodeId) -> &str {
     nodes
         .get(&from)
         .and_then(|node_info: &MCNodeInfo| node_info.user.as_ref())
@@ -1249,18 +1249,18 @@ mod tests {
 
     #[test]
     fn test_short_name_unknown_node() {
-        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         assert_eq!(short_name(&nodes, 12345), "????");
     }
 
     //noinspection ALL
     #[test]
     fn test_short_name_known_node() {
-        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         nodes.insert(
             12345,
             MCNodeInfo {
-                num: 12345,
+                node_id: 12345,
                 user: Some(MCUser {
                     id: "test".into(),
                     long_name: "Test User".into(),
@@ -1282,11 +1282,11 @@ mod tests {
 
     #[test]
     fn test_short_name_node_without_user() {
-        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         nodes.insert(
             12345,
             MCNodeInfo {
-                num: 12345,
+                node_id: 12345,
                 user: None,
                 position: None,
                 is_ignored: false,
@@ -1297,17 +1297,17 @@ mod tests {
 
     #[test]
     fn test_long_name_unknown_node() {
-        let nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         assert_eq!(long_name(&nodes, 12345), "Node information not available");
     }
 
     #[test]
     fn test_long_name_known_node() {
-        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         nodes.insert(
             12345,
             MCNodeInfo {
-                num: 12345,
+                node_id: 12345,
                 user: Some(MCUser {
                     id: "test".into(),
                     long_name: "Test User Long Name".into(),
@@ -1498,10 +1498,10 @@ mod tests {
     #[test]
     fn test_subscription_my_node_num() {
         let mut device_view = Device::default();
-        assert!(device_view.my_node_num.is_none());
+        assert!(device_view.my_node_id.is_none());
 
         let _ = device_view.update(SubscriptionMessage(MyNodeNum(12345)));
-        assert_eq!(device_view.my_node_num, Some(12345));
+        assert_eq!(device_view.my_node_id, Some(12345));
     }
 
     #[cfg(feature = "meshtastic")]
@@ -1534,7 +1534,7 @@ mod tests {
     #[test]
     fn test_subscription_new_channel() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         assert!(device_view.channels.is_empty());
 
         let channel = MCChannel {
@@ -1555,10 +1555,10 @@ mod tests {
     #[test]
     fn test_subscription_new_node() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test User".into(),
@@ -1584,10 +1584,10 @@ mod tests {
     #[test]
     fn test_subscription_new_node_ignored() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: None,
             position: None,
             is_ignored: true, // Should be ignored
@@ -1602,7 +1602,7 @@ mod tests {
     #[test]
     fn test_subscription_new_node_is_my_node() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(12345);
+        device_view.my_node_id = Some(12345);
 
         let position = test_position(37.7749, -122.4194);
 
@@ -1620,7 +1620,7 @@ mod tests {
         };
 
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(user.clone()),
             position: Some(position.clone()),
             is_ignored: false,
@@ -1644,11 +1644,11 @@ mod tests {
     #[test]
     fn test_update_node_position() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add a node first
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test".into(),
@@ -1683,11 +1683,11 @@ mod tests {
     #[test]
     fn test_update_node_position_my_node() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(12345);
+        device_view.my_node_id = Some(12345);
 
         // Add my node first
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: None,
             position: None,
             is_ignored: false,
@@ -1713,11 +1713,11 @@ mod tests {
     #[test]
     fn test_update_node_user() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add a node first
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: None,
             position: None,
             is_ignored: false,
@@ -1770,10 +1770,10 @@ mod tests {
     #[test]
     fn test_aliased_long_name_with_alias() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Original Name".into(),
@@ -1803,10 +1803,10 @@ mod tests {
     #[test]
     fn test_aliased_long_name_without_alias() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Original Name".into(),
@@ -1835,10 +1835,10 @@ mod tests {
     #[test]
     fn test_aliased_long_name_node_without_user() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: None,
             position: None,
             is_ignored: false,
@@ -1895,7 +1895,7 @@ mod tests {
     #[test]
     fn test_add_multiple_channels() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
             index: 0,
@@ -2093,12 +2093,12 @@ mod tests {
     #[test]
     fn test_new_node_info_with_show_user_updates() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         device_view.show_user_updates = true;
 
         // Add a node first
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test".into(),
@@ -2155,12 +2155,12 @@ mod tests {
     #[test]
     fn test_new_node_position_with_show_position_updates() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         device_view.show_position_updates = true;
 
         // Add a node first
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: None,
             position: None,
             is_ignored: false,
@@ -2264,7 +2264,7 @@ mod tests {
     #[test]
     fn test_channel_msg_with_valid_channel() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add a channel
         let channel = MCChannel {
@@ -2284,7 +2284,7 @@ mod tests {
     #[test]
     fn test_message_ack_with_valid_channel() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add a channel
         let channel = MCChannel {
@@ -2323,7 +2323,7 @@ mod tests {
     #[test]
     fn test_add_channel_without_my_node_num() {
         let mut device_view = Device::default();
-        assert!(device_view.my_node_num.is_none());
+        assert!(device_view.my_node_id.is_none());
 
         let channel = MCChannel {
             index: 0,
@@ -2338,7 +2338,7 @@ mod tests {
     #[test]
     fn test_subscription_disconnected_clears_state() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add some data
@@ -2349,7 +2349,7 @@ mod tests {
         let _ = device_view.update(SubscriptionMessage(NewChannel(channel)));
 
         let node_info = MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: None,
             position: None,
             is_ignored: false,
@@ -2368,23 +2368,23 @@ mod tests {
         device_view.channel_views.clear();
         device_view.nodes.clear();
         device_view.channels.clear();
-        device_view.my_node_num = None;
+        device_view.my_node_id = None;
         device_view.viewing_channel = None;
 
         assert!(device_view.channel_views.is_empty());
         assert!(device_view.nodes.is_empty());
         assert!(device_view.channels.is_empty());
-        assert!(device_view.my_node_num.is_none());
+        assert!(device_view.my_node_id.is_none());
         assert!(device_view.viewing_channel.is_none());
     }
 
     #[test]
     fn test_long_name_node_without_user() {
-        let mut nodes: HashMap<u32, MCNodeInfo> = HashMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         nodes.insert(
             12345,
             MCNodeInfo {
-                num: 12345,
+                node_id: 12345,
                 user: None,
                 position: None,
                 is_ignored: false,
@@ -2396,7 +2396,7 @@ mod tests {
     #[test]
     fn test_cancel_interactive_with_viewing_channel() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         device_view.editing_alias = Some(123);
         device_view.alias = "test".into();
 
@@ -2418,7 +2418,7 @@ mod tests {
     #[test]
     fn test_channel_change_connected_with_channel_view() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add a channel
@@ -2476,7 +2476,7 @@ mod tests {
     #[test]
     fn test_view_with_channels_and_nodes() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add channels
         let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
@@ -2490,7 +2490,7 @@ mod tests {
 
         // Add nodes
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test User".into(),
@@ -2515,7 +2515,7 @@ mod tests {
     #[test]
     fn test_view_with_viewing_channel() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add a channel
         let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
@@ -2534,7 +2534,7 @@ mod tests {
     #[test]
     fn test_view_with_filter() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add channels
         let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
@@ -2557,11 +2557,11 @@ mod tests {
     #[test]
     fn test_view_with_favourite_nodes() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add nodes
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test User".into(),
@@ -2589,11 +2589,11 @@ mod tests {
     #[test]
     fn test_view_with_node_alias() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add node
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Original Name".into(),
@@ -2620,11 +2620,11 @@ mod tests {
     #[test]
     fn test_view_with_editing_node_alias() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add node
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test User".into(),
@@ -2653,11 +2653,11 @@ mod tests {
     #[test]
     fn test_view_with_node_position() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add a node with a position
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test User".into(),
@@ -2682,7 +2682,7 @@ mod tests {
     #[test]
     fn test_header_all_connection_states() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         let device_list_view = DeviceList::default();
         let config = Config::default();
@@ -2706,7 +2706,7 @@ mod tests {
     #[test]
     fn test_header_with_viewing_channel() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add a channel
@@ -2728,12 +2728,12 @@ mod tests {
     #[test]
     fn test_header_with_viewing_node() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
         device_view.connection_state = Connected("device1".into(), RadioType::None);
 
         // Add a node
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test User".into(),
@@ -2838,7 +2838,7 @@ mod tests {
     #[test]
     fn test_channel_and_node_list() {
         let mut device_view = Device::default();
-        device_view.my_node_num = Some(999);
+        device_view.my_node_id = Some(999);
 
         // Add channels and nodes
         let _ = device_view.update(SubscriptionMessage(NewChannel(MCChannel {
@@ -2847,7 +2847,7 @@ mod tests {
         })));
 
         let _ = device_view.update(SubscriptionMessage(NewNode(MCNodeInfo {
-            num: 12345,
+            node_id: 12345,
             user: Some(MCUser {
                 id: "test".into(),
                 long_name: "Test User".into(),

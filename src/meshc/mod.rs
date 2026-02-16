@@ -2,7 +2,7 @@ pub mod subscription;
 
 pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
-use crate::channel_id::ChannelId;
+use crate::channel_id::{ChannelId, NodeId};
 use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriptionEvent;
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
@@ -38,10 +38,10 @@ impl From<&AdvertisementData> for MCNodeInfo {
     fn from(advert: &AdvertisementData) -> Self {
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
-            num: u32::from_be_bytes(advert.prefix[0..4].try_into().unwrap()), // TODO
+            node_id: node_id_from_bytes(&advert.prefix),
             user: Some(MCUser {
                 #[allow(clippy::unwrap_used)]
-                id: u32::from_be_bytes(advert.prefix[0..4].try_into().unwrap()).to_string(), // TODO
+                id: u32::from_be_bytes(advert.prefix[0..6].try_into().unwrap()).to_string(), // TODO
                 long_name: advert.name.to_string(),
                 short_name: advert.name.to_string(), // Use prefix in hex?
                 ..Default::default()
@@ -60,7 +60,7 @@ impl From<&Contact> for MCNodeInfo {
     fn from(contact: &Contact) -> Self {
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
-            num: u32::from_be_bytes(contact.prefix()[0..4].try_into().unwrap()), // TODO
+            node_id: node_id_from_bytes(&contact.prefix()),
             user: Some(MCUser {
                 #[allow(clippy::unwrap_used)]
                 id: u32::from_be_bytes(contact.prefix()[0..4].try_into().unwrap()).to_string(), // TODO
@@ -83,15 +83,13 @@ impl From<ReceivedMessage> for SubscriptionEvent {
         let channel_id = if let Some(channel_index) = message.channel {
             ChannelId::Channel(channel_index as i32)
         } else {
-            ChannelId::Node(u32::from_be_bytes(
-                message.sender_prefix[0..4].try_into().unwrap(),
-            )) // TODO
+            ChannelId::Node(node_id_from_bytes(&message.sender_prefix))
         };
 
         MCMessageReceived(
             channel_id,
             0, // TODO unique message ID?
-            u32::from_be_bytes(message.sender_prefix[0..4].try_into().unwrap()), // TODO
+            node_id_from_bytes(&message.sender_prefix),
             MCMessage::NewTextMessage(message.text.clone()),
             message.sender_timestamp,
         )
@@ -105,6 +103,18 @@ impl From<ChannelInfoData> for SubscriptionEvent {
             name: channel.name,
         })
     }
+}
+
+pub fn node_id_from_bytes(prefix: &[u8; 6]) -> NodeId {
+    let mut bytes = [0u8; 8];
+    bytes[2..8].copy_from_slice(prefix);
+    u64::from_be_bytes(bytes)
+}
+
+pub fn node_id_from_public_key(public_key: &[u8; 32]) -> NodeId {
+    let mut bytes = [0u8; 8];
+    bytes[2..8].copy_from_slice(&public_key[0..6]);
+    u64::from_be_bytes(bytes)
 }
 
 /*

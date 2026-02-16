@@ -8,6 +8,7 @@ use crate::device::SubscriptionEvent::{
 };
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
+use crate::meshc::node_id_from_public_key;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
 use futures::{SinkExt, Stream};
 use iced::stream;
@@ -310,20 +311,18 @@ async fn handle_radio_event(
             while let Ok(Some(message)) = meshcore.commands().lock().await.get_msg().await {
                 if let Some(channel_index) = message.channel
                     && !radio_cache.known_channels.contains(&channel_index)
-                {
-                    if let Ok(channel_info) = meshcore
+                    && let Ok(channel_info) = meshcore
                         .commands()
                         .lock()
                         .await
                         .get_channel(channel_index)
                         .await
-                    {
-                        radio_cache.known_channels.insert(channel_index);
-                        gui_sender
-                            .send(channel_info.into())
-                            .await
-                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                    }
+                {
+                    radio_cache.known_channels.insert(channel_index);
+                    gui_sender
+                        .send(channel_info.into())
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
 
                 gui_sender
@@ -385,9 +384,7 @@ async fn send_self_info(
 ) {
     #[allow(clippy::unwrap_used)]
     gui_sender
-        .send(MyNodeNum(u32::from_be_bytes(
-            self_info.public_key[0..4].try_into().unwrap(),
-        ))) // TODO
+        .send(MyNodeNum(node_id_from_public_key(&self_info.public_key)))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 

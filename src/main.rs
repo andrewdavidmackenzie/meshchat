@@ -13,7 +13,7 @@ use crate::Message::{
     ToggleShowUserUpdates,
 };
 use crate::View::{DeviceListView, DeviceView};
-use crate::channel_id::ChannelId;
+use crate::channel_id::{ChannelId, NodeId};
 use crate::config::{Config, HistoryLength, load_config};
 use crate::device::ConnectionState::Connected;
 use crate::device::Device;
@@ -90,7 +90,7 @@ impl fmt::Display for MCUser {
 /// A Node's Info as represented in the App, maybe a superset of User attributes from different meshes
 #[derive(Clone, Debug)]
 pub struct MCNodeInfo {
-    pub num: u32,
+    pub node_id: NodeId,
     pub user: Option<MCUser>,
     pub position: Option<MCPosition>,
     pub is_ignored: bool,
@@ -171,10 +171,10 @@ pub enum Message {
     AppError(String, String, u32),        // Message, detail, rx_time
     CriticalAppError(String, String, u32), // Message, detail, rx_time
     RemoveNotification(usize),
-    ToggleNodeFavourite(u32),
+    ToggleNodeFavourite(NodeId),
     CopyToClipBoard(String),
-    AddNodeAlias(u32, String),
-    RemoveNodeAlias(u32),
+    AddNodeAlias(NodeId, String),
+    RemoveNodeAlias(NodeId),
     AddDeviceAlias(String, String),
     RemoveDeviceAlias(String),
     Event(Event),
