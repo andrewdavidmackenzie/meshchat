@@ -108,13 +108,13 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 {
                                     let result = match message {
                                         Disconnect => break,
-                                        SendText(text, channel_id, reply_to_node_id) => {
+                                        SendText(text, channel_id, reply_to_message_id) => {
                                             send_text(
                                                 &meshcore,
                                                 &mut radio_cache,
                                                 channel_id,
                                                 text,
-                                                reply_to_node_id,
+                                                reply_to_message_id,
                                                 &mut gui_sender,
                                             )
                                             .await
@@ -239,7 +239,7 @@ async fn send_text(
     radio_cache: &mut RadioCache,
     channel_id: ChannelId,
     text: String,
-    _reply_to_node_id: Option<MessageId>,
+    _reply_to_message_id: Option<MessageId>,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
     let message_sent_info = match channel_id {
@@ -733,14 +733,6 @@ mod tests {
         assert_eq!(level, Some(100));
     }
 
-    // Tests for DeviceState
-
-    #[test]
-    fn device_state_disconnected() {
-        let state = DeviceState::Disconnected;
-        assert!(matches!(state, DeviceState::Disconnected));
-    }
-
     // Additional edge case tests for handle_self_info
 
     #[tokio::test]
@@ -768,7 +760,7 @@ mod tests {
     #[tokio::test]
     async fn handle_self_info_extreme_coordinates() {
         let public_key = [0u8; 32];
-        // Near north pole
+        // Near the North Pole
         let self_info = create_test_self_info("ArcticNode", public_key, 89_999_000, 0);
 
         let mut radio_cache = RadioCache::default();
