@@ -2,6 +2,7 @@ pub mod subscription;
 
 pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
+use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriptionEvent;
@@ -9,7 +10,11 @@ use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;
-use meshcore_rs::events::{AdvertisementData, ChannelInfoData, Contact, ReceivedMessage, SelfInfo};
+use meshcore_rs::events::{
+    AdvertResponseData, AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour,
+    SelfInfo,
+};
+use meshcore_rs::{ChannelMessage, ContactMessage};
 use uuid::Uuid;
 
 /// Conversions between [SelfIno] and MeshChat [MCUser]
@@ -58,14 +63,15 @@ impl From<&AdvertisementData> for MCNodeInfo {
     }
 }
 
-impl From<&Contact> for MCNodeInfo {
-    fn from(contact: &Contact) -> Self {
+impl From<Contact> for MCNodeInfo {
+    fn from(contact: Contact) -> Self {
+        let node_id = node_id_from_prefix(&contact.prefix());
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
-            node_id: node_id_from_prefix(&contact.prefix()),
+            node_id,
             user: Some(MCUser {
                 #[allow(clippy::unwrap_used)]
-                id: node_id_from_prefix(&contact.prefix()).to_string(),
+                id: node_id.to_string(),
                 long_name: contact.adv_name.clone(),
                 short_name: contact.adv_name.clone(),
                 ..Default::default()
@@ -80,20 +86,107 @@ impl From<&Contact> for MCNodeInfo {
     }
 }
 
-impl From<ReceivedMessage> for SubscriptionEvent {
-    fn from(message: ReceivedMessage) -> Self {
-        let channel_id = if let Some(channel_index) = message.channel {
-            ChannelId::Channel(channel_index as i32)
+impl From<ChannelInfoData> for MCChannel {
+    fn from(channel: ChannelInfoData) -> Self {
+        MCChannel {
+            index: channel.channel_idx as i32,
+            name: channel.name,
+        }
+    }
+}
+
+impl From<Neighbour> for MCNodeInfo {
+    fn from(neighbour: Neighbour) -> Self {
+        let node_id = node_id_from_bytes(neighbour.pubkey);
+        MCNodeInfo {
+            #[allow(clippy::unwrap_used)]
+            node_id,
+            user: Some(MCUser {
+                #[allow(clippy::unwrap_used)]
+                id: node_id.to_string(),
+                long_name: node_id.to_string(),
+                short_name: node_id.to_string(),
+                ..Default::default()
+            }),
+            position: None,
+            is_ignored: false,
+        }
+    }
+}
+
+impl From<AdvertResponseData> for MCNodeInfo {
+    fn from(advert: AdvertResponseData) -> Self {
+        let node_id = node_id_from_public_key(&advert.pubkey);
+        let position = if let Some(lat) = advert.lat
+            && let Some(long) = advert.lon
+        {
+            Some(MCPosition {
+                latitude: lat as f64 / 1_000_000.0,
+                longitude: long as f64 / 1_000_000.0,
+                ..Default::default()
+            })
         } else {
-            ChannelId::Node(node_id_from_prefix(&message.sender_prefix))
+            None
         };
 
+        MCNodeInfo {
+            #[allow(clippy::unwrap_used)]
+            node_id,
+            user: Some(MCUser {
+                #[allow(clippy::unwrap_used)]
+                id: node_id.to_string(),
+                long_name: advert.node_name.clone(),
+                short_name: advert.node_name,
+                ..Default::default()
+            }),
+            position,
+            is_ignored: false,
+        }
+    }
+}
+
+impl From<DiscoverEntry> for MCNodeInfo {
+    fn from(discovery: DiscoverEntry) -> Self {
+        let node_id = node_id_from_bytes(discovery.pubkey);
+        MCNodeInfo {
+            #[allow(clippy::unwrap_used)]
+            node_id,
+            user: Some(MCUser {
+                #[allow(clippy::unwrap_used)]
+                id: node_id.to_string(),
+                long_name: discovery.name.clone(),
+                short_name: discovery.name,
+                ..Default::default()
+            }),
+            position: None,
+            is_ignored: false,
+        }
+    }
+}
+
+/// Convert from a ChannelMessage to a SubscriptionEvent::MCMessageReceived
+impl From<ChannelMessage> for SubscriptionEvent {
+    fn from(message: ChannelMessage) -> Self {
         MCMessageReceived(
-            channel_id,
-            0, // TODO unique message ID?
-            node_id_from_prefix(&message.sender_prefix),
-            MCMessage::NewTextMessage(message.text.clone()),
+            ChannelId::Channel(message.channel_idx as i32),
+            message.sender_timestamp, // TODO hack for message id in a channel
+            0,                        // TODO how to get sender?
+            MCMessage::NewTextMessage(message.text),
             message.sender_timestamp,
+        )
+    }
+}
+
+/// Convert from a ContactMessage to a SubscriptionEvent::MCMessageReceived
+impl From<ContactMessage> for SubscriptionEvent {
+    fn from(contact_message: ContactMessage) -> Self {
+        let node_id = node_id_from_prefix(&contact_message.sender_prefix);
+        MCMessageReceived(
+            Node(node_id),
+            contact_message.sender_timestamp, // TODO hack for message id
+            node_id,
+            MCMessage::NewTextMessage(contact_message.text),
+            contact_message.sender_timestamp,
         )
     }
 }
@@ -123,31 +216,15 @@ pub fn node_id_from_public_key(public_key: &[u8; 32]) -> NodeId {
     u64::from_be_bytes(bytes)
 }
 
+pub fn node_id_from_bytes(public_key: Vec<u8>) -> NodeId {
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&public_key[0..8]);
+    u64::from_be_bytes(bytes)
+}
+
 pub fn message_id_from_expected_ack(expected_ack: [u8; 4]) -> MessageId {
     u32::from_be_bytes(expected_ack)
 }
-
-/*
-/// Convert a [ReceivedMessage] from MeshCore radio into a [SubscriptionEvent] for the GUI
-impl From<ReceivedMessage> for SubscriptionEvent {
-    fn from(message: ReceivedMessage) -> Self {
-        let channel_id = if let Some(channel_index) = message.channel {
-            ChannelId::Channel(channel_index as i32)
-        } else {
-            ChannelId::Node(0) // TODO figure this out
-        };
-        MCMessageReceived(
-            channel_id,
-            mesh_packet.id,
-            mesh_packet.from,
-            NewTextMessage(message.text),
-            message.sender_timestamp,
-        )
-    }
-}
-
-
- */
 
 #[cfg(test)]
 mod test {
@@ -155,11 +232,11 @@ mod test {
     use crate::channel_id::ChannelId;
     use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
     use crate::meshc::{
-        message_id_from_expected_ack, node_id_from_prefix, node_id_from_public_key,
-        node_id_to_destination,
+        message_id_from_expected_ack, node_id_from_bytes, node_id_from_prefix,
+        node_id_from_public_key, node_id_to_destination,
     };
     use meshcore_rs::events::{
-        AdvertisementData, ChannelInfoData, Contact, ReceivedMessage, SelfInfo,
+        AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour, SelfInfo,
     };
 
     // Tests for node_id_from_prefix
@@ -219,7 +296,7 @@ mod test {
         let mut public_key = [0xAA; 32]; // All bytes set to 0xAA
         public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
         let node_id = node_id_from_public_key(&public_key);
-        // Only first 8 bytes should matter
+        // Only the first 8 bytes should matter
         assert_eq!(node_id, 0x0102_0304_0506_0708);
     }
 
@@ -254,36 +331,55 @@ mod test {
         assert_eq!(message_id, u32::MAX);
     }
 
-    // Tests for From<ReceivedMessage> for SubscriptionEvent
+    // Tests for From<ChannelMessage> for SubscriptionEvent
 
     #[test]
-    fn received_message_to_subscription_event_channel_message() {
-        let message = ReceivedMessage {
-            sender_prefix: [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
+    fn channel_message_to_subscription_event() {
+        let message = ChannelMessage {
+            channel_idx: 2,
             path_len: 1,
             txt_type: 0,
             sender_timestamp: 1234567890,
             text: "Hello from channel".to_string(),
             snr: None,
-            signature: None,
-            channel: Some(2),
         };
 
         let event: SubscriptionEvent = message.into();
 
-        let MCMessageReceived(channel_id, _msg_id, from, msg, timestamp) = event else {
+        let MCMessageReceived(channel_id, _msg_id, _from, msg, timestamp) = event else {
             unreachable!("Expected MCMessageReceived event")
         };
 
         assert_eq!(channel_id, ChannelId::Channel(2));
-        assert_eq!(from, 0x0102_0304_0506_0000);
         assert_eq!(timestamp, 1234567890);
         assert_eq!(msg.to_string(), "Hello from channel");
     }
 
     #[test]
-    fn received_message_to_subscription_event_direct_message() {
-        let message = ReceivedMessage {
+    fn channel_message_to_subscription_event_channel_zero() {
+        let message = ChannelMessage {
+            channel_idx: 0,
+            path_len: 2,
+            txt_type: 0,
+            sender_timestamp: 100,
+            text: "Channel 0 message".to_string(),
+            snr: None,
+        };
+
+        let event: SubscriptionEvent = message.into();
+
+        let MCMessageReceived(channel_id, _, _, _, _) = event else {
+            unreachable!("Expected MCMessageReceived event")
+        };
+
+        assert_eq!(channel_id, ChannelId::Channel(0));
+    }
+
+    // Tests for From<ContactMessage> for SubscriptionEvent
+
+    #[test]
+    fn contact_message_to_subscription_event() {
+        let message = ContactMessage {
             sender_prefix: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
             path_len: 0,
             txt_type: 0,
@@ -291,7 +387,6 @@ mod test {
             text: "Direct message".to_string(),
             snr: Some(10.5),
             signature: None,
-            channel: None, // No channel = direct message
         };
 
         let event: SubscriptionEvent = message.into();
@@ -302,32 +397,10 @@ mod test {
 
         // Direct message should use Node channel ID
         let expected_node_id = 0xAABB_CCDD_EEFF_0000_u64;
-        assert_eq!(channel_id, ChannelId::Node(expected_node_id));
+        assert_eq!(channel_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
         assert_eq!(timestamp, 1234567891);
         assert_eq!(msg.to_string(), "Direct message");
-    }
-
-    #[test]
-    fn received_message_to_subscription_event_channel_zero() {
-        let message = ReceivedMessage {
-            sender_prefix: [0x10, 0x20, 0x30, 0x40, 0x50, 0x60],
-            path_len: 2,
-            txt_type: 0,
-            sender_timestamp: 100,
-            text: "Channel 0 message".to_string(),
-            snr: None,
-            signature: None,
-            channel: Some(0),
-        };
-
-        let event: SubscriptionEvent = message.into();
-
-        let MCMessageReceived(channel_id, _, _, _, _) = event else {
-            unreachable!("Expected MCMessageReceived event")
-        };
-
-        assert_eq!(channel_id, ChannelId::Channel(0));
     }
 
     // Tests for From<ChannelInfoData> for SubscriptionEvent
@@ -449,7 +522,7 @@ mod test {
             last_modification_timestamp: 0,
         };
 
-        let node_info: MCNodeInfo = (&contact).into();
+        let node_info: MCNodeInfo = contact.into();
 
         assert_eq!(node_info.node_id, 0xAABB_CCDD_EEFF_0000);
         assert!(!node_info.is_ignored);
@@ -598,5 +671,150 @@ mod test {
 
         assert!((position.latitude - 89.999999).abs() < 0.000001);
         assert!((position.longitude - 179.999999).abs() < 0.000001);
+    }
+
+    // Tests for node_id_from_bytes
+
+    #[test]
+    fn node_id_from_bytes_basic() {
+        let bytes = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, 0x0102_0304_0506_0708);
+    }
+
+    #[test]
+    fn node_id_from_bytes_all_zeros() {
+        let bytes = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, 0);
+    }
+
+    #[test]
+    fn node_id_from_bytes_all_ones() {
+        let bytes = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, u64::MAX);
+    }
+
+    #[test]
+    fn node_id_from_bytes_longer_input() {
+        // Only the first 8 bytes should be used
+        let bytes = vec![
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0xAA, 0xBB, 0xCC,
+        ];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, 0x0102_0304_0506_0708);
+    }
+
+    // Tests for From<Neighbour> for MCNodeInfo
+
+    #[test]
+    fn neighbour_to_node_info() {
+        let neighbour = Neighbour {
+            pubkey: vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88],
+            secs_ago: 120,
+            snr: 8.5,
+        };
+
+        let node_info: MCNodeInfo = neighbour.into();
+
+        assert_eq!(node_info.node_id, 0x1122_3344_5566_7788);
+        assert!(!node_info.is_ignored);
+        assert!(node_info.position.is_none());
+
+        let user = node_info.user.expect("Expected user");
+        assert_eq!(user.id, 0x1122_3344_5566_7788_u64.to_string());
+    }
+
+    #[test]
+    fn neighbour_to_node_info_zero_pubkey() {
+        let neighbour = Neighbour {
+            pubkey: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            secs_ago: 0,
+            snr: 0.0,
+        };
+
+        let node_info: MCNodeInfo = neighbour.into();
+
+        assert_eq!(node_info.node_id, 0);
+    }
+
+    // Tests for From<DiscoverEntry> for MCNodeInfo
+
+    #[test]
+    fn discover_entry_to_node_info() {
+        let entry = DiscoverEntry {
+            pubkey: vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11],
+            name: "DiscoveredNode".to_string(),
+        };
+
+        let node_info: MCNodeInfo = entry.into();
+
+        assert_eq!(node_info.node_id, 0xAABB_CCDD_EEFF_0011);
+        assert!(!node_info.is_ignored);
+        assert!(node_info.position.is_none());
+
+        let user = node_info.user.expect("Expected user");
+        assert_eq!(user.long_name, "DiscoveredNode");
+        assert_eq!(user.short_name, "DiscoveredNode");
+        assert_eq!(user.id, 0xAABB_CCDD_EEFF_0011_u64.to_string());
+    }
+
+    #[test]
+    fn discover_entry_to_node_info_empty_name() {
+        let entry = DiscoverEntry {
+            pubkey: vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
+            name: "".to_string(),
+        };
+
+        let node_info: MCNodeInfo = entry.into();
+
+        let user = node_info.user.expect("Expected user");
+        assert_eq!(user.long_name, "");
+        assert_eq!(user.short_name, "");
+    }
+
+    // Tests for From<ChannelInfoData> for MCChannel
+
+    #[test]
+    fn channel_info_to_mcchannel() {
+        let channel_info = ChannelInfoData {
+            channel_idx: 5,
+            name: "TestChannel".to_string(),
+            secret: [0u8; 16],
+        };
+
+        let channel: MCChannel = channel_info.into();
+
+        assert_eq!(channel.index, 5);
+        assert_eq!(channel.name, "TestChannel");
+    }
+
+    #[test]
+    fn channel_info_to_mcchannel_zero_index() {
+        let channel_info = ChannelInfoData {
+            channel_idx: 0,
+            name: "Primary".to_string(),
+            secret: [0xFF; 16],
+        };
+
+        let channel: MCChannel = channel_info.into();
+
+        assert_eq!(channel.index, 0);
+        assert_eq!(channel.name, "Primary");
+    }
+
+    #[test]
+    fn channel_info_to_mcchannel_max_index() {
+        let channel_info = ChannelInfoData {
+            channel_idx: 255,
+            name: "MaxChannel".to_string(),
+            secret: [0xAB; 16],
+        };
+
+        let channel: MCChannel = channel_info.into();
+
+        assert_eq!(channel.index, 255);
+        assert_eq!(channel.name, "MaxChannel");
     }
 }

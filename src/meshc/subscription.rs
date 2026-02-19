@@ -1,11 +1,12 @@
+use crate::channel_id::ChannelId::{Channel, Node};
 use crate::channel_id::{ChannelId, MessageId, NodeId};
-use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
 };
 use crate::device::SubscriptionEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
-    MCMessageReceived, MyNodeNum, MyPosition, MyUserInfo, NewNode, SendError,
+    MCMessageReceived, MessageACK, MyNodeNum, MyPosition, MyUserInfo, NewChannel, NewNode,
+    SendError,
 };
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
@@ -14,12 +15,17 @@ use crate::meshc::{message_id_from_expected_ack, node_id_from_public_key, node_i
 use crate::{MCPosition, MCUser, MeshChat};
 use futures::{SinkExt, Stream};
 use iced::stream;
-use meshcore_rs::events::{BatteryInfo, Contact, EventPayload, SelfInfo};
-use meshcore_rs::{EventType, MeshCore, MeshCoreEvent};
-use std::collections::HashSet;
+use meshcore_rs::events::{
+    BatteryInfo, ChannelInfoData, Contact, EventPayload, MsgSentInfo, NeighboursData, SelfInfo,
+};
+use meshcore_rs::{ChannelMessage, ContactMessage, Error, EventType, MeshCore, MeshCoreEvent};
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
+
+use crate::channel_view_entry::MCMessage;
+use tokio::time::{Duration, timeout};
 
 enum DeviceState {
     Disconnected,
@@ -30,6 +36,7 @@ enum DeviceState {
 struct RadioCache {
     self_id: NodeId,
     known_channels: HashSet<u8>,
+    pending_ack: HashMap<u32, ChannelId>,
 }
 
 /// A stream of [SubscriptionEvent] for comms between the app and the radio
@@ -108,13 +115,13 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 {
                                     let result = match message {
                                         Disconnect => break,
-                                        SendText(text, channel_id, reply_to_node_id) => {
+                                        SendText(text, channel_id, reply_to_message_id) => {
                                             send_text(
                                                 &meshcore,
                                                 &mut radio_cache,
                                                 channel_id,
                                                 text,
-                                                reply_to_node_id,
+                                                reply_to_message_id,
                                                 &mut gui_sender,
                                             )
                                             .await
@@ -172,6 +179,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
                         // Disconnect
                         device_state = Disconnected;
+                        // Suppress disconnect errors
                         let _ = do_disconnect(meshcore).await;
                         gui_sender
                             .send(DisconnectedEvent(ble_device))
@@ -187,12 +195,16 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 /// Connect to a specific BlueTooth device by name and return a [MeshCore] that receives messages
 /// from the radio and can be used to send messages to the radio.
 async fn do_connect(ble_device: &str) -> meshcore_rs::Result<MeshCore> {
-    MeshCore::ble_connect(ble_device).await
+    timeout(Duration::from_secs(10), MeshCore::ble_connect(ble_device))
+        .await
+        .map_err(|_| Error::Timeout("Disconnect".to_string()))?
 }
 
 /// Disconnect from the radio we are currently connected to using the [MeshCore]
 async fn do_disconnect(meshcore: MeshCore) -> meshcore_rs::Result<()> {
-    meshcore.disconnect().await
+    timeout(Duration::from_secs(1), meshcore.disconnect())
+        .await
+        .map_err(|_| Error::Timeout("Disconnect".to_string()))?
 }
 
 /// Get information about the connected device
@@ -201,22 +213,43 @@ async fn get_my_info(
     meshcore: &MeshCore,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
-    // Send APPSTART to initialize connection and get device info
+    // Send APPSTART to initialise connection and get device info
     let self_info = meshcore.commands().lock().await.send_appstart().await?;
     handle_self_info(radio_cache, &self_info, gui_sender).await;
 
-    // Add known nodes
+    // Add known contacts
     let contacts = get_contacts(meshcore).await?;
     for contact in contacts {
         gui_sender
-            .send(NewNode((&contact).into()))
+            .send(NewNode(contact.into()))
             .await
             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
     }
 
+    get_channels(meshcore, gui_sender).await?;
+
     // Get battery info
     if let Ok(battery) = meshcore.commands().lock().await.get_bat().await {
         handle_battery_info(&battery, gui_sender).await;
+    }
+
+    Ok(())
+}
+
+/// Fetch all known channels from the radio and send them to the GUI
+async fn get_channels(
+    meshcore: &MeshCore,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) -> meshcore_rs::Result<()> {
+    let mut index = 0;
+    while let Ok(channel) = meshcore.commands().lock().await.get_channel(index).await {
+        if !channel.name.is_empty() {
+            gui_sender
+                .send(NewChannel(channel.into()))
+                .await
+                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+        }
+        index += 1;
     }
 
     Ok(())
@@ -228,8 +261,44 @@ async fn get_contacts(meshcore: &MeshCore) -> meshcore_rs::Result<Vec<Contact>> 
         .commands()
         .lock()
         .await
-        .get_contacts_with_timeout(0, std::time::Duration::from_secs(30))
+        .get_contacts_with_timeout(0, Duration::from_secs(30))
         .await
+}
+
+/// Fetch known neighbours from a contact
+#[allow(dead_code)]
+async fn get_neighbours(
+    meshcore: &MeshCore,
+    contact: &Contact,
+) -> meshcore_rs::Result<NeighboursData> {
+    meshcore
+        .commands()
+        .lock()
+        .await
+        .request_neighbours(contact, 64, 0)
+        .await
+}
+
+/// Fetch any pending messages from the radio and send them to the GUI
+async fn get_pending_messages(
+    meshcore: &MeshCore,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+    while let Ok(Some(event)) = meshcore.commands().lock().await.get_msg().await {
+        match event.event_type {
+            EventType::ContactMsgRecv => {
+                if let EventPayload::ContactMessage(contact_message) = event.payload {
+                    handle_new_contact_message(contact_message, gui_sender).await;
+                }
+            }
+            EventType::ChannelMsgRecv => {
+                if let EventPayload::ChannelMessage(channel_message) = event.payload {
+                    handle_new_channel_message(channel_message, gui_sender).await;
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Send a text message
@@ -239,43 +308,61 @@ async fn send_text(
     radio_cache: &mut RadioCache,
     channel_id: ChannelId,
     text: String,
-    _reply_to_node_id: Option<MessageId>,
+    _reply_to_message_id: Option<MessageId>,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
-    let message_sent_info = match channel_id {
-        ChannelId::Channel(channel_index) => {
-            let chan_idx: u8 = channel_index.try_into().unwrap_or(0); // TODO
+    match channel_id {
+        Channel(channel_index) => {
+            let chan_idx: u8 = channel_index
+                .try_into()
+                .map_err(|_| Error::Channel("Invalid Channel Number".to_string()))?;
             meshcore
                 .commands()
                 .lock()
                 .await
-                .send_chan_msg(chan_idx, &text, None)
+                .send_channel_msg(chan_idx, &text, None)
+                .await?;
+
+            // Reflect the message back into the GUI
+            let msg = MCMessage::NewTextMessage(text);
+            gui_sender
+                .send(MCMessageReceived(
+                    channel_id,
+                    MeshChat::now(), // TODO hack for message id in a channel
+                    radio_cache.self_id,
+                    msg,
+                    MeshChat::now(),
+                ))
                 .await
+                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
         }
-        ChannelId::Node(node_id) => {
-            meshcore
+        Node(node_id) => {
+            let message_sent_info = meshcore
                 .commands()
                 .lock()
                 .await
                 .send_msg(node_id_to_destination(&node_id), &text, None)
+                .await?;
+
+            let message_id = message_id_from_expected_ack(message_sent_info.expected_ack);
+
+            // Mark this sent message as pending an ACK
+            radio_cache.pending_ack.insert(message_id, Node(node_id));
+
+            // Reflect the message back into the GUI
+            let msg = MCMessage::NewTextMessage(text);
+            gui_sender
+                .send(MCMessageReceived(
+                    channel_id,
+                    message_id,
+                    radio_cache.self_id,
+                    msg,
+                    MeshChat::now(),
+                ))
                 .await
+                .unwrap_or_else(|e| eprintln!("Send error: {e}"));
         }
-    }?;
-
-    // TODO maybe leave this to MsgSentInfo event back from radio?
-
-    // Reflect the message back into the GUI
-    let msg = MCMessage::NewTextMessage(text);
-    gui_sender
-        .send(MCMessageReceived(
-            channel_id,
-            message_id_from_expected_ack(message_sent_info.expected_ack),
-            radio_cache.self_id,
-            msg,
-            MeshChat::now(),
-        ))
-        .await
-        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+    }
 
     Ok(())
 }
@@ -373,22 +460,84 @@ async fn handle_battery_info(
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
 
+async fn handle_new_channel(
+    radio_cache: &mut RadioCache,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    channel_info: ChannelInfoData,
+) {
+    radio_cache.known_channels.insert(channel_info.channel_idx);
+    gui_sender
+        .send(channel_info.into())
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+}
+
+async fn handle_neighbours(
+    neighbours: NeighboursData,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+    println!("Neighbours: {neighbours:?}");
+    for neighbour in neighbours.neighbours {
+        gui_sender
+            .send(NewNode(neighbour.into()))
+            .await
+            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+    }
+}
+
+async fn handle_new_channel_message(
+    channel_message: ChannelMessage,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+    // TODO is this needed?
+    /*
+    let channel_index = channel_message.channel_idx;
+    if !radio_cache.known_channels.contains(&channel_index)
+        && let Ok(channel_info) = meshcore
+            .commands()
+            .lock()
+            .await
+            .get_channel(channel_index)
+            .await
+    {
+        handle_new_channel(radio_cache, gui_sender, channel_info).await;
+    }
+     */
+
+    gui_sender
+        .send(channel_message.into())
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+}
+
+async fn handle_new_contact_message(
+    contact_message: ContactMessage,
+    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+    gui_sender
+        .send(contact_message.into())
+        .await
+        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+}
+
+async fn handle_message_sent(
+    _message_sent: MsgSentInfo,
+    _gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+
+    //    let message_id = message_id_from_expected_ack(message_sent.expected_ack);
+}
+
 async fn handle_radio_event(
     radio_cache: &mut RadioCache,
     meshcore: &MeshCore,
     meshcore_event: Box<MeshCoreEvent>,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
-    println!("{meshcore_event:?}");
     match meshcore_event.event_type {
         EventType::NeighboursResponse => {
             if let EventPayload::Neighbours(neighbours) = meshcore_event.payload {
-                println!("Neighbours: {neighbours:?}");
-                for neighbor in neighbours.neighbours {
-                    println!("Neighbor: {neighbor:?}");
-                    //     pub pubkey: Vec<u8>,
-                    // Send node info?
-                }
+                handle_neighbours(neighbours, gui_sender).await;
             }
         }
         EventType::Contacts => {
@@ -396,22 +545,17 @@ async fn handle_radio_event(
                 println!("Contacts: {contacts:?}");
             }
         }
-        EventType::NewContact => {
+        EventType::NewContact | EventType::NextContact => {
             if let EventPayload::Contact(contact) = meshcore_event.payload {
-                println!("NewContact: {contact:?}");
+                gui_sender
+                    .send(NewNode(contact.into()))
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
-        }
-        EventType::NextContact => {
-            println!("NextContact");
         }
         EventType::SelfInfo => {
             if let EventPayload::SelfInfo(self_info) = meshcore_event.payload {
                 handle_self_info(radio_cache, &self_info, gui_sender).await;
-            }
-        }
-        EventType::DeviceInfo => {
-            if let EventPayload::DeviceInfo(device_info) = meshcore_event.payload {
-                println!("Device Info: {device_info:?}");
             }
         }
         EventType::Battery => {
@@ -421,34 +565,16 @@ async fn handle_radio_event(
         }
         EventType::ChannelInfo => {
             if let EventPayload::ChannelInfo(channel_info) = meshcore_event.payload {
-                println!("ChannelInfo: {channel_info:?}");
-                /*
-                    pub channel_idx: u8,
-                    /// Channel name
-                    pub name: String,
-                    can use to set name for channels
-                self.gui_sender
-                    .send(NewChannel(MCChannel::from(channel)))
-                    .await
-                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                 */
+                handle_new_channel(radio_cache, gui_sender, channel_info).await;
             }
         }
         EventType::MsgSent => {
-            if let EventPayload::MsgSent(msg_sent) = meshcore_event.payload {
-                println!("MsgSent: {msg_sent:?}");
-                /*
-                self.gui_sender
-                    .send(MessageACK(channel_id, data.request_id))
-                    .await
-                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-
-                 */
+            if let EventPayload::MsgSent(message_sent_info) = meshcore_event.payload {
+                handle_message_sent(message_sent_info, gui_sender).await;
             }
         }
         EventType::Advertisement => {
             if let EventPayload::Advertisement(advertisement) = meshcore_event.payload {
-                println!("Advertisement: {advertisement:?}");
                 gui_sender
                     .send(NewNode((&advertisement).into()))
                     .await
@@ -456,66 +582,48 @@ async fn handle_radio_event(
             }
         }
         EventType::MessagesWaiting => {
-            while let Ok(Some(message)) = meshcore.commands().lock().await.get_msg().await {
-                if let Some(channel_index) = message.channel
-                    && !radio_cache.known_channels.contains(&channel_index)
-                    && let Ok(channel_info) = meshcore
-                        .commands()
-                        .lock()
-                        .await
-                        .get_channel(channel_index)
-                        .await
-                {
-                    radio_cache.known_channels.insert(channel_index);
-                    gui_sender
-                        .send(channel_info.into())
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                }
-
-                gui_sender
-                    .send(message.into())
-                    .await
-                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-            }
+            get_pending_messages(meshcore, gui_sender).await;
         }
         EventType::DiscoverResponse => {
             if let EventPayload::DiscoverResponse(discover_entry) = meshcore_event.payload {
-                println!("DiscoverResponse: {discover_entry:?}");
-                println!("Attributes: {:?}", meshcore_event.attributes);
-                /*
-                send node info pubkey and name?
-                 */
+                for discovery in discover_entry {
+                    gui_sender
+                        .send(NewNode(discovery.into()))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
             }
         }
         EventType::AdvertResponse => {
             if let EventPayload::AdvertResponse(advert_response) = meshcore_event.payload {
-                println!("AdvertResponse: {advert_response:?}");
-                /*
-                send node info? name position
-
-                    pub pubkey: [u8; 32],
-                    /// Advertisement type
-                    pub adv_type: u8,
-                    /// Node name
-                    pub node_name: String,
-                    /// Latitude (optional)
-                    pub lat: Option<i32>,
-                    /// Longitude (optional)
-                    pub lon: Option<i32>,
-                    /// Node description (optional)
-                    pub node_desc: Option<String>,
-                 */
-            }
-        }
-        EventType::ContactMsgRecv | EventType::ChannelMsgRecv => {
-            if let EventPayload::Message(message) = meshcore_event.payload {
                 gui_sender
-                    .send(message.into())
+                    .send(NewNode(advert_response.into()))
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
         }
+        EventType::ContactMsgRecv => {
+            if let EventPayload::ContactMessage(contact_message) = meshcore_event.payload {
+                handle_new_contact_message(contact_message, gui_sender).await;
+            }
+        }
+        EventType::ChannelMsgRecv => {
+            if let EventPayload::ChannelMessage(channel_message) = meshcore_event.payload {
+                handle_new_channel_message(channel_message, gui_sender).await;
+            }
+        }
+        EventType::Ack => {
+            if let EventPayload::Ack { tag } = meshcore_event.payload {
+                let message_id = message_id_from_expected_ack(tag);
+                if let Some(channel_id) = radio_cache.pending_ack.remove(&message_id) {
+                    gui_sender
+                        .send(MessageACK(channel_id, message_id))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
+            }
+        }
+        EventType::NoMoreMessages | EventType::Ok => {}
         EventType::Error => {
             // TODO maybe avoid this as we will report errors back from commands that
             // wait for a response, but here we will receive a duplicate....
@@ -530,10 +638,11 @@ async fn handle_radio_event(
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
         }
+        EventType::LogData => { /* LogData payload */ }
         _ => {
             println!(
-                "Event Type = {:?} ({})",
-                meshcore_event.event_type, meshcore_event.event_type as u32
+                "Unhandled Event Type ({}) = {meshcore_event:?}",
+                meshcore_event.event_type as u32
             );
         }
     }
@@ -547,6 +656,7 @@ mod tests {
     use futures::StreamExt;
     use futures::channel::mpsc;
     use meshcore_rs::events::{BatteryInfo, SelfInfo};
+    use std::default::Default;
 
     // Helper to create a test sender/receiver pair
     fn create_test_channel() -> (
@@ -603,8 +713,10 @@ mod tests {
 
     #[test]
     fn radio_cache_self_id() {
-        let mut cache = RadioCache::default();
-        cache.self_id = 0x0102_0304_0506_0708;
+        let cache = RadioCache {
+            self_id: 0x0102_0304_0506_0708,
+            ..Default::default()
+        };
         assert_eq!(cache.self_id, 0x0102_0304_0506_0708);
     }
 
@@ -733,14 +845,6 @@ mod tests {
         assert_eq!(level, Some(100));
     }
 
-    // Tests for DeviceState
-
-    #[test]
-    fn device_state_disconnected() {
-        let state = DeviceState::Disconnected;
-        assert!(matches!(state, DeviceState::Disconnected));
-    }
-
     // Additional edge case tests for handle_self_info
 
     #[tokio::test]
@@ -768,7 +872,7 @@ mod tests {
     #[tokio::test]
     async fn handle_self_info_extreme_coordinates() {
         let public_key = [0u8; 32];
-        // Near north pole
+        // Near the North Pole
         let self_info = create_test_self_info("ArcticNode", public_key, 89_999_000, 0);
 
         let mut radio_cache = RadioCache::default();
