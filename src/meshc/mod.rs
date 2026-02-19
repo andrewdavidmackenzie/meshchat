@@ -9,7 +9,10 @@ use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;
-use meshcore_rs::events::{AdvertisementData, ChannelInfoData, Contact, ReceivedMessage, SelfInfo};
+use meshcore_rs::events::{
+    AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour, ReceivedMessage,
+    SelfInfo,
+};
 use uuid::Uuid;
 
 /// Conversions between [SelfIno] and MeshChat [MCUser]
@@ -58,14 +61,15 @@ impl From<&AdvertisementData> for MCNodeInfo {
     }
 }
 
-impl From<&Contact> for MCNodeInfo {
-    fn from(contact: &Contact) -> Self {
+impl From<Contact> for MCNodeInfo {
+    fn from(contact: Contact) -> Self {
+        let node_id = node_id_from_prefix(&contact.prefix());
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
-            node_id: node_id_from_prefix(&contact.prefix()),
+            node_id,
             user: Some(MCUser {
                 #[allow(clippy::unwrap_used)]
-                id: node_id_from_prefix(&contact.prefix()).to_string(),
+                id: node_id.to_string(),
                 long_name: contact.adv_name.clone(),
                 short_name: contact.adv_name.clone(),
                 ..Default::default()
@@ -75,6 +79,53 @@ impl From<&Contact> for MCNodeInfo {
                 longitude: contact.adv_lon as f64 / 1_000_000.0,
                 ..Default::default()
             }),
+            is_ignored: false,
+        }
+    }
+}
+
+impl From<ChannelInfoData> for MCChannel {
+    fn from(channel: ChannelInfoData) -> Self {
+        MCChannel {
+            index: channel.channel_idx as i32,
+            name: channel.name,
+        }
+    }
+}
+
+impl From<Neighbour> for MCNodeInfo {
+    fn from(neighbour: Neighbour) -> Self {
+        let node_id = node_id_from_bytes(neighbour.pubkey);
+        MCNodeInfo {
+            #[allow(clippy::unwrap_used)]
+            node_id,
+            user: Some(MCUser {
+                #[allow(clippy::unwrap_used)]
+                id: node_id.to_string(),
+                long_name: node_id.to_string(),
+                short_name: node_id.to_string(),
+                ..Default::default()
+            }),
+            position: None,
+            is_ignored: false,
+        }
+    }
+}
+
+impl From<DiscoverEntry> for MCNodeInfo {
+    fn from(discovery: DiscoverEntry) -> Self {
+        let node_id = node_id_from_bytes(discovery.pubkey);
+        MCNodeInfo {
+            #[allow(clippy::unwrap_used)]
+            node_id,
+            user: Some(MCUser {
+                #[allow(clippy::unwrap_used)]
+                id: node_id.to_string(),
+                long_name: discovery.name.clone(),
+                short_name: discovery.name,
+                ..Default::default()
+            }),
+            position: None,
             is_ignored: false,
         }
     }
@@ -90,9 +141,9 @@ impl From<ReceivedMessage> for SubscriptionEvent {
 
         MCMessageReceived(
             channel_id,
-            0, // TODO unique message ID?
+            message.sender_timestamp, // TODO Chack for message id in a channel
             node_id_from_prefix(&message.sender_prefix),
-            MCMessage::NewTextMessage(message.text.clone()),
+            MCMessage::NewTextMessage(message.text),
             message.sender_timestamp,
         )
     }
@@ -118,6 +169,12 @@ pub fn node_id_to_destination(node_id: &NodeId) -> Destination {
 }
 
 pub fn node_id_from_public_key(public_key: &[u8; 32]) -> NodeId {
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&public_key[0..8]);
+    u64::from_be_bytes(bytes)
+}
+
+pub fn node_id_from_bytes(public_key: Vec<u8>) -> NodeId {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&public_key[0..8]);
     u64::from_be_bytes(bytes)
@@ -219,7 +276,7 @@ mod test {
         let mut public_key = [0xAA; 32]; // All bytes set to 0xAA
         public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
         let node_id = node_id_from_public_key(&public_key);
-        // Only first 8 bytes should matter
+        // Only the first 8 bytes should matter
         assert_eq!(node_id, 0x0102_0304_0506_0708);
     }
 
@@ -449,7 +506,7 @@ mod test {
             last_modification_timestamp: 0,
         };
 
-        let node_info: MCNodeInfo = (&contact).into();
+        let node_info: MCNodeInfo = contact.into();
 
         assert_eq!(node_info.node_id, 0xAABB_CCDD_EEFF_0000);
         assert!(!node_info.is_ignored);

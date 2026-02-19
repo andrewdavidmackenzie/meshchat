@@ -13,7 +13,7 @@ include = ["src", "assets", "build.rs", "README.md", "LICENSE"]
 default = ["meshtastic", "meshcore"]
 meshcore = ["dep:meshcore-rs"]
 meshtastic = ["dep:meshtastic"]
-debug = ["iced/debug"] # use "... --features "debug" to enable this for Iced
+debug = ["iced/debug", "dep:tracing", "dep:tracing-subscriber"] # use "... --features "debug" to enable this for Iced
 hot = ["iced/hot"]
 # Allow the feature to check for app updates to be disabled by people building for distribution channels that take care of updates themselves
 auto-update = ["self_update"]
@@ -49,8 +49,10 @@ uuid = { version = "1.21.0", default-features = false, features = ["v4"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
-meshcore-rs = { version = "0.1.4", default-features = false, features = ["ble"], optional = true }
+meshcore-rs = { path = "../meshcore-rs", default-features = false, features = ["ble"], optional = true }
 self_update = { version = "0.42.0", default-features = false, optional = true }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 
 [dev-dependencies]
 tempfile = "3.25.0"

@@ -838,9 +838,9 @@ mod tests {
 
         // Check event was sent
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MyNodeNum event");
-        assert!(matches!(event, Some(MyNodeNum(12345))));
+        assert!(matches!(event, MyNodeNum(12345)));
     }
 
     #[allow(deprecated)]
@@ -945,10 +945,8 @@ mod tests {
 
         // No event should be sent for the disabled channel
         assert!(
-            receiver
-                .try_next()
-                .expect("Failed to check channel for disabled channel")
-                .is_none()
+            receiver.try_recv().is_err(),
+            "Expected no event for disabled channel but received one"
         );
     }
 
@@ -976,11 +974,9 @@ mod tests {
 
         // Check event was sent
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive RadioNotification event");
-        assert!(
-            matches!(event, Some(RadioNotification(msg, 1234567890)) if msg == "Test notification")
-        );
+        assert!(matches!(event, RadioNotification(msg, 1234567890) if msg == "Test notification"));
     }
 
     #[tokio::test]
@@ -1002,10 +998,8 @@ mod tests {
 
         // No event should be sent for the unknown payload
         assert!(
-            receiver
-                .try_next()
-                .expect("Failed to check channel for unknown payload")
-                .is_none()
+            receiver.try_recv().is_err(),
+            "Expected no event for unknown payload but received one"
         );
     }
 
@@ -1021,9 +1015,8 @@ mod tests {
         router.handle_a_mesh_packet(&packet).await;
 
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MCMessageReceived event for new text message");
-        let event = event.expect("Should receive Some event for new text message");
         assert!(
             matches!(&event, MCMessageReceived(channel_id, id, from, msg, _rx_time)
                 if *channel_id == ChannelId::Channel(0) && *id == 123 && *from == 2000
@@ -1044,9 +1037,8 @@ mod tests {
         router.handle_a_mesh_packet(&packet).await;
 
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MCMessageReceived event for text reply");
-        let event = event.expect("Should receive Some event for text reply");
         assert!(
             matches!(&event, MCMessageReceived(_, _, _, msg, _)
                 if matches!(msg, TextMessageReply(reply_id, text) if *reply_id == 456 && text == "Reply text")),
@@ -1066,9 +1058,8 @@ mod tests {
         router.handle_a_mesh_packet(&packet).await;
 
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MCMessageReceived event for emoji reply");
-        let event = event.expect("Should receive Some event for emoji reply");
         assert!(
             matches!(&event, MCMessageReceived(_, _, _, msg, _)
                 if matches!(msg, EmojiReply(reply_id, emoji) if *reply_id == 456 && emoji == "👍")),
@@ -1088,9 +1079,8 @@ mod tests {
         router.handle_a_mesh_packet(&packet).await;
 
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MessageACK event for broadcast");
-        let event = event.expect("Should receive Some event for broadcast ACK");
         assert!(
             matches!(&event, MessageACK(channel_id, request_id)
                 if *channel_id == ChannelId::Channel(0) && *request_id == 789),
@@ -1110,9 +1100,8 @@ mod tests {
         router.handle_a_mesh_packet(&packet).await;
 
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MessageACK event for DM");
-        let event = event.expect("Should receive Some event for DM ACK");
         assert!(
             matches!(&event, MessageACK(channel_id, request_id)
                 if *channel_id == Node(2000) && *request_id == 789),
@@ -1134,10 +1123,8 @@ mod tests {
 
         // No event should be sent for a packet without a decoded payload
         assert!(
-            receiver
-                .try_next()
-                .expect("Failed to check channel for packet with no payload")
-                .is_none()
+            receiver.try_recv().is_err(),
+            "Expected no event for packet with no payload but received one"
         );
     }
 
@@ -1166,9 +1153,9 @@ mod tests {
 
         // Check event was sent
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MyNodeNum event from PacketRouter");
-        assert!(matches!(event, Some(MyNodeNum(99999))));
+        assert!(matches!(event, MyNodeNum(99999)));
     }
 
     #[test]
@@ -1182,8 +1169,8 @@ mod tests {
         assert!(result.is_ok());
 
         let event = receiver
-            .try_next()
+            .try_recv()
             .expect("Failed to receive MCMessageReceived event from PacketRouter");
-        assert!(matches!(event, Some(MCMessageReceived(_, _, _, _, _))));
+        assert!(matches!(event, MCMessageReceived(_, _, _, _, _)));
     }
 }

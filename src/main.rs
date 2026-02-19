@@ -214,6 +214,11 @@ async fn check_for_update() -> Result<Status, String> {
 }
 
 fn main() -> iced::Result {
+    #[cfg(feature = "debug")]
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
     let mut window_settings = window::Settings {
         size: Size {
             width: 600.0,

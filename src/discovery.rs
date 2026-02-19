@@ -639,10 +639,8 @@ mod tests {
 
         // No events should be sent
         assert!(
-            receiver
-                .try_next()
-                .expect("Could not get message back")
-                .is_none()
+            receiver.try_recv().is_err(),
+            "Expected no events but received one"
         );
         assert!(tracked.is_empty());
     }
@@ -663,10 +661,8 @@ mod tests {
 
         // No events should be sent (the device has only been unseen once)
         assert!(
-            receiver
-                .try_next()
-                .expect("Could not get message back")
-                .is_none()
+            receiver.try_recv().is_err(),
+            "Expected no events but received one"
         );
         // Device should still be tracked with incremented count
         assert_eq!(tracked.get("Device1").map(|(c, _)| *c), Some(1));
@@ -687,15 +683,13 @@ mod tests {
         sender.close_channel();
 
         // Should receive BLERadioLost event
-        let event = receiver.try_next().expect("Could not get message back");
-        assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device1"));
+        let event = receiver.try_recv().expect("Expected BLERadioLost event");
+        assert!(matches!(event, BLERadioLost(name) if name == "Device1"));
 
         // No more events
         assert!(
-            receiver
-                .try_next()
-                .expect("Could not get message back")
-                .is_none()
+            receiver.try_recv().is_err(),
+            "Expected no more events but received one"
         );
 
         // Device should be removed from tracking
@@ -722,7 +716,7 @@ mod tests {
 
         // Should receive 2 BLERadioLost events
         let mut lost_devices = Vec::new();
-        while let Ok(Some(event)) = receiver.try_next() {
+        while let Ok(event) = receiver.try_recv() {
             if let BLERadioLost(name) = event {
                 lost_devices.push(name);
             }
@@ -757,15 +751,13 @@ mod tests {
         sender.close_channel();
 
         // Should receive only 1 BLERadioLost event for Device3
-        let event = receiver.try_next().expect("Could not get message back");
-        assert!(matches!(event, Some(BLERadioLost(name)) if name == "Device3"));
+        let event = receiver.try_recv().expect("Expected BLERadioLost event");
+        assert!(matches!(event, BLERadioLost(name) if name == "Device3"));
 
         // No more events
         assert!(
-            receiver
-                .try_next()
-                .expect("Could not get message back")
-                .is_none()
+            receiver.try_recv().is_err(),
+            "Expected no more events but received one"
         );
 
         // Device1 and Device2 should still be tracked

@@ -14,7 +14,7 @@ use crate::device::SubscriberMessage::{
 };
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
-    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
+    DisconnectingEvent, MCMessageSent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
 
 use crate::Message::{
@@ -86,6 +86,7 @@ pub enum SubscriptionEvent {
     RadioNotification(String, TimeStamp), // Message, rx_time
     MessageACK(ChannelId, MessageId),
     MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp), // channel_id, id, from, MCMessage, rx_time
+    MCMessageSent(ChannelId, MessageId, NodeId, TimeStamp), // channel_id, id, from, MCMessage, rx_time
     NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, rx_time
     NewNodePosition(ChannelId, MessageId, NodeId, MCPosition, TimeStamp), // channel_id, id, from, MCPosition, rx_time
     DeviceBatteryLevel(Option<u32>),
@@ -500,6 +501,11 @@ impl Device {
             }
             ChannelName(channel_number, name) => {
                 self.set_channel_name(channel_number, name);
+                Task::none()
+            }
+            MCMessageSent(_, _, _, _) => {
+                // TODO a tick the message was actually sent from the radio
+                // Maybe need to fake this in meshtastic, meshcore has an event
                 Task::none()
             }
         }
