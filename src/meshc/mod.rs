@@ -200,10 +200,12 @@ mod test {
     use crate::channel_id::ChannelId;
     use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
     use crate::meshc::{
-        message_id_from_expected_ack, node_id_from_prefix, node_id_from_public_key,
-        node_id_to_destination,
+        message_id_from_expected_ack, node_id_from_bytes, node_id_from_prefix,
+        node_id_from_public_key, node_id_to_destination,
     };
-    use meshcore_rs::events::{AdvertisementData, ChannelInfoData, Contact, SelfInfo};
+    use meshcore_rs::events::{
+        AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour, SelfInfo,
+    };
 
     // Tests for node_id_from_prefix
 
@@ -637,5 +639,150 @@ mod test {
 
         assert!((position.latitude - 89.999999).abs() < 0.000001);
         assert!((position.longitude - 179.999999).abs() < 0.000001);
+    }
+
+    // Tests for node_id_from_bytes
+
+    #[test]
+    fn node_id_from_bytes_basic() {
+        let bytes = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, 0x0102_0304_0506_0708);
+    }
+
+    #[test]
+    fn node_id_from_bytes_all_zeros() {
+        let bytes = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, 0);
+    }
+
+    #[test]
+    fn node_id_from_bytes_all_ones() {
+        let bytes = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, u64::MAX);
+    }
+
+    #[test]
+    fn node_id_from_bytes_longer_input() {
+        // Only first 8 bytes should be used
+        let bytes = vec![
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0xAA, 0xBB, 0xCC,
+        ];
+        let node_id = node_id_from_bytes(bytes);
+        assert_eq!(node_id, 0x0102_0304_0506_0708);
+    }
+
+    // Tests for From<Neighbour> for MCNodeInfo
+
+    #[test]
+    fn neighbour_to_node_info() {
+        let neighbour = Neighbour {
+            pubkey: vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88],
+            secs_ago: 120,
+            snr: 8.5,
+        };
+
+        let node_info: MCNodeInfo = neighbour.into();
+
+        assert_eq!(node_info.node_id, 0x1122_3344_5566_7788);
+        assert!(!node_info.is_ignored);
+        assert!(node_info.position.is_none());
+
+        let user = node_info.user.expect("Expected user");
+        assert_eq!(user.id, 0x1122_3344_5566_7788_u64.to_string());
+    }
+
+    #[test]
+    fn neighbour_to_node_info_zero_pubkey() {
+        let neighbour = Neighbour {
+            pubkey: vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            secs_ago: 0,
+            snr: 0.0,
+        };
+
+        let node_info: MCNodeInfo = neighbour.into();
+
+        assert_eq!(node_info.node_id, 0);
+    }
+
+    // Tests for From<DiscoverEntry> for MCNodeInfo
+
+    #[test]
+    fn discover_entry_to_node_info() {
+        let entry = DiscoverEntry {
+            pubkey: vec![0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11],
+            name: "DiscoveredNode".to_string(),
+        };
+
+        let node_info: MCNodeInfo = entry.into();
+
+        assert_eq!(node_info.node_id, 0xAABB_CCDD_EEFF_0011);
+        assert!(!node_info.is_ignored);
+        assert!(node_info.position.is_none());
+
+        let user = node_info.user.expect("Expected user");
+        assert_eq!(user.long_name, "DiscoveredNode");
+        assert_eq!(user.short_name, "DiscoveredNode");
+        assert_eq!(user.id, 0xAABB_CCDD_EEFF_0011_u64.to_string());
+    }
+
+    #[test]
+    fn discover_entry_to_node_info_empty_name() {
+        let entry = DiscoverEntry {
+            pubkey: vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
+            name: "".to_string(),
+        };
+
+        let node_info: MCNodeInfo = entry.into();
+
+        let user = node_info.user.expect("Expected user");
+        assert_eq!(user.long_name, "");
+        assert_eq!(user.short_name, "");
+    }
+
+    // Tests for From<ChannelInfoData> for MCChannel
+
+    #[test]
+    fn channel_info_to_mcchannel() {
+        let channel_info = ChannelInfoData {
+            channel_idx: 5,
+            name: "TestChannel".to_string(),
+            secret: [0u8; 16],
+        };
+
+        let channel: MCChannel = channel_info.into();
+
+        assert_eq!(channel.index, 5);
+        assert_eq!(channel.name, "TestChannel");
+    }
+
+    #[test]
+    fn channel_info_to_mcchannel_zero_index() {
+        let channel_info = ChannelInfoData {
+            channel_idx: 0,
+            name: "Primary".to_string(),
+            secret: [0xFF; 16],
+        };
+
+        let channel: MCChannel = channel_info.into();
+
+        assert_eq!(channel.index, 0);
+        assert_eq!(channel.name, "Primary");
+    }
+
+    #[test]
+    fn channel_info_to_mcchannel_max_index() {
+        let channel_info = ChannelInfoData {
+            channel_idx: 255,
+            name: "MaxChannel".to_string(),
+            secret: [0xAB; 16],
+        };
+
+        let channel: MCChannel = channel_info.into();
+
+        assert_eq!(channel.index, 255);
+        assert_eq!(channel.name, "MaxChannel");
     }
 }
