@@ -2,6 +2,7 @@ pub mod subscription;
 
 pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
+use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriptionEvent;
@@ -146,14 +147,14 @@ impl From<ChannelMessage> for SubscriptionEvent {
 
 /// Convert from a ContactMessage to a SubscriptionEvent::MCMessageReceived
 impl From<ContactMessage> for SubscriptionEvent {
-    fn from(message: ContactMessage) -> Self {
-        let sender_id = node_id_from_prefix(&message.sender_prefix);
+    fn from(contact_message: ContactMessage) -> Self {
+        let node_id = node_id_from_prefix(&contact_message.sender_prefix);
         MCMessageReceived(
-            ChannelId::Node(sender_id),
-            message.sender_timestamp, // TODO hack for message id
-            sender_id,
-            MCMessage::NewTextMessage(message.text),
-            message.sender_timestamp,
+            Node(node_id),
+            contact_message.sender_timestamp, // TODO hack for message id
+            node_id,
+            MCMessage::NewTextMessage(contact_message.text),
+            contact_message.sender_timestamp,
         )
     }
 }

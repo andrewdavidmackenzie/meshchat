@@ -12,10 +12,7 @@ use crate::device::SubscriptionEvent::{
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
-use crate::meshc::{
-    message_id_from_expected_ack, node_id_from_prefix, node_id_from_public_key,
-    node_id_to_destination,
-};
+use crate::meshc::{message_id_from_expected_ack, node_id_from_public_key, node_id_to_destination};
 use crate::{MCPosition, MCUser, MeshChat};
 use futures::{SinkExt, Stream};
 use iced::stream;
@@ -517,17 +514,8 @@ async fn handle_new_contact_message(
     contact_message: ContactMessage,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) {
-    let node_id = node_id_from_prefix(&contact_message.sender_prefix);
-    let mcmessage = MCMessageReceived(
-        Node(node_id),
-        contact_message.sender_timestamp, // TODO hack for message id
-        node_id,
-        MCMessage::NewTextMessage(contact_message.text),
-        contact_message.sender_timestamp,
-    );
-
     gui_sender
-        .send(mcmessage)
+        .send(contact_message.into())
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
