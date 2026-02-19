@@ -20,7 +20,7 @@ use meshcore_rs::events::{
     BatteryInfo, ChannelInfoData, Contact, EventPayload, NeighboursData, SelfInfo,
 };
 use meshcore_rs::{Error, EventType, MeshCore, MeshCoreEvent};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
@@ -36,6 +36,7 @@ enum DeviceState {
 struct RadioCache {
     self_id: NodeId,
     known_channels: HashSet<u8>,
+    pending_ack: HashMap<u32, ChannelId>,
 }
 
 /// A stream of [SubscriptionEvent] for comms between the app and the radio
@@ -347,12 +348,17 @@ async fn send_text(
                 .send_msg(node_id_to_destination(&node_id), &text, None)
                 .await?;
 
+            let message_id = message_id_from_expected_ack(message_sent_info.expected_ack);
+
+            // Mark this sent message as pending an ACK
+            radio_cache.pending_ack.insert(message_id, Node(node_id));
+
             // Reflect the message back into the GUI
             let msg = MCMessage::NewTextMessage(text);
             gui_sender
                 .send(MCMessageReceived(
                     channel_id,
-                    message_id_from_expected_ack(message_sent_info.expected_ack),
+                    message_id,
                     radio_cache.self_id,
                     msg,
                     MeshChat::now(),
@@ -597,13 +603,13 @@ async fn handle_radio_event(
         }
         EventType::Ack => {
             if let EventPayload::Ack { tag } = meshcore_event.payload {
-                // TODO how to handle channel Id
-                // DO we get Ack events for channel messages?
-                // TODO the GUI may have to find the message from the message id
-                gui_sender
-                    .send(MessageACK(Channel(0), message_id_from_expected_ack(tag)))
-                    .await
-                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                let message_id = message_id_from_expected_ack(tag);
+                if let Some(channel_id) = radio_cache.pending_ack.remove(&message_id) {
+                    gui_sender
+                        .send(MessageACK(channel_id.clone(), message_id))
+                        .await
+                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                }
             }
         }
         EventType::NoMoreMessages | EventType::Ok => {}
@@ -621,11 +627,7 @@ async fn handle_radio_event(
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
         }
-        EventType::LogData => {
-            if let EventPayload::LogData(log_data) = meshcore_event.payload {
-                println!("Log: {:?}", log_data);
-            }
-        }
+        EventType::LogData => { /* LogData payload */ }
         _ => {
             println!(
                 "Unhandled Event Type ({}) = {meshcore_event:?}",
