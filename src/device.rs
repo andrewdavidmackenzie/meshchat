@@ -461,7 +461,7 @@ impl Device {
                     let new_message = ChannelViewEntry::new(id, from, mc_message, rx_time);
                     channel_view.new_message(new_message, &self.history_length)
                 } else {
-                    eprintln!("No channel for MCMessage");
+                    eprintln!("No channel for MCMessage: channel_id = {:?}", channel_id);
                     Task::none()
                 }
             }
