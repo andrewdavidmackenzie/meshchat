@@ -596,23 +596,10 @@ async fn handle_radio_event(
         }
         EventType::AdvertResponse => {
             if let EventPayload::AdvertResponse(advert_response) = meshcore_event.payload {
-                // TODO process this or not? NewNode?
-                println!("AdvertResponse: {advert_response:?}");
-                /*
-                send node info? name position
-
-                    pub pubkey: [u8; 32],
-                    /// Advertisement type
-                    pub adv_type: u8,
-                    /// Node name
-                    pub node_name: String,
-                    /// Latitude (optional)
-                    pub lat: Option<i32>,
-                    /// Longitude (optional)
-                    pub lon: Option<i32>,
-                    /// Node description (optional)
-                    pub node_desc: Option<String>,
-                 */
+                gui_sender
+                    .send(NewNode(advert_response.into()))
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
         }
         EventType::ContactMsgRecv => {

@@ -11,7 +11,8 @@ use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;
 use meshcore_rs::events::{
-    AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour, SelfInfo,
+    AdvertResponseData, AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour,
+    SelfInfo,
 };
 use meshcore_rs::{ChannelMessage, ContactMessage};
 use uuid::Uuid;
@@ -108,6 +109,37 @@ impl From<Neighbour> for MCNodeInfo {
                 ..Default::default()
             }),
             position: None,
+            is_ignored: false,
+        }
+    }
+}
+
+impl From<AdvertResponseData> for MCNodeInfo {
+    fn from(advert: AdvertResponseData) -> Self {
+        let node_id = node_id_from_public_key(&advert.pubkey);
+        let position = if let Some(lat) = advert.lat
+            && let Some(long) = advert.lon
+        {
+            Some(MCPosition {
+                latitude: lat as f64 / 1_000_000.0,
+                longitude: long as f64 / 1_000_000.0,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
+        MCNodeInfo {
+            #[allow(clippy::unwrap_used)]
+            node_id,
+            user: Some(MCUser {
+                #[allow(clippy::unwrap_used)]
+                id: node_id.to_string(),
+                long_name: advert.node_name.clone(),
+                short_name: advert.node_name,
+                ..Default::default()
+            }),
+            position,
             is_ignored: false,
         }
     }
@@ -365,7 +397,7 @@ mod test {
 
         // Direct message should use Node channel ID
         let expected_node_id = 0xAABB_CCDD_EEFF_0000_u64;
-        assert_eq!(channel_id, ChannelId::Node(expected_node_id));
+        assert_eq!(channel_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
         assert_eq!(timestamp, 1234567891);
         assert_eq!(msg.to_string(), "Direct message");
@@ -666,7 +698,7 @@ mod test {
 
     #[test]
     fn node_id_from_bytes_longer_input() {
-        // Only first 8 bytes should be used
+        // Only the first 8 bytes should be used
         let bytes = vec![
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0xAA, 0xBB, 0xCC,
         ];
