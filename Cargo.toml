@@ -49,7 +49,7 @@ uuid = { version = "1.21.0", default-features = false, features = ["v4"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
-meshcore-rs = { path = "../meshcore-rs", default-features = false, features = ["ble"], optional = true }
+meshcore-rs = { version = "0.1.5", default-features = false, features = ["ble"], optional = true }
 self_update = { version = "0.42.0", default-features = false, optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
