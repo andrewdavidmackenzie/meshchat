@@ -85,6 +85,7 @@ pub enum SubscriptionEvent {
     NewNode(MCNodeInfo),
     RadioNotification(String, TimeStamp), // Message, rx_time
     MessageACK(ChannelId, MessageId),
+    /// ChannelId - channel sent to, Message Id, NodeId - sending node, The Message itself, Timestamp
     MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp), // channel_id, id, from, MCMessage, rx_time
     MCMessageSent(ChannelId, MessageId, NodeId, TimeStamp), // channel_id, id, from, MCMessage, rx_time
     NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, rx_time

@@ -1,6 +1,5 @@
 use crate::channel_id::ChannelId::{Channel, Node};
 use crate::channel_id::{ChannelId, MessageId, NodeId};
-use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
 };
@@ -17,7 +16,7 @@ use crate::{MCPosition, MCUser, MeshChat};
 use futures::{SinkExt, Stream};
 use iced::stream;
 use meshcore_rs::events::{
-    BatteryInfo, ChannelInfoData, Contact, EventPayload, NeighboursData, SelfInfo,
+    BatteryInfo, ChannelInfoData, Contact, EventPayload, MsgSentInfo, NeighboursData, SelfInfo,
 };
 use meshcore_rs::{ChannelMessage, ContactMessage, Error, EventType, MeshCore, MeshCoreEvent};
 use std::collections::{HashMap, HashSet};
@@ -25,6 +24,7 @@ use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 
+use crate::channel_view_entry::MCMessage;
 use tokio::time::{Duration, timeout};
 
 enum DeviceState {
@@ -520,6 +520,14 @@ async fn handle_new_contact_message(
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
 
+async fn handle_message_sent(
+    _message_sent: MsgSentInfo,
+    _gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+) {
+
+    //    let message_id = message_id_from_expected_ack(message_sent.expected_ack);
+}
+
 async fn handle_radio_event(
     radio_cache: &mut RadioCache,
     meshcore: &MeshCore,
@@ -561,21 +569,9 @@ async fn handle_radio_event(
             }
         }
         EventType::MsgSent => {
-            println!("TODO handle Message Sent:");
-            /*
-            if let EventPayload::MsgSent(msg_sent) = meshcore_event.payload {
-                // TODO how to get the channel_id? message_type???
-                gui_sender
-                    .send(MCMessageSent(
-                        Channel(0),
-                        message_id_from_expected_ack(msg_sent.expected_ack),
-                        radio_cache.self_id,
-                        MeshChat::now(),
-                    ))
-                    .await
-                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+            if let EventPayload::MsgSent(message_sent_info) = meshcore_event.payload {
+                handle_message_sent(message_sent_info, gui_sender).await;
             }
-             */
         }
         EventType::Advertisement => {
             if let EventPayload::Advertisement(advertisement) = meshcore_event.payload {
