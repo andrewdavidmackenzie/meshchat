@@ -330,7 +330,7 @@ pub fn text_input_button_style(theme: &Theme, status: Status) -> button::Style {
         },
         Status::Disabled => button::Style {
             background: Some(Background::Color(Color::TRANSPARENT)),
-            text_color: COLOR_GRAY_60, // TODO use the disabled color from palette
+            text_color: COLOR_GRAY_60,
             border: NO_BORDER,
             shadow: NO_SHADOW,
             snap: false,
