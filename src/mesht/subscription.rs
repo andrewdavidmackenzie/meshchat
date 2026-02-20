@@ -36,6 +36,7 @@ use meshtastic::{Message, utils};
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::mpsc::channel;
+use tokio::time::timeout;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::{Stream, StreamExt};
 
@@ -588,8 +589,18 @@ async fn send_user(
 /// radio and a [ConnectedStreamApi] that can be used to send messages to the radio.
 async fn do_connect(ble_device: &str) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
     let ble_id = BleId::from_mac_address(ble_device).unwrap_or(BleId::from_name(ble_device));
-    let ble_stream =
-        utils::stream::build_ble_stream::<BleId>(ble_id, Duration::from_secs(4)).await?;
+    let ble_stream = timeout(
+        Duration::from_secs(5),
+        utils::stream::build_ble_stream::<BleId>(ble_id, Duration::from_secs(10)),
+    )
+    .await
+    .map_err(|_| Error::StreamBuildError {
+        source: Box::new(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "Connect timed out",
+        )),
+        description: "Connect".to_string(),
+    })??;
     let stream_api = StreamApi::new();
     let (packet_receiver, stream_api) = stream_api.connect(ble_stream).await;
     let config_id = utils::generate_rand_id();
@@ -599,7 +610,15 @@ async fn do_connect(ble_device: &str) -> Result<(PacketReceiver, ConnectedStream
 
 /// Disconnect from the radio we are currently connected to using the [ConnectedStreamApi]
 async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Error> {
-    stream_api.disconnect().await
+    timeout(Duration::from_secs(1), stream_api.disconnect())
+        .await
+        .map_err(|_| Error::StreamBuildError {
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Disconnect timed out",
+            )),
+            description: "Disconnect".to_string(),
+        })?
 }
 
 #[cfg(test)]

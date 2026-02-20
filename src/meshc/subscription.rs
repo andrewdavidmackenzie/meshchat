@@ -228,7 +228,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 async fn do_connect(ble_device: &str) -> meshcore_rs::Result<MeshCore> {
     timeout(Duration::from_secs(10), MeshCore::ble_connect(ble_device))
         .await
-        .map_err(|_| Error::Timeout("Disconnect".to_string()))?
+        .map_err(|_| Error::Timeout("Connect".to_string()))?
 }
 
 /// Disconnect from the radio we are currently connected to using the [MeshCore]
