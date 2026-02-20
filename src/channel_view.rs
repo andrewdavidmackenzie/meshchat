@@ -232,7 +232,7 @@ impl ChannelView {
             ShareMeshChat => {
                 // Insert the pre-prepared sharing message text to the message text_input
                 self.message = String::from(
-                    "I am using the MeshChat app. Its available for macOS/Windows/Linux from: \
+                    "I am using the MeshChat app. It's available for macOS/Windows/Linux from: \
                 https://github.com/andrewdavidmackenzie/meshchat/releases/latest ",
                 );
                 // and shift the focus to it in case the user wants to add to it or edit it

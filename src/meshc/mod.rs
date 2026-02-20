@@ -17,19 +17,6 @@ use meshcore_rs::events::{
 };
 use uuid::Uuid;
 
-/// Conversions between [SelfIno] and MeshChat [MCUser]
-impl From<&SelfInfo> for MCUser {
-    fn from(self_info: &SelfInfo) -> Self {
-        MCUser {
-            #[allow(clippy::unwrap_used)]
-            id: node_id_from_public_key(&self_info.public_key).to_string(),
-            long_name: self_info.name.clone(),
-            short_name: self_info.name.clone(),
-            ..Default::default()
-        }
-    }
-}
-
 /// Conversions between [SelfIno] and MeshChat [MCPosition]
 impl From<&SelfInfo> for MCPosition {
     fn from(self_info: &SelfInfo) -> Self {
@@ -527,43 +514,6 @@ mod test {
             cr: 5,
             name: name.to_string(),
         }
-    }
-
-    // Tests for From<&SelfInfo> for MCUser
-
-    #[test]
-    fn self_info_to_mcuser() {
-        let mut public_key = [0u8; 32];
-        public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
-        let self_info = create_test_self_info("MyNode", public_key, 0, 0);
-
-        let user: MCUser = (&self_info).into();
-
-        assert_eq!(user.long_name, "MyNode");
-        assert_eq!(user.short_name, "MyNode");
-        assert_eq!(user.id, 0x0102_0304_0506_0708_u64.to_string());
-    }
-
-    #[test]
-    fn self_info_to_mcuser_empty_name() {
-        let public_key = [0u8; 32];
-        let self_info = create_test_self_info("", public_key, 0, 0);
-
-        let user: MCUser = (&self_info).into();
-
-        assert_eq!(user.long_name, "");
-        assert_eq!(user.short_name, "");
-    }
-
-    #[test]
-    fn self_info_to_mcuser_unicode_name() {
-        let public_key = [0xFF; 32];
-        let self_info = create_test_self_info("日本語ノード", public_key, 0, 0);
-
-        let user: MCUser = (&self_info).into();
-
-        assert_eq!(user.long_name, "日本語ノード");
-        assert_eq!(user.short_name, "日本語ノード");
     }
 
     // Tests for From<&SelfInfo> for MCPosition
