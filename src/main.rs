@@ -17,7 +17,9 @@ use crate::channel_id::{ChannelId, NodeId};
 use crate::config::{Config, HistoryLength, load_config};
 use crate::device::ConnectionState::Connected;
 use crate::device::DeviceViewMessage;
-use crate::device::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
+use crate::device::DeviceViewMessage::DisconnectRequest;
+#[cfg(any(feature = "meshtastic", feature = "meshcore"))]
+use crate::device::DeviceViewMessage::SubscriptionMessage;
 use crate::device::{Device, TimeStamp};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;

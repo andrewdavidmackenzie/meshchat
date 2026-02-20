@@ -19,7 +19,7 @@ use crate::{MCPosition, MCUser, MeshChat};
 use futures::{SinkExt, Stream};
 use iced::stream;
 use meshcore_rs::events::{
-    BatteryInfo, ChannelInfoData, Contact, EventPayload, MsgSentInfo, NeighboursData, SelfInfo,
+    BatteryInfo, ChannelInfoData, Contact, EventPayload, NeighboursData, SelfInfo,
 };
 use meshcore_rs::{ChannelMessage, ContactMessage, Error, EventType, MeshCore, MeshCoreEvent};
 use std::collections::{HashMap, HashSet};
@@ -327,6 +327,7 @@ async fn send_text(
             let chan_idx: u8 = channel_index
                 .try_into()
                 .map_err(|_| Error::Channel("Invalid Channel Number".to_string()))?;
+            // No message sent info returned for a channel message
             meshcore
                 .commands()
                 .lock()
@@ -339,7 +340,7 @@ async fn send_text(
             gui_sender
                 .send(MCMessageReceived(
                     channel_id,
-                    MeshChat::now(), // TODO hack for message id in a channel
+                    MeshChat::now() as MessageId,
                     radio_cache.self_id,
                     msg,
                     MeshChat::now(),
@@ -543,7 +544,7 @@ async fn handle_new_channel_message(
 
     let mcmessage = MCMessageReceived(
         Channel(channel_message.channel_idx as i32),
-        channel_message.sender_timestamp, // TODO hack for message id in a channel
+        channel_message.sender_timestamp as MessageId,
         *node_id,
         MCMessage::NewTextMessage(text.to_string()),
         channel_message.sender_timestamp,
@@ -563,14 +564,6 @@ async fn handle_new_contact_message(
         .send(contact_message.into())
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-}
-
-async fn handle_message_sent(
-    _message_sent: MsgSentInfo,
-    _gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
-) {
-
-    //    let message_id = message_id_from_expected_ack(message_sent.expected_ack);
 }
 
 async fn handle_radio_event(
@@ -611,11 +604,6 @@ async fn handle_radio_event(
         EventType::ChannelInfo => {
             if let EventPayload::ChannelInfo(channel_info) = meshcore_event.payload {
                 handle_new_channel(radio_cache, gui_sender, channel_info).await;
-            }
-        }
-        EventType::MsgSent => {
-            if let EventPayload::MsgSent(message_sent_info) = meshcore_event.payload {
-                handle_message_sent(message_sent_info, gui_sender).await;
             }
         }
         EventType::Advertisement => {
@@ -670,7 +658,6 @@ async fn handle_radio_event(
         }
         EventType::NoMoreMessages | EventType::Ok => {}
         EventType::Error => {
-            // TODO maybe avoid this as we will report errors back from commands that
             // wait for a response, but here we will receive a duplicate....
             if let EventPayload::String(message) = meshcore_event.payload {
                 gui_sender
@@ -684,6 +671,7 @@ async fn handle_radio_event(
             }
         }
         EventType::LogData => { /* LogData payload */ }
+        EventType::MsgSent => { /* Doesn't have message body to reflect back to GUI */ }
         _ => {
             println!(
                 "Unhandled Event Type ({}) = {meshcore_event:?}",

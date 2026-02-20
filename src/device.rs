@@ -14,7 +14,7 @@ use crate::device::SubscriberMessage::{
 };
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
-    DisconnectingEvent, MCMessageSent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
+    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
 
 use crate::Message::{
@@ -84,10 +84,9 @@ pub enum SubscriptionEvent {
     NewChannel(MCChannel),
     NewNode(MCNodeInfo),
     RadioNotification(String, TimeStamp), // Message, rx_time
-    MessageACK(ChannelId, MessageId),
-    /// ChannelId - channel sent to, Message Id, NodeId - sending node, The Message itself, Timestamp
+    /// ChannelId - channel sent to, MessageId, NodeId - sending node, The Message itself, Timestamp
     MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp), // channel_id, id, from, MCMessage, rx_time
-    MCMessageSent(ChannelId, MessageId, NodeId, TimeStamp), // channel_id, id, from, MCMessage, rx_time
+    MessageACK(ChannelId, MessageId),
     NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, rx_time
     NewNodePosition(ChannelId, MessageId, NodeId, MCPosition, TimeStamp), // channel_id, id, from, MCPosition, rx_time
     DeviceBatteryLevel(Option<u32>),
@@ -449,14 +448,6 @@ impl Device {
                     )
                 })
             }
-            MessageACK(channel_id, message_id) => {
-                if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                    channel_view.ack(message_id)
-                } else {
-                    eprintln!("No channel for MessageACK");
-                }
-                Task::none()
-            }
             MCMessageReceived(channel_id, id, from, mc_message, rx_time) => {
                 if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
                     let new_message = ChannelViewEntry::new(id, from, mc_message, rx_time);
@@ -504,9 +495,12 @@ impl Device {
                 self.set_channel_name(channel_number, name);
                 Task::none()
             }
-            MCMessageSent(_, _, _, _) => {
-                // TODO a tick the message was actually sent from the radio
-                // Maybe need to fake this in meshtastic, meshcore has an event
+            MessageACK(channel_id, message_id) => {
+                if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+                    channel_view.ack(message_id)
+                } else {
+                    eprintln!("No channel for MessageACK");
+                }
                 Task::none()
             }
         }
@@ -2016,7 +2010,7 @@ mod tests {
         let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
-        // The same channel should return Task::none equivalent behavior
+        // The same channel should return Task::none equivalent behaviour
         let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
         assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
     }

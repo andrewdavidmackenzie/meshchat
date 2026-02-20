@@ -170,7 +170,7 @@ impl From<ContactMessage> for SubscriptionEvent {
         let node_id = node_id_from_prefix(&contact_message.sender_prefix);
         MCMessageReceived(
             Node(node_id),
-            contact_message.sender_timestamp, // TODO hack for message id
+            contact_message.sender_timestamp as MessageId,
             node_id,
             MCMessage::NewTextMessage(contact_message.text),
             contact_message.sender_timestamp,
