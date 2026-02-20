@@ -182,7 +182,6 @@ impl MyRouter {
                     if let Ok(message) = String::from_utf8(data.payload.clone()) {
                         let channel_id = self.channel_id_from_packet(mesh_packet);
 
-                        // TODO Write an Into for this
                         self.gui_sender
                             .send(MCMessageReceived(
                                 channel_id,

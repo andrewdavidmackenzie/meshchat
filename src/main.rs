@@ -17,7 +17,6 @@ use crate::channel_id::{ChannelId, NodeId};
 use crate::config::{Config, HistoryLength, load_config};
 use crate::device::ConnectionState::Connected;
 use crate::device::DeviceViewMessage;
-#[allow(unused_imports)] // TODO remove later
 use crate::device::DeviceViewMessage::{DisconnectRequest, SubscriptionMessage};
 use crate::device::{Device, TimeStamp};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
@@ -295,7 +294,7 @@ impl MeshChat {
     /// This is the main function of the app, and it drives the GUI.
     /// It is called every time a message is received from the GUI, and it updates the app state
     /// accordingly.
-    /// It also handles window events like "minimize" and close buttons, and it handles navigation
+    /// It also handles window events like "minimise" and close buttons, and it handles navigation
     /// between views.
     /// It also handles the discovery of devices and the connection to them.
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -615,7 +614,7 @@ impl MeshChat {
         container(inner).style(tooltip_style).into()
     }
 
-    /// Function to create a modal dialog in the middle of the screen
+    /// Function to create a modal dialogue in the middle of the screen
     pub fn modal<'a, Message>(
         base: impl Into<Element<'a, Message>>,
         content: impl Into<Element<'a, Message>>,

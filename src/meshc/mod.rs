@@ -3,18 +3,18 @@ pub mod subscription;
 pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
 use crate::channel_id::ChannelId::Node;
-use crate::channel_id::{ChannelId, MessageId, NodeId};
+use crate::channel_id::{MessageId, NodeId};
 use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriptionEvent;
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
+use meshcore_rs::ContactMessage;
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;
 use meshcore_rs::events::{
     AdvertResponseData, AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour,
     SelfInfo,
 };
-use meshcore_rs::{ChannelMessage, ContactMessage};
 use uuid::Uuid;
 
 /// Conversions between [SelfIno] and MeshChat [MCUser]
@@ -164,19 +164,6 @@ impl From<DiscoverEntry> for MCNodeInfo {
     }
 }
 
-/// Convert from a ChannelMessage to a SubscriptionEvent::MCMessageReceived
-impl From<ChannelMessage> for SubscriptionEvent {
-    fn from(message: ChannelMessage) -> Self {
-        MCMessageReceived(
-            ChannelId::Channel(message.channel_idx as i32),
-            message.sender_timestamp, // TODO hack for message id in a channel
-            0,                        // TODO how to get sender?
-            MCMessage::NewTextMessage(message.text),
-            message.sender_timestamp,
-        )
-    }
-}
-
 /// Convert from a ContactMessage to a SubscriptionEvent::MCMessageReceived
 impl From<ContactMessage> for SubscriptionEvent {
     fn from(contact_message: ContactMessage) -> Self {
@@ -229,7 +216,6 @@ pub fn message_id_from_expected_ack(expected_ack: [u8; 4]) -> MessageId {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::channel_id::ChannelId;
     use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
     use crate::meshc::{
         message_id_from_expected_ack, node_id_from_bytes, node_id_from_prefix,
@@ -329,50 +315,6 @@ mod test {
         let expected_ack = [0xFF, 0xFF, 0xFF, 0xFF];
         let message_id = message_id_from_expected_ack(expected_ack);
         assert_eq!(message_id, u32::MAX);
-    }
-
-    // Tests for From<ChannelMessage> for SubscriptionEvent
-
-    #[test]
-    fn channel_message_to_subscription_event() {
-        let message = ChannelMessage {
-            channel_idx: 2,
-            path_len: 1,
-            txt_type: 0,
-            sender_timestamp: 1234567890,
-            text: "Hello from channel".to_string(),
-            snr: None,
-        };
-
-        let event: SubscriptionEvent = message.into();
-
-        let MCMessageReceived(channel_id, _msg_id, _from, msg, timestamp) = event else {
-            unreachable!("Expected MCMessageReceived event")
-        };
-
-        assert_eq!(channel_id, ChannelId::Channel(2));
-        assert_eq!(timestamp, 1234567890);
-        assert_eq!(msg.to_string(), "Hello from channel");
-    }
-
-    #[test]
-    fn channel_message_to_subscription_event_channel_zero() {
-        let message = ChannelMessage {
-            channel_idx: 0,
-            path_len: 2,
-            txt_type: 0,
-            sender_timestamp: 100,
-            text: "Channel 0 message".to_string(),
-            snr: None,
-        };
-
-        let event: SubscriptionEvent = message.into();
-
-        let MCMessageReceived(channel_id, _, _, _, _) = event else {
-            unreachable!("Expected MCMessageReceived event")
-        };
-
-        assert_eq!(channel_id, ChannelId::Channel(0));
     }
 
     // Tests for From<ContactMessage> for SubscriptionEvent
