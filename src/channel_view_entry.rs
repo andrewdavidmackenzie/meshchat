@@ -87,10 +87,10 @@ impl ChannelViewEntry {
     /// the current time in EPOC as an u64
     pub fn new(message_id: u32, from: NodeId, message: MCMessage, rx_time: u32) -> Self {
         ChannelViewEntry {
-            message,
             from,
             message_id,
             rx_daytime: Self::rx_time(rx_time),
+            message,
             ..Default::default()
         }
     }
