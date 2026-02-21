@@ -153,9 +153,12 @@ impl DeviceList {
             }
             Connected(mac_address, _) => header_row
                 .push(
-                    button(text(self.device_name_or_alias(mac_address, config)))
-                        .style(button_chip_style)
-                        .on_press(Navigation(View::DeviceView(None))),
+                    button(text(format!(
+                        "📱 {}",
+                        self.device_name_or_alias(mac_address, config)
+                    )))
+                    .style(button_chip_style)
+                    .on_press(Navigation(View::DeviceView(None))),
                 )
                 .push(Space::new().width(Fill)),
             Disconnecting(device_name) => header_row
