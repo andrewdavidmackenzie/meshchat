@@ -10,6 +10,11 @@ Meshchat is a cross-platform GUI application to interact with Meshtastic and Mes
 - it saves the last device connected to (and Channel/Node if chosen), and on re-start it will try to
   automatically reconnect to that device and channel/node and continue chatting
 
+## Installers
+
+Installers for macOS, Linux and Windows are available
+at [Latest Release on GitHub](https://github.com/andrewdavidmackenzie/meshchat/releases/latest)
+
 ## Screenshots
 
 On the left, the Device view, once you have connected to a BLE Radio, shows configured channels, a list of nodes
