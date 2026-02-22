@@ -49,7 +49,7 @@ My thinking was to keep the app as simple to look at and use as possible.
 
 Here are some of the features I have added in recent releases:
 
-### 0.3.5 Release ([Release Notes](https://github.com/andrewdavidmackenzie/meshchat/releases/tag/0.3.5-rc1))
+### 0.3.6 Release ([Release Notes](https://github.com/andrewdavidmackenzie/meshchat/releases/tag/0.3.6-rc1))
 
 The main addition in this release is initial support for MeshCore radios, and basic chatting with Channels or Nodes
 ("Contacts" in MeshCore).
