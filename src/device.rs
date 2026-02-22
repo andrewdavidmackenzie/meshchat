@@ -315,10 +315,7 @@ impl Device {
         if self.viewing_channel != channel_id {
             self.viewing_channel = channel_id;
 
-            if let Some(channel) = &channel_id
-                && let Connected(ble_device, radio_type) = &self.connection_state
-                && self.channel_views.contains_key(channel)
-            {
+            if let Connected(ble_device, radio_type) = &self.connection_state {
                 let device = ble_device.clone();
                 let radio = *radio_type;
                 return Task::perform(empty(), move |_| {
