@@ -64,7 +64,6 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
         move |mut gui_sender: futures_channel::mpsc::Sender<SubscriptionEvent>| async move {
             let mut device_state = Disconnected;
             let mut radio_cache = RadioCache::default();
-
             let (subscriber_sender, mut subscriber_receiver) = channel::<SubscriberMessage>(100);
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
@@ -210,6 +209,10 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
                         // Disconnect
                         device_state = Disconnected;
+
+                        // Reset the cache
+                        radio_cache = RadioCache::default();
+
                         // Suppress disconnect errors
                         let _ = do_disconnect(meshcore).await;
                         gui_sender
