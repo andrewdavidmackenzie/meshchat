@@ -633,7 +633,7 @@ impl MeshChat {
     }
 
     /// Convert a location tuple to a URL that can be opened in a browser.
-    fn location_url(position: &MCPosition) -> String {
+    pub fn location_url(position: &MCPosition) -> String {
         format!(
             "https://maps.google.com/?q={:.7},{:.7}",
             position.latitude, position.longitude

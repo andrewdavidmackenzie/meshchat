@@ -18,8 +18,8 @@ use crate::device::SubscriptionEvent::{
 };
 
 use crate::Message::{
-    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, RemoveNodeAlias,
-    ShowLocation, ShowUserInfo, ToggleNodeFavourite,
+    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, OpenUrl,
+    RemoveNodeAlias, ShowLocation, ShowUserInfo, ToggleNodeFavourite,
 };
 use crate::View::DeviceListView;
 use crate::channel_id::ChannelId::Node;
@@ -152,6 +152,7 @@ pub struct Device {
     show_position_updates: bool,
     show_user_updates: bool,
 }
+
 async fn empty() {}
 
 impl Device {
@@ -725,7 +726,32 @@ impl Device {
         Column::new()
             .push(self.search_box())
             .push(channel_and_node_scroll)
+            .push(self.button_row())
             .into()
+    }
+
+    /// Add a row of buttons at the bottom of the view to show position and into
+    fn button_row(&self) -> Element<'static, Message> {
+        let mut row = Row::new().padding(6).spacing(4);
+
+        // If we know our position, show a button to show it on a map
+        if let Some(position) = self.my_position.as_ref() {
+            row = row.push(
+                button(text("Show Position 📌"))
+                    .style(button_chip_style)
+                    .on_press(OpenUrl(MeshChat::location_url(position))),
+            );
+        }
+
+        if let Some(user) = &self.my_user {
+            row = row.push(
+                button(text("Show Info ⓘ"))
+                    .style(button_chip_style)
+                    .on_press(ShowUserInfo(user.clone())),
+            );
+        }
+
+        row.into()
     }
 
     /// Create a list of channels and nodes in this device with a button to select one of them
