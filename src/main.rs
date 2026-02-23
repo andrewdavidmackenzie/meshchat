@@ -219,6 +219,7 @@ fn main() -> iced::Result {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
+    #[allow(unused_mut)]
     let mut window_settings = window::Settings {
         size: Size {
             width: 600.0,
@@ -233,7 +234,7 @@ fn main() -> iced::Result {
     #[cfg(not(target_os = "macos"))]
     let icon_bytes = include_bytes!("../assets/images/icon.ico");
     #[cfg(not(target_os = "macos"))]
-    if let Ok(app_icon) = icon::from_file_data(icon_bytes, None) {
+    if let Ok(app_icon) = iced::window::icon::from_file_data(icon_bytes, None) {
         window_settings.icon = Some(app_icon);
     }
 
