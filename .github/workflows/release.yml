@@ -60,7 +60,7 @@ jobs:
         run: |
           echo "Searching for packages in target directory..."
           echo "=== All package files found ==="
-          find target -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.exe" -o -name "*.msi" \) 2>/dev/null || true
+          find target -type f \( -name "meshchat*.deb" -o -name "meshchat*.AppImage" -o -name "MeshChat*.dmg" -o -name "meshchat*.app.tar.gz" -o -name "meshchat*.exe" -o -name "meshchat*.msi" \) 2>/dev/null || true
           echo "=== End of package list ==="
 
       - name: Upload packages as artifacts
@@ -68,12 +68,12 @@ jobs:
         with:
           name: packages-${{ matrix.target }}
           path: |
-            target/**/*.deb
-            target/**/*.AppImage
-            target/**/*.dmg
-            target/**/*.app.tar.gz
-            target/**/*.exe
-            target/**/*.msi
+            target/**/meshchat*.deb
+            target/**/meshchat*.AppImage
+            target/**/MeshChat*.dmg
+            target/**/meshchat*.app.tar.gz
+            target/**/meshchat*.exe
+            target/**/meshchat*.msi
           if-no-files-found: warn
 
   upload-release:
@@ -98,12 +98,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/**/*.deb
-            artifacts/**/*.AppImage
-            artifacts/**/*.dmg
-            artifacts/**/*.app.tar.gz
-            artifacts/**/*.exe
-            artifacts/**/*.msi
+            artifacts/**/meshchat*.deb
+            artifacts/**/meshchat*.AppImage
+            artifacts/**/MeshChat*.dmg
+            artifacts/**/meshchat*.app.tar.gz
+            artifacts/**/meshchat*.exe
+            artifacts/**/meshchat*.msi
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
