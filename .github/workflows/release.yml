@@ -51,38 +51,29 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package the application
-        id: package
+        shell: bash
+        run: cargo packager --release --target ${{ matrix.target }} --verbose
+
+      - name: Find generated packages
+        id: find-packages
         shell: bash
         run: |
-          cargo packager --release --target ${{ matrix.target }} --verbose
-
-          # Find all generated packages
-          echo "Searching for packages..."
-
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            PACKAGES=$(find target -maxdepth 1 \( -name "*.deb" -o -name "*.AppImage" \) 2>/dev/null | tr '\n' ',')
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            PACKAGES=$(find target -maxdepth 1 \( -name "*.dmg" -o -name "*.app.tar.gz" \) 2>/dev/null | tr '\n' ',')
-          elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            PACKAGES=$(find target -maxdepth 1 \( -name "*.exe" -o -name "*.msi" \) 2>/dev/null | tr '\n' ',')
-          fi
-
-          # Remove trailing comma
-          PACKAGES=${PACKAGES%,}
-          echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
-          echo "Found packages: $PACKAGES"
+          echo "Searching for packages in target directory..."
+          echo "=== All package files found ==="
+          find target -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.exe" -o -name "*.msi" \) 2>/dev/null || true
+          echo "=== End of package list ==="
 
       - name: Upload packages as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.target }}
           path: |
-            target/*.deb
-            target/*.AppImage
-            target/*.dmg
-            target/*.app.tar.gz
-            target/*.exe
-            target/*.msi
+            target/**/*.deb
+            target/**/*.AppImage
+            target/**/*.dmg
+            target/**/*.app.tar.gz
+            target/**/*.exe
+            target/**/*.msi
           if-no-files-found: warn
 
   upload-release:
