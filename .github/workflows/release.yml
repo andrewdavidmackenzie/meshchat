@@ -47,7 +47,10 @@ jobs:
       - name: Install cargo-packager
         run: cargo install cargo-packager --locked
 
-      - name: Build and package the application
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package the application
         id: package
         shell: bash
         run: |
