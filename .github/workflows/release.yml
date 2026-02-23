@@ -102,7 +102,7 @@ jobs:
             artifacts/**/meshchat*.AppImage
             artifacts/**/MeshChat*.dmg
             artifacts/**/meshchat*.app.tar.gz
-            artifacts/**/meshchat*.exe
+            artifacts/**/meshchat*-setup.exe
             artifacts/**/meshchat*.msi
           tag_name: ${{ github.event.release.tag_name }}
         env:
