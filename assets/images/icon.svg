@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90D9"/>
+      <stop offset="50%" style="stop-color:#2E5CB8"/>
+      <stop offset="100%" style="stop-color:#1E3A8A"/>
+    </linearGradient>
+
+    <!-- Globe gradient for depth -->
+    <radialGradient id="globeGradient" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.3)"/>
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0)"/>
+    </radialGradient>
+
+    <!-- Subtle glow for chat bubbles -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Shadow for depth -->
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="1024" height="1024" rx="180" ry="180" fill="url(#bgGradient)"/>
+
+  <!-- Globe container - centered -->
+  <g transform="translate(512, 512)" filter="url(#shadow)">
+    <!-- Main globe circle -->
+    <circle r="280" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="12"/>
+
+    <!-- Globe shine overlay -->
+    <circle r="280" fill="url(#globeGradient)"/>
+
+    <!-- Horizontal latitude lines -->
+    <ellipse cx="0" cy="-180" rx="200" ry="50" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="6"/>
+    <ellipse cx="0" cy="-90" rx="260" ry="70" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="6"/>
+    <ellipse cx="0" cy="0" rx="280" ry="80" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="8"/>
+    <ellipse cx="0" cy="90" rx="260" ry="70" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="6"/>
+    <ellipse cx="0" cy="180" rx="200" ry="50" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="6"/>
+
+    <!-- Vertical longitude lines -->
+    <ellipse cx="0" cy="0" rx="80" ry="280" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="6"/>
+    <ellipse cx="0" cy="0" rx="180" ry="280" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="6"/>
+    <ellipse cx="0" cy="0" rx="280" ry="280" fill="none" stroke="rgba(255,255,255,0)" stroke-width="0"/>
+
+    <!-- Tilted longitude for 3D effect -->
+    <ellipse cx="0" cy="0" rx="140" ry="280" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="5" transform="rotate(30)"/>
+    <ellipse cx="0" cy="0" rx="140" ry="280" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="5" transform="rotate(-30)"/>
+    <ellipse cx="0" cy="0" rx="220" ry="280" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="5" transform="rotate(15)"/>
+    <ellipse cx="0" cy="0" rx="220" ry="280" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="5" transform="rotate(-15)"/>
+  </g>
+
+  <!-- Chat bubble - top right -->
+  <g filter="url(#glow)">
+    <path d="M750 180
+             Q750 140, 790 140
+             L890 140
+             Q930 140, 930 180
+             L930 260
+             Q930 300, 890 300
+             L820 300
+             L790 340
+             L780 300
+             L790 300
+             Q750 300, 750 260
+             Z"
+          fill="white" fill-opacity="0.95"/>
+    <!-- Dots in bubble -->
+    <circle cx="810" cy="220" r="14" fill="#2E5CB8"/>
+    <circle cx="855" cy="220" r="14" fill="#2E5CB8"/>
+    <circle cx="900" cy="220" r="14" fill="#2E5CB8"/>
+  </g>
+
+  <!-- Chat bubble - bottom left -->
+  <g filter="url(#glow)">
+    <path d="M94 680
+             Q94 640, 134 640
+             L274 640
+             Q314 640, 314 680
+             L314 760
+             Q314 800, 274 800
+             L204 800
+             L234 850
+             L174 800
+             L134 800
+             Q94 800, 94 760
+             Z"
+          fill="white" fill-opacity="0.95"/>
+    <!-- Dots in bubble -->
+    <circle cx="154" cy="720" r="14" fill="#2E5CB8"/>
+    <circle cx="204" cy="720" r="14" fill="#2E5CB8"/>
+    <circle cx="254" cy="720" r="14" fill="#2E5CB8"/>
+  </g>
+
+  <!-- Small chat bubble - top left accent -->
+  <g filter="url(#glow)">
+    <path d="M120 280
+             Q120 250, 150 250
+             L230 250
+             Q260 250, 260 280
+             L260 340
+             Q260 370, 230 370
+             L180 370
+             L160 400
+             L155 370
+             L150 370
+             Q120 370, 120 340
+             Z"
+          fill="white" fill-opacity="0.9"/>
+    <!-- Dots in bubble -->
+    <circle cx="160" cy="310" r="10" fill="#2E5CB8"/>
+    <circle cx="190" cy="310" r="10" fill="#2E5CB8"/>
+    <circle cx="220" cy="310" r="10" fill="#2E5CB8"/>
+  </g>
+
+  <!-- Connection dots on globe to suggest mesh network -->
+  <g fill="white">
+    <circle cx="400" cy="450" r="12" opacity="0.9"/>
+    <circle cx="580" cy="380" r="10" opacity="0.8"/>
+    <circle cx="650" cy="520" r="11" opacity="0.85"/>
+    <circle cx="480" cy="620" r="10" opacity="0.8"/>
+    <circle cx="350" cy="550" r="9" opacity="0.75"/>
+    <circle cx="550" cy="550" r="8" opacity="0.7"/>
+  </g>
+
+  <!-- Mesh connection lines between dots -->
+  <g stroke="white" stroke-width="3" opacity="0.5">
+    <line x1="400" y1="450" x2="580" y2="380"/>
+    <line x1="580" y1="380" x2="650" y2="520"/>
+    <line x1="650" y1="520" x2="480" y2="620"/>
+    <line x1="480" y1="620" x2="350" y2="550"/>
+    <line x1="350" y1="550" x2="400" y2="450"/>
+    <line x1="400" y1="450" x2="550" y2="550"/>
+    <line x1="550" y1="550" x2="580" y2="380"/>
+    <line x1="550" y1="550" x2="650" y2="520"/>
+  </g>
+</svg>

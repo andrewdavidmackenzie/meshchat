@@ -8,14 +8,24 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
-  GH_TOKEN: ${{ github.token }}
 
 jobs:
   build-and-bundle:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-15, windows-latest, windows-11-arm, ubuntu-24.04-arm ]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
 
     steps:
       - name: Checkout
@@ -23,6 +33,8 @@ jobs:
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
 
@@ -30,52 +42,77 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt install libdbus-1-dev pkg-config
+          sudo apt-get install -y libdbus-1-dev pkg-config libbluetooth-dev
 
-      - name: Install cargo bundle
-        run: cargo install cargo-bundle
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked
 
-      - name: Build bundle for non-Windows
-        if: runner.os != 'Windows'
-        run: cargo bundle --release
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Build bundle for Windows
-        if: runner.os == 'Windows'
-        run: cargo bundle --release --format msi
-
-      - name: Find and prepare bundle artifacts
-        id: find-bundles
+      - name: Package application
+        id: package
         shell: bash
         run: |
-          ARCH=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
-          VERSION=$(echo "${{ github.event.release.tag_name }}" | tr '-' '_')
-          if [ "${{ runner.os }}" == "Linux" ]; then
-            BUNDLE_PATH=$(find target/release/bundle -name "*.AppImage" -o -name "*.deb" | head -1)
-            BUNDLE_NAME=$(basename "$BUNDLE_PATH")
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            BUNDLE_PATH=$(find target/release/bundle -name "*.app" -type d | head -1)
-            ORIGINAL_NAME=$(basename "$BUNDLE_PATH")
-            BUNDLE_DIR=$(dirname "$BUNDLE_PATH")
-            # Create a zip for macOS app bundle with architecture in name
-            cd "$BUNDLE_DIR"
-            BUNDLE_NAME="meshchat_${VERSION}_${ARCH}.app.zip"
-            zip -r "$BUNDLE_NAME" "$ORIGINAL_NAME"
-            BUNDLE_PATH="${BUNDLE_DIR}/${BUNDLE_NAME}"
-          elif [ "${{ runner.os }}" == "Windows" ]; then
-            BUNDLE_PATH=$(find target/release/bundle -name "*.msi" | head -1)
-            BUNDLE_DIR=$(dirname "$BUNDLE_PATH")
-            BUNDLE_NAME="meshchat_${VERSION}_${ARCH}.msi"
-            mv "$BUNDLE_PATH" "${BUNDLE_DIR}/${BUNDLE_NAME}"
-            BUNDLE_PATH="${BUNDLE_DIR}/${BUNDLE_NAME}"
+          cargo packager --release --target ${{ matrix.target }} --verbose
+
+          # Find all generated packages
+          echo "Searching for packages..."
+
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            PACKAGES=$(find target/release -maxdepth 1 \( -name "*.deb" -o -name "*.AppImage" \) 2>/dev/null | tr '\n' ',')
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            PACKAGES=$(find target/release -maxdepth 1 \( -name "*.dmg" -o -name "*.app.tar.gz" \) 2>/dev/null | tr '\n' ',')
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            PACKAGES=$(find target/release -maxdepth 1 \( -name "*.exe" -o -name "*.msi" \) 2>/dev/null | tr '\n' ',')
           fi
-          echo "bundle_path=$BUNDLE_PATH" >> $GITHUB_OUTPUT
-          echo "bundle_name=$BUNDLE_NAME" >> $GITHUB_OUTPUT
-          echo "Found bundle: $BUNDLE_PATH"
+
+          # Remove trailing comma
+          PACKAGES=${PACKAGES%,}
+          echo "packages=$PACKAGES" >> $GITHUB_OUTPUT
+          echo "Found packages: $PACKAGES"
+
+      - name: Upload packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.target }}
+          path: |
+            target/release/*.deb
+            target/release/*.AppImage
+            target/release/*.dmg
+            target/release/*.app.tar.gz
+            target/release/*.exe
+            target/release/*.msi
+          if-no-files-found: warn
+
+  upload-release:
+    needs: build-and-bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find artifacts -type f | head -50
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.find-bundles.outputs.bundle_path }}
+          files: |
+            artifacts/**/*.deb
+            artifacts/**/*.AppImage
+            artifacts/**/*.dmg
+            artifacts/**/*.app.tar.gz
+            artifacts/**/*.exe
+            artifacts/**/*.msi
           tag_name: ${{ github.event.release.tag_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
