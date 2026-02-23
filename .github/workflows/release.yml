@@ -77,12 +77,12 @@ jobs:
         with:
           name: packages-${{ matrix.target }}
           path: |
-            target/release/*.deb
-            target/release/*.AppImage
-            target/release/*.dmg
-            target/release/*.app.tar.gz
-            target/release/*.exe
-            target/release/*.msi
+            target/*.deb
+            target/*.AppImage
+            target/*.dmg
+            target/*.app.tar.gz
+            target/*.exe
+            target/*.msi
           if-no-files-found: warn
 
   upload-release:
