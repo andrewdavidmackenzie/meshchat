@@ -21,7 +21,23 @@ use iced::{Center, Element, Fill, Renderer, Task, Theme, alignment};
 use iced_aw::{Menu, MenuBar, menu_bar, menu_items};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::time::Duration;
+
+// Static image handles to avoid recreating on every render
+static UNKNOWN_ICON: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(include_bytes!("../assets/images/unknown.png").to_vec())
+});
+
+#[cfg(feature = "meshtastic")]
+static MESHTASTIC_ICON: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(include_bytes!("../assets/images/meshtastic.png").to_vec())
+});
+
+#[cfg(feature = "meshcore")]
+static MESHCORE_ICON: LazyLock<image::Handle> = LazyLock::new(|| {
+    image::Handle::from_bytes(include_bytes!("../assets/images/meshcore.png").to_vec())
+});
 
 /// The type of radio firmware detected
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -215,15 +231,15 @@ impl DeviceList {
         for (ble_device, device_info) in &self.device_list {
             let mut device_row = Row::new().align_y(Center).padding(2);
 
-            // Add firmware icon based on a radio type
-            let icon_path = match device_info.radio_type {
-                RadioType::None => "assets/images/unknown.png",
+            // Add firmware icon based on radio type (using static handles)
+            let icon_handle = match device_info.radio_type {
+                RadioType::None => UNKNOWN_ICON.clone(),
                 #[cfg(feature = "meshtastic")]
-                RadioType::Meshtastic => "assets/images/meshtastic.png",
+                RadioType::Meshtastic => MESHTASTIC_ICON.clone(),
                 #[cfg(feature = "meshcore")]
-                RadioType::MeshCore => "assets/images/meshcore.png",
+                RadioType::MeshCore => MESHCORE_ICON.clone(),
             };
-            let icon = image(icon_path).width(24).height(24);
+            let icon = image(icon_handle).width(24).height(24);
             device_row = device_row.push(icon);
             device_row = device_row.push(Space::new().width(8));
 
