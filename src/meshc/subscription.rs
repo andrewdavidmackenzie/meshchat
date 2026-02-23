@@ -87,7 +87,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     Disconnected => {
                         // Wait for a message from the UI to request that we connect to a device
                         // No need to wait for any messages from a radio, as we are not connected to one
-                        if let Some(Connect(ble_device)) = gui_stream.next().await {
+                        if let Some(Connect(ble_device, _)) = gui_stream.next().await {
                             gui_sender
                                 .send(ConnectingEvent(ble_device.clone()))
                                 .await

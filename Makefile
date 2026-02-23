@@ -19,7 +19,7 @@ publish: release
 	cargo publish --no-verify --allow-dirty
 
 test:
-	cargo test
+	cargo test --all-features
 
 udeps:
 	cargo +nightly udeps

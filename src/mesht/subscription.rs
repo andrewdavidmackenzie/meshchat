@@ -62,7 +62,7 @@ impl MyRouter {
     }
 
     /// Figure out which channel we should show a message in a [MeshPacket]
-    /// i.e., is a broadcast message in a channel, or a DM to/from my node.
+    /// I.e. is a broadcast message in a channel, or a DM to/from my node.
     fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
         if mesh_packet.to == u32::MAX {
             // Destined for a channel
@@ -320,7 +320,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                     Disconnected => {
                         // Wait for a message from the UI to request that we connect to a device
                         // No need to wait for any messages from a radio, as we are not connected to one
-                        if let Some(Connect(ble_device)) = gui_stream.next().await {
+                        if let Some(Connect(ble_device, _)) = gui_stream.next().await {
                             gui_sender
                                 .send(ConnectingEvent(ble_device.clone()))
                                 .await
@@ -358,7 +358,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 
                         while let Some(message) = StreamExt::next(&mut merged_stream).await {
                             let result = match message {
-                                Connect(_) => {
+                                Connect(_, _) => {
                                     eprintln!("Cannot connect while already connected");
                                     Ok(())
                                 }

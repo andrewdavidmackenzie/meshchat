@@ -1,6 +1,9 @@
 //! MeshChat is an iced GUI app that uses the mesht "rust" crate to discover and control
 //! mesht compatible radios connected to the host running it
 
+#[cfg(not(any(feature = "meshtastic", feature = "meshcore")))]
+compile_error!("At least one of 'meshtastic' or 'meshcore' features must be enabled");
+
 #[cfg(feature = "auto-update")]
 use crate::Message::UpdateChecked;
 use crate::Message::{

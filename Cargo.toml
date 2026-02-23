@@ -88,6 +88,11 @@ panic = "deny"
 [package.metadata.cargo-all-features]
 # Exclude certain features from the build matrix
 denylist = ["hot", "debug"]
+# Skip combinations that don't include at least one radio protocol
+skip_feature_sets = [
+    [],              # no features
+    ["auto-update"], # only auto-update without radio support
+]
 
 # For cargo packager tool
 [package.metadata.packager]
