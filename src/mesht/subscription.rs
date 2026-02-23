@@ -590,7 +590,7 @@ async fn send_user(
 async fn do_connect(ble_device: &str) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
     let ble_id = BleId::from_mac_address(ble_device).unwrap_or(BleId::from_name(ble_device));
     let ble_stream = timeout(
-        Duration::from_secs(10),
+        Duration::from_secs(30),
         utils::stream::build_ble_stream::<BleId>(ble_id, Duration::from_secs(10)),
     )
     .await
