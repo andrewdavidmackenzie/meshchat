@@ -28,7 +28,6 @@ use crate::styles::{modal_style, picker_header_style, tooltip_style};
 use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{Column, center, container, mouse_area, opaque, operation, stack, text};
-use iced::window::icon;
 use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 #[cfg(feature = "auto-update")]
@@ -231,7 +230,9 @@ fn main() -> iced::Result {
     };
 
     // Try and add an icon to the window::Settings
+    #[cfg(not(target_os = "macos"))]
     let icon_bytes = include_bytes!("../assets/images/icon.ico");
+    #[cfg(not(target_os = "macos"))]
     if let Ok(app_icon) = icon::from_file_data(icon_bytes, None) {
         window_settings.icon = Some(app_icon);
     }
