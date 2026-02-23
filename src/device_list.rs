@@ -93,7 +93,7 @@ impl DeviceList {
             Error(e) => {
                 return Task::perform(empty(), move |_| {
                     Message::AppError(
-                        "Discovery Error".to_string(),
+                        "Application Error".to_string(),
                         e.to_string(),
                         MeshChat::now(),
                     )
@@ -102,7 +102,7 @@ impl DeviceList {
             CriticalError(e) => {
                 return Task::perform(empty(), move |_| {
                     Message::CriticalAppError(
-                        "Discovery Error".to_string(),
+                        "Critical Application Error".to_string(),
                         e.to_string(),
                         MeshChat::now(),
                     )
