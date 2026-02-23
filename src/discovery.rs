@@ -122,7 +122,10 @@ async fn announce_device_changes(
             if let Some(local_name) = properties.local_name {
                 // Detect radio type from service UUIDs
                 let radio_type = detect_radio_type(&properties.services);
-                ble_devices_now.insert(local_name, radio_type);
+                // Skip unknown radio types
+                if radio_type != RadioType::None {
+                    ble_devices_now.insert(local_name, radio_type);
+                }
             }
         }
     }
