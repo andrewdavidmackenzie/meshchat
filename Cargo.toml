@@ -89,15 +89,30 @@ panic = "deny"
 # Exclude certain features from the build matrix
 denylist = ["hot", "debug"]
 
-# For creation of OS bundles
-[package.metadata.bundle]
-identifier = "meshchat.mackenzie-serres.net"
-icon = ["assets/images/icon.png", "assets/images/icon.ico"]
-resources = ["assets"]
-category = "public.app-category.social-networking" # would prefer to find a better category
-short_description = "An application for chatting on the Meshtastic LoRa MESH via connected Bluetooth LE radios"
-osx_frameworks = []
-osx_minimum_system_version = "10.11"
-#osx_url_schemes = ""
-osx_info_plist_exts = ["assets/plist_exts/bluetooth.txt"]
-deb_depends = ["openssl-devel", "libdbus-sys"]
+# For cargo packager tool
+[package.metadata.packager]
+before-packaging-command = "cargo build --release"
+product-name = "MeshChat"
+identifier = "net.mackenzie-serres.meshchat"
+icons = [
+    "./assets/images/icon.png", # General/Linux
+    "./assets/images/icon.icns", # macOS
+    "./assets/images/icon.ico", # Windows
+]
+
+[package.metadata.packager.macos]
+info-plist-path = "./assets/plist_exts/Info.plist"
+
+# Runtime dependencies:
+# - libdbus-1-3: D-Bus library required by btleplug via dbus-rs
+#   Source: https://github.com/diwic/dbus-rs
+# - libbluetooth3: BlueZ Bluetooth library required by btleplug
+#   Source: https://packages.debian.org/sid/libbluetooth3
+[package.metadata.packager.deb]
+depends = ["libdbus-1-3", "libbluetooth3"]
+
+# Bundle libs into AppImage for portability across distros
+# Source: https://docs.crabnebula.dev/packager/configuration/
+[package.metadata.packager.appimage]
+# Note: find -name is used, which supports globs, but exact names are safer
+libs = ["libdbus-1.so.3", "libbluetooth.so.3"]

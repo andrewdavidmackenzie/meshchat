@@ -38,3 +38,6 @@ run:
 
 bundle:
 	cargo bundle --release
+
+package:
+	cargo packager --release
