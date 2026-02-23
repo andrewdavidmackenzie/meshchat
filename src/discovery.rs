@@ -121,9 +121,7 @@ async fn announce_device_changes(
         if let Ok(Some(properties)) = peripheral.properties().await {
             if let Some(local_name) = properties.local_name {
                 // Detect radio type from service UUIDs
-                let radio_type = detect_radio_type(&properties.services);
-                // Skip unknown radio types
-                if radio_type != RadioType::None {
+                if let Some(radio_type) = detect_radio_type(&properties.services) {
                     ble_devices_now.insert(local_name, radio_type);
                 }
             }
@@ -152,17 +150,17 @@ async fn announce_device_changes(
 
 /// Detect the radio type from the service UUIDs advertised by the peripheral
 #[allow(unused_variables)]
-fn detect_radio_type(services: &[Uuid]) -> RadioType {
+fn detect_radio_type(services: &[Uuid]) -> Option<RadioType> {
     #[cfg(feature = "meshtastic")]
     if services.contains(&MESHTASTIC_SERVICE_UUID) {
-        return RadioType::Meshtastic;
+        return Some(RadioType::Meshtastic);
     }
     #[cfg(feature = "meshcore")]
     if services.contains(&MESHCORE_SERVICE_UUID) {
-        return RadioType::MeshCore;
+        return Some(RadioType::MeshCore);
     }
-    // Default to Meshtastic if no service UUID matches (fallback)
-    RadioType::default()
+
+    None
 }
 
 /// Process device changes and return events to send.
@@ -208,17 +206,19 @@ fn process_device_changes(
 mod tests {
     use super::*;
 
+    #[cfg(feature = "meshtastic")]
     /// Helper to create a HashMap of device names with default RadioType
     fn devices(items: &[&str]) -> HashMap<String, RadioType> {
         items
             .iter()
-            .map(|s| (s.to_string(), RadioType::default()))
+            .map(|s| (s.to_string(), RadioType::Meshtastic))
             .collect()
     }
 
+    #[cfg(feature = "meshtastic")]
     /// Helper to create a tracked device's HashMap entry
     fn tracked_device(name: &str, unseen_count: i32) -> (String, (i32, RadioType)) {
-        (name.to_string(), (unseen_count, RadioType::default()))
+        (name.to_string(), (unseen_count, RadioType::Meshtastic))
     }
 
     // Test discovering new devices
@@ -600,28 +600,28 @@ mod tests {
     #[test]
     fn test_detect_radio_type_meshtastic() {
         let services = vec![MESHTASTIC_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), RadioType::Meshtastic);
+        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
     }
 
     #[cfg(feature = "meshcore")]
     #[test]
     fn test_detect_radio_type_meshcore() {
         let services = vec![MESHCORE_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), RadioType::MeshCore);
+        assert_eq!(detect_radio_type(&services), Some(RadioType::MeshCore));
     }
 
     #[test]
     fn test_detect_radio_type_empty() {
         let services: Vec<Uuid> = vec![];
         // Should return default
-        assert_eq!(detect_radio_type(&services), RadioType::default());
+        assert_eq!(detect_radio_type(&services), None);
     }
 
     #[test]
     fn test_detect_radio_type_unknown_uuid() {
         let services = vec![Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc)];
         // Should return default
-        assert_eq!(detect_radio_type(&services), RadioType::default());
+        assert_eq!(detect_radio_type(&services), None);
     }
 
     // Async tests for announce_device_changes
@@ -852,7 +852,7 @@ mod tests {
     fn test_detect_radio_type_meshtastic_with_other_uuids() {
         let other_uuid = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
         let services = vec![other_uuid, MESHTASTIC_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), RadioType::Meshtastic);
+        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
     }
 
     #[cfg(feature = "meshcore")]
@@ -860,7 +860,7 @@ mod tests {
     fn test_detect_radio_type_meshcore_with_other_uuids() {
         let other_uuid = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
         let services = vec![other_uuid, MESHCORE_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), RadioType::MeshCore);
+        assert_eq!(detect_radio_type(&services), Some(RadioType::MeshCore));
     }
 
     #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
@@ -868,7 +868,7 @@ mod tests {
     fn test_detect_radio_type_both_services_meshtastic_first() {
         // When both services are present, meshtastic takes priority (checked first)
         let services = vec![MESHTASTIC_SERVICE_UUID, MESHCORE_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), RadioType::Meshtastic);
+        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
     }
 
     #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
@@ -876,7 +876,7 @@ mod tests {
     fn test_detect_radio_type_both_services_meshcore_first() {
         // Even when meshcore UUID is first, meshtastic still wins (due to check order)
         let services = vec![MESHCORE_SERVICE_UUID, MESHTASTIC_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), RadioType::Meshtastic);
+        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
     }
 
     #[test]
@@ -884,9 +884,10 @@ mod tests {
         let services: Vec<Uuid> = (0..10)
             .map(|i| Uuid::from_u128(0x10000000_0000_0000_0000_000000000000 + i))
             .collect();
-        assert_eq!(detect_radio_type(&services), RadioType::default());
+        assert_eq!(detect_radio_type(&services), None);
     }
 
+    #[cfg(feature = "meshtastic")]
     // Test helper functions
     #[test]
     fn test_devices_helper_creates_correct_map() {
@@ -895,7 +896,7 @@ mod tests {
         assert!(result.contains_key("A"));
         assert!(result.contains_key("B"));
         assert!(result.contains_key("C"));
-        assert_eq!(result.get("A"), Some(&RadioType::default()));
+        assert_eq!(result.get("A"), Some(&RadioType::Meshtastic));
     }
 
     #[test]
@@ -904,20 +905,22 @@ mod tests {
         assert!(result.is_empty());
     }
 
+    #[cfg(feature = "meshtastic")]
     #[test]
     fn test_tracked_device_helper() {
         let (name, (count, radio_type)) = tracked_device("TestDevice", 5);
         assert_eq!(name, "TestDevice");
         assert_eq!(count, 5);
-        assert_eq!(radio_type, RadioType::default());
+        assert_eq!(radio_type, RadioType::Meshtastic);
     }
 
     // Test boundary conditions for unseen count
+    #[cfg(feature = "meshtastic")]
     #[test]
     fn test_unseen_count_boundary_at_2() {
         let current: HashMap<String, RadioType> = HashMap::new();
         let mut tracked: HashMap<String, (i32, RadioType)> = HashMap::new();
-        tracked.insert("Device1".to_string(), (2, RadioType::default()));
+        tracked.insert("Device1".to_string(), (2, RadioType::Meshtastic));
 
         let (_, lost) = process_device_changes(&current, &mut tracked);
 
@@ -926,11 +929,12 @@ mod tests {
         assert!(lost.contains(&"Device1".to_string()));
     }
 
+    #[cfg(feature = "meshtastic")]
     #[test]
     fn test_unseen_count_boundary_at_1() {
         let current: HashMap<String, RadioType> = HashMap::new();
         let mut tracked: HashMap<String, (i32, RadioType)> = HashMap::new();
-        tracked.insert("Device1".to_string(), (1, RadioType::default()));
+        tracked.insert("Device1".to_string(), (1, RadioType::Meshtastic));
 
         let (_, lost) = process_device_changes(&current, &mut tracked);
 
@@ -939,25 +943,30 @@ mod tests {
         assert_eq!(tracked.get("Device1").map(|(c, _)| *c), Some(2));
     }
 
+    #[cfg(feature = "meshtastic")]
     // Test that lost event includes correct device names
     #[test]
     fn test_lost_returns_correct_device_names() {
         let current: HashMap<String, RadioType> = HashMap::new();
         let mut tracked: HashMap<String, (i32, RadioType)> = HashMap::new();
-        tracked.insert("UniqueDeviceName123".to_string(), (2, RadioType::default()));
+        tracked.insert(
+            "UniqueDeviceName123".to_string(),
+            (2, RadioType::Meshtastic),
+        );
 
         let (_, lost) = process_device_changes(&current, &mut tracked);
 
         assert_eq!(lost, vec!["UniqueDeviceName123".to_string()]);
     }
 
+    #[cfg(feature = "meshtastic")]
     // Test Unicode device names
     #[test]
     fn test_device_with_unicode_name() {
         let mut current: HashMap<String, RadioType> = HashMap::new();
-        current.insert("日本語デバイス".to_string(), RadioType::default());
-        current.insert("Устройство".to_string(), RadioType::default());
-        current.insert("📱Device".to_string(), RadioType::default());
+        current.insert("日本語デバイス".to_string(), RadioType::Meshtastic);
+        current.insert("Устройство".to_string(), RadioType::Meshtastic);
+        current.insert("📱Device".to_string(), RadioType::Meshtastic);
 
         let mut tracked: HashMap<String, (i32, RadioType)> = HashMap::new();
 
@@ -969,11 +978,12 @@ mod tests {
         assert!(tracked.contains_key("📱Device"));
     }
 
+    #[cfg(feature = "meshtastic")]
     // Test device with an empty name
     #[test]
     fn test_device_with_empty_name() {
         let mut current: HashMap<String, RadioType> = HashMap::new();
-        current.insert("".to_string(), RadioType::default());
+        current.insert("".to_string(), RadioType::Meshtastic);
 
         let mut tracked: HashMap<String, (i32, RadioType)> = HashMap::new();
 
@@ -984,12 +994,13 @@ mod tests {
         assert!(tracked.contains_key(""));
     }
 
+    #[cfg(feature = "meshtastic")]
     // Test very long device name
     #[test]
     fn test_device_with_long_name() {
         let long_name = "A".repeat(1000);
         let mut current: HashMap<String, RadioType> = HashMap::new();
-        current.insert(long_name.clone(), RadioType::default());
+        current.insert(long_name.clone(), RadioType::Meshtastic);
 
         let mut tracked: HashMap<String, (i32, RadioType)> = HashMap::new();
 
@@ -1021,13 +1032,14 @@ mod tests {
         assert_eq!(tracked.get("Device1").map(|(c, _)| *c), Some(0));
     }
 
+    #[cfg(feature = "meshtastic")]
     // Test many devices performance
     #[test]
     fn test_many_devices() {
         let device_names: Vec<String> = (0..100).map(|i| format!("Device{}", i)).collect();
         let current: HashMap<String, RadioType> = device_names
             .iter()
-            .map(|s| (s.clone(), RadioType::default()))
+            .map(|s| (s.clone(), RadioType::Meshtastic))
             .collect();
 
         let mut tracked: HashMap<String, (i32, RadioType)> = HashMap::new();

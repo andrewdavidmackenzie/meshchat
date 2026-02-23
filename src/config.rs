@@ -448,12 +448,13 @@ mod tests {
         assert_default(returned);
     }
 
+    #[cfg(feature = "meshtastic")]
     #[tokio::test]
     async fn mac_address_saved() {
         let config = Config {
             ble_device: Some((
                 BDAddr::from([0, 1, 2, 3, 4, 5]).to_string(),
-                RadioType::None,
+                RadioType::Meshtastic,
             )),
             ..Default::default()
         };
@@ -473,7 +474,7 @@ mod tests {
             returned.ble_device.expect("BLE device address not saved"),
             (
                 BDAddr::from([0, 1, 2, 3, 4, 5]).to_string(),
-                RadioType::None
+                RadioType::Meshtastic
             )
         );
     }
