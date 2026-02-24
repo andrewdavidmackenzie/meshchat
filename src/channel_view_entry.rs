@@ -6,7 +6,7 @@ use crate::channel_view_entry::MCMessage::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
-use crate::device::{long_name, short_name};
+use crate::device::{TimeStamp, long_name, short_name};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
     alert_message_style, bubble_style, button_chip_style, menu_button_style, message_text_style,
@@ -70,7 +70,7 @@ pub struct ChannelViewEntry {
     from: NodeId,
     message_id: u32,
     /// The daytime the message was sent/received
-    rx_daytime: DateTime<Local>,
+    timestamp: DateTime<Local>,
     /// The message contents of differing types
     message: MCMessage,
     /// Has the user of the app seen this message?
@@ -85,19 +85,20 @@ pub struct ChannelViewEntry {
 impl ChannelViewEntry {
     /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
-    pub fn new(message_id: u32, from: NodeId, message: MCMessage, rx_time: u32) -> Self {
+    pub fn new(message_id: u32, from: NodeId, message: MCMessage, timestamp: TimeStamp) -> Self {
         ChannelViewEntry {
             from,
             message_id,
-            rx_daytime: Self::rx_time(rx_time),
+            timestamp: Self::local_time(timestamp),
             message,
             ..Default::default()
         }
     }
 
     /// Get the time now as a [DateTime<Local>]
-    pub fn rx_time(rx_time: u32) -> DateTime<Local> {
-        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap_or_default();
+    pub fn local_time(timestamp: TimeStamp) -> DateTime<Local> {
+        let datetime_utc =
+            DateTime::<Utc>::from_timestamp_secs(timestamp as i64).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
     }
 
@@ -151,12 +152,12 @@ impl ChannelViewEntry {
 
     /// Return the time this message was received/sent as u64 seconds in EPOCH time
     pub fn time(&self) -> DateTime<Local> {
-        self.rx_daytime
+        self.timestamp
     }
 
     /// Order two messages - using the rx_daytime field.
-    pub fn sort_by_rx_time(_: &u32, left: &Self, _: &u32, right: &Self) -> Ordering {
-        left.rx_daytime.cmp(&right.rx_daytime)
+    pub fn sort_by_timestamp(_: &TimeStamp, left: &Self, _: &TimeStamp, right: &Self) -> Ordering {
+        left.timestamp.cmp(&right.timestamp)
     }
 
     /// Return the text to use when replying to this message
@@ -497,7 +498,7 @@ fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer>
 #[cfg(test)]
 impl PartialEq<Self> for ChannelViewEntry {
     fn eq(&self, other: &Self) -> bool {
-        self.rx_daytime == other.rx_daytime
+        self.timestamp == other.timestamp
     }
 }
 
@@ -512,7 +513,7 @@ mod tests {
     use ringmap::RingMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn now_secs() -> u32 {
+    fn now_secs() -> TimeStamp {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Could no tget time")
@@ -708,14 +709,14 @@ mod tests {
     }
 
     #[test]
-    fn test_sort_by_rx_time() {
+    fn test_sort_by_timestamp() {
         let older = ChannelViewEntry::new(1, 100, NewTextMessage("old".into()), 1000);
         let newer = ChannelViewEntry::new(2, 100, NewTextMessage("new".into()), 2000);
 
-        let ordering = ChannelViewEntry::sort_by_rx_time(&1, &older, &2, &newer);
+        let ordering = ChannelViewEntry::sort_by_timestamp(&1, &older, &2, &newer);
         assert_eq!(ordering, Ordering::Less);
 
-        let ordering = ChannelViewEntry::sort_by_rx_time(&2, &newer, &1, &older);
+        let ordering = ChannelViewEntry::sort_by_timestamp(&2, &newer, &1, &older);
         assert_eq!(ordering, Ordering::Greater);
     }
 
@@ -751,8 +752,8 @@ mod tests {
 
     #[test]
     fn test_channel_view_entry_time() {
-        let rx_time = now_secs();
-        let entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), rx_time);
+        let timestamp = now_secs();
+        let entry = ChannelViewEntry::new(1, 100, NewTextMessage("test".into()), timestamp);
 
         // The time should be convertible and reasonable
         let time = entry.time();

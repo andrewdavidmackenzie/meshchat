@@ -1123,7 +1123,7 @@ mod tests {
             .try_recv()
             .expect("Failed to receive MCMessageReceived event for new text message");
         assert!(
-            matches!(&event, MCMessageReceived(channel_id, id, from, msg, _rx_time)
+            matches!(&event, MCMessageReceived(channel_id, id, from, msg, _timestamp)
                 if *channel_id == ChannelId::Channel(0) && *id == 123 && *from == 2000
                 && matches!(msg, NewTextMessage(text) if text == "Hello world")),
             "Expected MCMessageReceived with channel 0, id 123, from 2000, NewTextMessage('Hello world'), got {:?}",
