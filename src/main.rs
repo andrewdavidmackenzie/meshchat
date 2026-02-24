@@ -8,12 +8,12 @@ compile_error!("At least one of 'meshtastic' or 'meshcore' features must be enab
 use crate::Message::UpdateChecked;
 use crate::Message::{
     AddDeviceAlias, AddNodeAlias, AppError, AppNotification, CloseSettingsDialog, CloseShowUser,
-    ConfigLoaded, CopyToClipBoard, CriticalAppError, DeviceAndChannelChange, DeviceListViewEvent,
-    DeviceViewEvent, Exit, HistoryLengthSelected, Navigation, OpenSettingsDialog, OpenUrl,
-    RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification, SetWindowPosition, SetWindowSize,
-    ShowLocation, ShowUserInfo, ToggleAutoReconnect, ToggleAutoUpdate, ToggleNodeFavourite,
-    ToggleSaveWindowPosition, ToggleSaveWindowSize, ToggleShowPositionUpdates,
-    ToggleShowUserUpdates,
+    ConfigLoaded, CopyToClipBoard, CriticalAppError, DeviceAndChannelConfigChange,
+    DeviceListViewEvent, DeviceViewEvent, Exit, HistoryLengthSelected, Navigation,
+    OpenSettingsDialog, OpenUrl, RemoveDeviceAlias, RemoveNodeAlias, RemoveNotification,
+    SetWindowPosition, SetWindowSize, ShowLocation, ShowUserInfo, ToggleAutoReconnect,
+    ToggleAutoUpdate, ToggleNodeFavourite, ToggleSaveWindowPosition, ToggleSaveWindowSize,
+    ToggleShowPositionUpdates, ToggleShowUserUpdates,
 };
 use crate::View::{DeviceListView, DeviceView};
 use crate::channel_id::{ChannelId, NodeId};
@@ -165,7 +165,7 @@ pub enum Message {
     DeviceViewEvent(DeviceViewMessage),
     Exit,
     ConfigLoaded(Config),
-    DeviceAndChannelChange(Option<(String, RadioType)>, Option<ChannelId>),
+    DeviceAndChannelConfigChange(Option<(String, RadioType)>, Option<ChannelId>),
     ShowLocation(MCPosition),
     ShowUserInfo(MCUser),
     CloseShowUser,
@@ -362,7 +362,7 @@ impl MeshChat {
 
                 Task::batch(tasks)
             }
-            DeviceAndChannelChange(ble_device, channel) => {
+            DeviceAndChannelConfigChange(ble_device, channel) => {
                 self.config.ble_device = ble_device;
                 self.config.channel_id = channel;
                 // and save it asynchronously, so that we don't block the GUI thread
@@ -664,11 +664,11 @@ impl MeshChat {
     /// Navigate to show a different view, as defined by the [View] enum
     fn navigate(&mut self, view: View) -> Task<Message> {
         self.current_view = view;
-        if let DeviceView(Some(channel_id)) = &self.current_view {
-            self.device
-                .update(DeviceViewMessage::ShowChannel(Some(*channel_id)))
-        } else {
-            Task::none()
+        match &self.current_view {
+            DeviceListView => Task::none(),
+            DeviceView(channel_id) => self
+                .device
+                .update(DeviceViewMessage::ShowChannel(*channel_id)),
         }
     }
 }

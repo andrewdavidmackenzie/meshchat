@@ -34,7 +34,7 @@ use iced::{Center, Element, Fill, Font, Padding, Task};
 use ringmap::RingMap;
 use std::collections::HashMap;
 
-const MESSAGE_INPUT_ID: &str = "message_input";
+pub const MESSAGE_INPUT_ID: Id = Id::new("message_input");
 const CHANNEL_VIEW_SCROLLABLE: &str = "channel_view_scrollable";
 
 #[derive(Debug, Clone)]
@@ -192,7 +192,7 @@ impl ChannelView {
             PrepareReply(entry_id) => {
                 if self.entries.contains_key(&entry_id) {
                     self.preparing_reply_to = Some(entry_id);
-                    operation::focus(Id::new(MESSAGE_INPUT_ID))
+                    operation::focus(MESSAGE_INPUT_ID)
                 } else {
                     Task::none()
                 }
@@ -234,7 +234,7 @@ impl ChannelView {
                 https://github.com/andrewdavidmackenzie/meshchat/releases/latest ",
                 );
                 // and shift the focus to it in case the user wants to add to it or edit it
-                operation::focus(Id::new(MESSAGE_INPUT_ID))
+                operation::focus(MESSAGE_INPUT_ID)
             }
         }
     }
@@ -539,7 +539,7 @@ impl ChannelView {
                         text_input("Type your message here", &self.message)
                             .style(text_input_style)
                             .padding([4, 4])
-                            .id(Id::new(MESSAGE_INPUT_ID))
+                            .id(MESSAGE_INPUT_ID)
                             .on_input(|s| {
                                 DeviceViewEvent(ChannelMsg(self.channel_id, MessageInput(s)))
                             })
