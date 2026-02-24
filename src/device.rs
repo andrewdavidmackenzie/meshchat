@@ -83,12 +83,12 @@ pub enum SubscriptionEvent {
     MyPosition(MCPosition),
     NewChannel(MCChannel),
     NewNode(MCNodeInfo),
-    RadioNotification(String, TimeStamp), // Message, rx_time
+    RadioNotification(String, TimeStamp), // Message, TimeStamp
     /// ChannelId - channel sent to, MessageId, NodeId - sending node, The Message itself, Timestamp
-    MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp), // channel_id, id, from, MCMessage, rx_time
+    MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp), // channel_id, id, from, MCMessage, TimeStamp
     MessageACK(ChannelId, MessageId),
-    NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, rx_time
-    NewNodePosition(ChannelId, MessageId, NodeId, MCPosition, TimeStamp), // channel_id, id, from, MCPosition, rx_time
+    NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, TimeStamp
+    NewNodePosition(ChannelId, MessageId, NodeId, MCPosition, TimeStamp), // channel_id, id, from, MCPosition, TimeStamp
     DeviceBatteryLevel(Option<u32>),
     ChannelName(i32, String), // channel number, name
 }
@@ -428,18 +428,18 @@ impl Device {
                 self.add_node(node_info);
                 Task::none()
             }
-            RadioNotification(message, rx_time) => {
+            RadioNotification(message, timestamp) => {
                 Task::perform(empty(), move |_| {
                     Message::AppNotification(
                         "Radio Notification".to_string(),
                         message,
-                        rx_time
+                        timestamp
                     )
                 })
             }
-            MCMessageReceived(channel_id, id, from, mc_message, rx_time) => {
+            MCMessageReceived(channel_id, id, from, mc_message, timestamp) => {
                 if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                    let new_message = ChannelViewEntry::new(id, from, mc_message, rx_time);
+                    let new_message = ChannelViewEntry::new(id, from, mc_message, timestamp);
                     channel_view.new_message(new_message, &self.history_length)
                 } else {
                     eprintln!("No channel for MCMessage: channel_id = {:?}", channel_id);
@@ -450,12 +450,12 @@ impl Device {
                 self.battery_level = level;
                 Task::none()
             }
-            NewNodeInfo(channel_id, id,  from, mc_user, rx_time) => {
+            NewNodeInfo(channel_id, id, from, mc_user, timestamp) => {
                 self.update_node_user(from, &mc_user);
 
                 if self.show_user_updates {
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(id, from, UserMessage(mc_user), rx_time);
+                        let new_message = ChannelViewEntry::new(id, from, UserMessage(mc_user), timestamp);
                         return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("NewNodeInfo: Node '{}' unknown", mc_user.long_name);
@@ -463,7 +463,7 @@ impl Device {
                 }
                 Task::none()
             }
-            NewNodePosition(channel_id, id, from, position, rx_time) => {
+            NewNodePosition(channel_id, id, from, position, timestamp) => {
                 self.update_node_position(from, &position);
                 if self.show_position_updates {
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
@@ -471,7 +471,7 @@ impl Device {
                                 id,
                                 from,
                                 PositionMessage(position),
-                                rx_time,
+                                timestamp,
                             );
                             return channel_view.new_message(new_message, &self.history_length);
                     } else {

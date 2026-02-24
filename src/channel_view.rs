@@ -33,7 +33,6 @@ use iced::widget::{Id, operation};
 use iced::{Center, Element, Fill, Font, Padding, Task};
 use ringmap::RingMap;
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 const MESSAGE_INPUT_ID: &str = "message_input";
 const CHANNEL_VIEW_SCROLLABLE: &str = "channel_view_scrollable";
@@ -59,7 +58,7 @@ pub enum ChannelViewMessage {
 pub struct ChannelView {
     channel_id: ChannelId,
     message: String,                         // text message typed in so far
-    entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by rx_time
+    entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by timestamp
     my_node_num: NodeId,
     preparing_reply: Option<u32>,
     emoji_picker: EmojiPicker,
@@ -87,12 +86,9 @@ impl ChannelView {
 
     /// Get the time now as a [DateTime<Local>]
     fn now_local() -> DateTime<Local> {
-        let rx_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|t| t.as_secs())
-            .unwrap_or(0);
-
-        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap_or_default();
+        let timestamp = MeshChat::now();
+        let datetime_utc =
+            DateTime::<Utc>::from_timestamp_secs(timestamp as i64).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
     }
 
@@ -110,7 +106,7 @@ impl ChannelView {
                 let oldest = Self::now_local() - *duration;
                 while self
                     .entries
-                    .pop_front_if(|_k, v| v.time() < oldest)
+                    .pop_front_if(|_k, channel_view_entry| channel_view_entry.time() < oldest)
                     .is_some()
                 {}
             }
@@ -138,7 +134,7 @@ impl ChannelView {
                 self.entries.insert_sorted_by(
                     new_message.message_id(),
                     new_message,
-                    ChannelViewEntry::sort_by_rx_time,
+                    ChannelViewEntry::sort_by_timestamp,
                 );
 
                 self.trim_history(history_length);

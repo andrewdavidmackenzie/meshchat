@@ -1,5 +1,6 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
+use crate::device::TimeStamp;
 use crate::styles::{
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, error_notification_style,
     info_notification_style, permanent_notification_style,
@@ -15,9 +16,9 @@ use iced::{Bottom, Element, Fill, Renderer, Right, Task, Theme};
 /// - Info(summary, detail)
 #[derive(Debug)]
 pub enum Notification {
-    Critical(String, String, u32), // Message, Detail, rx_time
-    Error(String, String, u32),    // Message, Detail, rx_time
-    Info(String, String, u32),     // Message, Detail, rx_time
+    Critical(String, String, u32), // Message, Detail, TimeStamp
+    Error(String, String, u32),    // Message, Detail, TimeStamp
+    Info(String, String, u32),     // Message, Detail, TimeStamp
 }
 
 /// A collection of notifications that should be shown on screen
@@ -33,7 +34,7 @@ impl Notifications {
         let mut notifications = Column::new().padding(10);
 
         for (id, notification) in &self.inner {
-            let (style, cancellable, summary, details, rx_time) = match notification {
+            let (style, cancellable, summary, details, timestamp) = match notification {
                 Notification::Critical(s, d, t) => (
                     permanent_notification_style as fn(&Theme) -> Style,
                     false,
@@ -61,7 +62,7 @@ impl Notifications {
                 *id,
                 summary,
                 details,
-                *rx_time,
+                *timestamp,
                 style,
                 cancellable,
             ));
@@ -74,7 +75,7 @@ impl Notifications {
         id: usize,
         summary: &'a str,
         detail: &'a str,
-        rx_time: u32,
+        timestamp: TimeStamp,
         style: impl Fn(&Theme) -> Style + 'static,
         cancellable: bool,
     ) -> Element<'a, Message> {
@@ -92,7 +93,7 @@ impl Notifications {
         let bottom_row = Row::new()
             .push(text(detail).size(14))
             .push(Space::new().width(Fill))
-            .push(Self::time_to_text(rx_time))
+            .push(Self::time_to_text(timestamp))
             .align_y(Bottom);
 
         Container::new(Column::new().push(top_row).push(bottom_row))
@@ -103,8 +104,9 @@ impl Notifications {
     }
 
     /// Convert the notification creation time to a Text element
-    fn time_to_text<'a>(rx_time: u32) -> Text<'a, Theme, Renderer> {
-        let datetime_utc = DateTime::<Utc>::from_timestamp_secs(rx_time as i64).unwrap_or_default();
+    fn time_to_text<'a>(timestamp: TimeStamp) -> Text<'a, Theme, Renderer> {
+        let datetime_utc =
+            DateTime::<Utc>::from_timestamp_secs(timestamp as i64).unwrap_or_default();
         let datetime_local = datetime_utc.with_timezone(&Local);
         let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
         text(time_str)
@@ -333,35 +335,39 @@ mod tests {
     }
 
     #[test]
-    fn test_notification_rx_time_preserved() {
+    fn test_notification_timestamp_preserved() {
         let mut notifications = Notifications::default();
-        let rx_time = 1234567890;
-        let _ = notifications.add(Notification::Info("test".into(), "detail".into(), rx_time));
+        let timestamp = 1234567890;
+        let _ = notifications.add(Notification::Info(
+            "test".into(),
+            "detail".into(),
+            timestamp,
+        ));
 
         let notification = &notifications.inner[0].1;
         assert!(
-            matches!(notification, Notification::Info(_, _, time) if *time == rx_time),
-            "Info notification should preserve rx_time {}, got {:?}",
-            rx_time,
+            matches!(notification, Notification::Info(_, _, time) if *time == timestamp),
+            "Info notification should preserve timestamp {}, got {:?}",
+            timestamp,
             notification
         );
     }
 
     #[test]
-    fn test_error_notification_rx_time_preserved() {
+    fn test_error_notification_timestamp_preserved() {
         let mut notifications = Notifications::default();
-        let rx_time = 1234567890;
+        let timestamp = 1234567890;
         let _ = notifications.add(Notification::Error(
             "error".into(),
             "detail".into(),
-            rx_time,
+            timestamp,
         ));
 
         let notification = &notifications.inner[0].1;
         assert!(
-            matches!(notification, Notification::Error(_, _, time) if *time == rx_time),
-            "Error notification should preserve rx_time {}, got {:?}",
-            rx_time,
+            matches!(notification, Notification::Error(_, _, time) if *time == timestamp),
+            "Error notification should preserve timestamp {}, got {:?}",
+            timestamp,
             notification
         );
     }
@@ -502,7 +508,7 @@ mod tests {
     }
 
     #[test]
-    fn test_view_with_zero_rx_time() {
+    fn test_view_with_zero_timestamp() {
         let mut notifications = Notifications::default();
         let _ = notifications.add(Notification::Info("Test".into(), "Detail".into(), 0));
         let _element = notifications.view();
@@ -510,7 +516,7 @@ mod tests {
     }
 
     #[test]
-    fn test_view_with_max_rx_time() {
+    fn test_view_with_max_timestamp() {
         let mut notifications = Notifications::default();
         let _ = notifications.add(Notification::Info("Test".into(), "Detail".into(), u32::MAX));
         let _element = notifications.view();
@@ -680,20 +686,20 @@ mod tests {
     }
 
     #[test]
-    fn test_critical_notification_rx_time_preserved() {
+    fn test_critical_notification_timestamp_preserved() {
         let mut notifications = Notifications::default();
-        let rx_time = 1234567890;
+        let timestamp = 1234567890;
         let _ = notifications.add(Notification::Critical(
             "critical".into(),
             "detail".into(),
-            rx_time,
+            timestamp,
         ));
 
         let notification = &notifications.inner[0].1;
         assert!(
-            matches!(notification, Notification::Critical(_, _, time) if *time == rx_time),
-            "Critical notification should preserve rx_time {}, got {:?}",
-            rx_time,
+            matches!(notification, Notification::Critical(_, _, time) if *time == timestamp),
+            "Critical notification should preserve timestamp {}, got {:?}",
+            timestamp,
             notification
         );
     }

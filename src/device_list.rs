@@ -93,7 +93,7 @@ impl DeviceList {
             Error(e) => {
                 return Task::perform(empty(), move |_| {
                     Message::AppError(
-                        "Discovery Error".to_string(),
+                        "Application Error".to_string(),
                         e.to_string(),
                         MeshChat::now(),
                     )
@@ -102,7 +102,7 @@ impl DeviceList {
             CriticalError(e) => {
                 return Task::perform(empty(), move |_| {
                     Message::CriticalAppError(
-                        "Discovery Error".to_string(),
+                        "Critical Application Error".to_string(),
                         e.to_string(),
                         MeshChat::now(),
                     )
@@ -553,6 +553,15 @@ mod tests {
         // Error should return a task (not Task::none)
         let _task = view.update(Error("Test error".to_string()));
         // The task will be an AppError message when executed
+    }
+
+    #[test]
+    fn test_critical_error_returns_task() {
+        let mut view = DeviceList::default();
+
+        // CriticalError should return a task (not Task::none)
+        let _task = view.update(CriticalError("Critical test error".to_string()));
+        // The task will be a CriticalAppError message when executed
     }
 
     #[test]

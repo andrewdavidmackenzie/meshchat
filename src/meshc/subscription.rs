@@ -57,7 +57,6 @@ impl RadioCache {
     }
 }
 /// A stream of [SubscriptionEvent] for comms between the app and the radio
-///
 pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     stream::channel(
         100,
@@ -581,7 +580,7 @@ async fn handle_new_channel_message(
         channel_message.sender_timestamp as MessageId,
         *node_id,
         MCMessage::NewTextMessage(text.to_string()),
-        channel_message.sender_timestamp,
+        MeshChat::now(),
     );
 
     gui_sender
@@ -1119,5 +1118,83 @@ mod tests {
 
         assert_eq!(user.long_name, "日本語ノード");
         assert_eq!(user.short_name, "日本語ノード");
+    }
+
+    // Tests for local timestamp usage
+
+    #[tokio::test]
+    async fn handle_new_channel_message_uses_local_timestamp() {
+        use meshcore_rs::ChannelMessage;
+
+        let radio_cache = RadioCache::default();
+        let (mut sender, mut receiver) = create_test_channel();
+
+        let channel_message = ChannelMessage {
+            channel_idx: 0,
+            sender_timestamp: 1234567890, // Old radio timestamp (should be ignored)
+            text: "Test message".to_string(),
+            path_len: 0,
+            txt_type: 0,
+            snr: None,
+        };
+
+        let before = MeshChat::now();
+        handle_new_channel_message(&radio_cache, channel_message, &mut sender).await;
+        let after = MeshChat::now();
+
+        let event = receiver
+            .next()
+            .await
+            .expect("Expected MCMessageReceived event");
+
+        if let MCMessageReceived(_, _, _, _, timestamp) = event {
+            assert!(
+                timestamp >= before && timestamp <= after,
+                "Timestamp should be local time between {} and {}, got {}",
+                before,
+                after,
+                timestamp
+            );
+        } else {
+            unreachable!("Expected MCMessageReceived event, got {:?}", event);
+        }
+    }
+
+    #[tokio::test]
+    async fn handle_new_contact_message_uses_local_timestamp() {
+        use meshcore_rs::ContactMessage;
+
+        let (mut sender, mut receiver) = create_test_channel();
+
+        let contact_message = ContactMessage {
+            sender_prefix: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
+            path_len: 0,
+            txt_type: 0,
+            sender_timestamp: 1234567890, // Old radio timestamp (should be ignored)
+            text: "Direct message".to_string(),
+            snr: Some(10.5),
+            signature: None,
+        };
+
+        let before = MeshChat::now();
+        handle_new_contact_message(contact_message, &mut sender).await;
+        let after = MeshChat::now();
+
+        let event = receiver
+            .next()
+            .await
+            .expect("Expected MCMessageReceived event");
+
+        if let MCMessageReceived(_, _, _, _, timestamp) = event {
+            assert!(
+                timestamp >= before && timestamp <= after,
+                "Timestamp should be local time between {} and {}, got {}",
+                before,
+                after,
+                timestamp
+            );
+        } else {
+            unreachable!("Expected MCMessageReceived event, got {:?}", event);
+        }
     }
 }

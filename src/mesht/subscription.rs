@@ -16,7 +16,7 @@ use crate::device::SubscriptionEvent::{
 };
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
-use crate::{MCChannel, MCNodeInfo, MCPosition, channel_id};
+use crate::{MCChannel, MCNodeInfo, MCPosition, MeshChat, channel_id};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -189,7 +189,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 AlertMessage(message),
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -215,7 +215,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 mcmessage,
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -232,7 +232,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 mcposition,
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -259,7 +259,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 (&user).into(),
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -626,8 +626,9 @@ async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Erro
 mod tests {
     use super::*;
     use futures_channel::mpsc;
+    use meshtastic::Message;
     use meshtastic::protobufs::{
-        Channel as ProtoChannel, Data, MyNodeInfo, NodeInfo as ProtoNodeInfo,
+        Channel as ProtoChannel, Data, MyNodeInfo, NodeInfo as ProtoNodeInfo, Position, User,
     };
 
     // Helper to create a basic MeshPacket for testing
@@ -692,6 +693,92 @@ mod tests {
             dest: 0,
             source: 0,
             request_id,
+            reply_id: 0,
+            emoji: 0,
+            bitfield: Some(0),
+        }));
+        packet
+    }
+
+    // Helper to create a MeshPacket with position payload
+    #[allow(deprecated)]
+    fn create_position_mesh_packet(
+        from: u32,
+        to: u32,
+        channel: u32,
+        id: u32,
+        latitude_i: i32,
+        longitude_i: i32,
+    ) -> MeshPacket {
+        let position = Position {
+            latitude_i: Some(latitude_i),
+            longitude_i: Some(longitude_i),
+            altitude: Some(0),
+            time: 0,
+            location_source: 0,
+            altitude_source: 0,
+            timestamp: 0,
+            timestamp_millis_adjust: 0,
+            altitude_hae: Some(0),
+            altitude_geoidal_separation: Some(0),
+            pdop: 0,
+            hdop: 0,
+            vdop: 0,
+            gps_accuracy: 0,
+            ground_speed: Some(0),
+            ground_track: Some(0),
+            fix_quality: 0,
+            fix_type: 0,
+            sats_in_view: 0,
+            sensor_id: 0,
+            next_update: 0,
+            seq_number: 0,
+            precision_bits: 0,
+        };
+        let mut packet = create_mesh_packet(from, to, channel, id);
+        packet.payload_variant = Some(Decoded(Data {
+            portnum: PortNum::PositionApp as i32,
+            payload: position.encode_to_vec(),
+            want_response: false,
+            dest: 0,
+            source: 0,
+            request_id: 0,
+            reply_id: 0,
+            emoji: 0,
+            bitfield: Some(0),
+        }));
+        packet
+    }
+
+    // Helper to create a MeshPacket with nodeinfo payload
+    #[allow(deprecated)]
+    fn create_nodeinfo_mesh_packet(
+        from: u32,
+        to: u32,
+        channel: u32,
+        id: u32,
+        long_name: &str,
+        short_name: &str,
+    ) -> MeshPacket {
+        let user = User {
+            id: format!("!{:08x}", from),
+            long_name: long_name.to_string(),
+            short_name: short_name.to_string(),
+            macaddr: vec![],
+            hw_model: 0,
+            is_licensed: false,
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: Some(false),
+        };
+        let mut packet = create_mesh_packet(from, to, channel, id);
+        packet.payload_variant = Some(Decoded(Data {
+            portnum: PortNum::NodeinfoApp as i32,
+            payload: user.encode_to_vec(),
+            want_response: false,
+            dest: 0,
+            source: 0,
+            request_id: 0,
             reply_id: 0,
             emoji: 0,
             bitfield: Some(0),
@@ -1036,7 +1123,7 @@ mod tests {
             .try_recv()
             .expect("Failed to receive MCMessageReceived event for new text message");
         assert!(
-            matches!(&event, MCMessageReceived(channel_id, id, from, msg, _rx_time)
+            matches!(&event, MCMessageReceived(channel_id, id, from, msg, _timestamp)
                 if *channel_id == ChannelId::Channel(0) && *id == 123 && *from == 2000
                 && matches!(msg, NewTextMessage(text) if text == "Hello world")),
             "Expected MCMessageReceived with channel 0, id 123, from 2000, NewTextMessage('Hello world'), got {:?}",
@@ -1190,5 +1277,138 @@ mod tests {
             .try_recv()
             .expect("Failed to receive MCMessageReceived event from PacketRouter");
         assert!(matches!(event, MCMessageReceived(_, _, _, _, _)));
+    }
+
+    // Tests for local timestamp usage (MeshChat::now() instead of radio rx_time)
+
+    #[tokio::test]
+    async fn test_text_message_uses_local_timestamp() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let before = MeshChat::now();
+        let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Hello", 0, 0);
+        router.handle_a_mesh_packet(&packet).await;
+        let after = MeshChat::now();
+
+        let event = receiver
+            .try_recv()
+            .expect("Expected MCMessageReceived event");
+        if let MCMessageReceived(_, _, _, _, timestamp) = event {
+            assert!(
+                timestamp >= before && timestamp <= after,
+                "Timestamp should be local time between {} and {}, got {}",
+                before,
+                after,
+                timestamp
+            );
+        } else {
+            unreachable!("Expected MCMessageReceived event, got {:?}", event);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_text_reply_uses_local_timestamp() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let before = MeshChat::now();
+        let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Reply", 456, 0);
+        router.handle_a_mesh_packet(&packet).await;
+        let after = MeshChat::now();
+
+        let event = receiver
+            .try_recv()
+            .expect("Expected MCMessageReceived event");
+        if let MCMessageReceived(_, _, _, _, timestamp) = event {
+            assert!(
+                timestamp >= before && timestamp <= after,
+                "Timestamp should be local time between {} and {}, got {}",
+                before,
+                after,
+                timestamp
+            );
+        } else {
+            unreachable!("Expected MCMessageReceived event, got {:?}", event);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_emoji_reply_uses_local_timestamp() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let before = MeshChat::now();
+        let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "👍", 456, 1);
+        router.handle_a_mesh_packet(&packet).await;
+        let after = MeshChat::now();
+
+        let event = receiver
+            .try_recv()
+            .expect("Expected MCMessageReceived event");
+        if let MCMessageReceived(_, _, _, _, timestamp) = event {
+            assert!(
+                timestamp >= before && timestamp <= after,
+                "Timestamp should be local time between {} and {}, got {}",
+                before,
+                after,
+                timestamp
+            );
+        } else {
+            unreachable!("Expected MCMessageReceived event, got {:?}", event);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_position_update_uses_local_timestamp() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let before = MeshChat::now();
+        let packet = create_position_mesh_packet(2000, u32::MAX, 0, 123, 37_774_900, -122_419_400);
+        router.handle_a_mesh_packet(&packet).await;
+        let after = MeshChat::now();
+
+        let event = receiver.try_recv().expect("Expected NewNodePosition event");
+        if let NewNodePosition(_, _, _, _, timestamp) = event {
+            assert!(
+                timestamp >= before && timestamp <= after,
+                "Timestamp should be local time between {} and {}, got {}",
+                before,
+                after,
+                timestamp
+            );
+        } else {
+            unreachable!("Expected NewNodePosition event, got {:?}", event);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_node_info_uses_local_timestamp() {
+        let (sender, mut receiver) = mpsc::channel::<SubscriptionEvent>(10);
+        let mut router = MyRouter::new(sender);
+        router.my_node_num = Some(1000);
+
+        let before = MeshChat::now();
+        let packet = create_nodeinfo_mesh_packet(2000, u32::MAX, 0, 123, "TestNode", "!abcd1234");
+        router.handle_a_mesh_packet(&packet).await;
+        let after = MeshChat::now();
+
+        let event = receiver.try_recv().expect("Expected NewNodeInfo event");
+        if let NewNodeInfo(_, _, _, _, timestamp) = event {
+            assert!(
+                timestamp >= before && timestamp <= after,
+                "Timestamp should be local time between {} and {}, got {}",
+                before,
+                after,
+                timestamp
+            );
+        } else {
+            unreachable!("Expected NewNodeInfo event, got {:?}", event);
+        }
     }
 }

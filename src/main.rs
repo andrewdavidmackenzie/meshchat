@@ -170,9 +170,9 @@ pub enum Message {
     ShowUserInfo(MCUser),
     CloseShowUser,
     OpenUrl(String),
-    AppNotification(String, String, TimeStamp), // Message, detail, rx_time
-    AppError(String, String, TimeStamp),        // Message, detail, rx_time
-    CriticalAppError(String, String, TimeStamp), // Message, detail, rx_time
+    AppNotification(String, String, TimeStamp), // Message, detail, TimeStamp
+    AppError(String, String, TimeStamp),        // Message, detail, TimeStamp
+    CriticalAppError(String, String, TimeStamp), // Message, detail, TimeStamp
     RemoveNotification(usize),
     ToggleNodeFavourite(NodeId),
     CopyToClipBoard(String),
@@ -310,15 +310,15 @@ impl MeshChat {
             DeviceListViewEvent(device_list_event) => self.device_list.update(device_list_event),
             DeviceViewEvent(device_event) => self.device.update(device_event),
             Exit => window::latest().and_then(window::close),
-            AppNotification(summary, detail, rx_time) => self
+            AppNotification(summary, detail, timestamp) => self
                 .notifications
-                .add(Notification::Info(summary, detail, rx_time)),
-            AppError(summary, detail, rx_time) => self
+                .add(Notification::Info(summary, detail, timestamp)),
+            AppError(summary, detail, timestamp) => self
                 .notifications
-                .add(Notification::Error(summary, detail, rx_time)),
-            CriticalAppError(summary, detail, rx_time) => self
+                .add(Notification::Error(summary, detail, timestamp)),
+            CriticalAppError(summary, detail, timestamp) => self
                 .notifications
-                .add(Notification::Critical(summary, detail, rx_time)),
+                .add(Notification::Critical(summary, detail, timestamp)),
             Message::None => Task::none(),
             ConfigLoaded(config) => {
                 self.device.set_history_length(config.history_length);
