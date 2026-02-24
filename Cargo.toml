@@ -40,7 +40,7 @@ ringmap = { version = "0.2" }
 # For horizontal busy bar in easing.rs
 lyon_algorithms = { version = "1.0", default-features = false }
 futures-channel = { version = "0.3.32", default-features = false }
-chrono = { version = "0.4.43", default-features = false, features = ["clock"] }
+chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
 webbrowser = { version = "1.0", default-features = false }
 iced_aw = { version = "0.13", default-features = false, features = ["menu"] }
 btleplug = { version = "0.11.8", default-features = false }
