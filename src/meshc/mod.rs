@@ -308,20 +308,21 @@ mod test {
 
     #[test]
     fn contact_message_to_subscription_event() {
-        let timestamp = MeshChat::now();
+        let before_conversion = MeshChat::now();
         let message = ContactMessage {
             sender_prefix: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
             path_len: 0,
             txt_type: 0,
-            sender_timestamp: timestamp,
+            sender_timestamp: 1234567890, // Old radio timestamp (should be ignored)
             text: "Direct message".to_string(),
             snr: Some(10.5),
             signature: None,
         };
 
         let event: SubscriptionEvent = message.into();
+        let after_conversion = MeshChat::now();
 
-        let MCMessageReceived(channel_id, _msg_id, from, msg, timestamp) = event else {
+        let MCMessageReceived(channel_id, _msg_id, from, msg, event_timestamp) = event else {
             unreachable!("Expected MCMessageReceived event")
         };
 
@@ -329,7 +330,14 @@ mod test {
         let expected_node_id = 0xAABB_CCDD_EEFF_0000_u64;
         assert_eq!(channel_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
-        assert_eq!(timestamp, timestamp);
+        // Timestamp should be local time (from MeshChat::now()), not the sender_timestamp
+        assert!(
+            event_timestamp >= before_conversion && event_timestamp <= after_conversion,
+            "Event timestamp should be a local timestamp between {} and {}, got {}",
+            before_conversion,
+            after_conversion,
+            event_timestamp
+        );
         assert_eq!(msg.to_string(), "Direct message");
     }
 

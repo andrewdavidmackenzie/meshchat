@@ -232,7 +232,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 mcposition,
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -259,7 +259,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 (&user).into(),
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
