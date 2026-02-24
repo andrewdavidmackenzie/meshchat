@@ -35,7 +35,7 @@ use ringmap::RingMap;
 use std::collections::HashMap;
 
 pub const MESSAGE_INPUT_ID: Id = Id::new("message_input");
-const CHANNEL_VIEW_SCROLLABLE: &str = "channel_view_scrollable";
+const CHANNEL_VIEW_SCROLLABLE_ID: Id = Id::new("channel_view_scrollable");
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -148,7 +148,7 @@ impl ChannelView {
 
         if mine {
             // scroll to the end of messages to see the message I just sent
-            operation::snap_to(Id::from(CHANNEL_VIEW_SCROLLABLE), RelativeOffset::END)
+            operation::snap_to(CHANNEL_VIEW_SCROLLABLE_ID, RelativeOffset::END)
         } else {
             Task::none()
         }
@@ -333,7 +333,7 @@ impl ChannelView {
                     let scrollbar = Scrollbar::new().width(10.0);
                     scrollable::Direction::Vertical(scrollbar)
                 })
-                .id(Id::new(CHANNEL_VIEW_SCROLLABLE))
+                .id(CHANNEL_VIEW_SCROLLABLE_ID)
                 .style(scrollbar_style)
                 .width(Fill)
                 .height(Fill)
