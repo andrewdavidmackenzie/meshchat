@@ -1,4 +1,3 @@
-use crate::MeshChat;
 use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::{ChannelViewEntry, MCMessage};
 use crate::config::{Config, HistoryLength};
@@ -16,12 +15,8 @@ use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
     DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
+use crate::MeshChat;
 
-use crate::Message::{
-    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, OpenUrl,
-    RemoveNodeAlias, ShowLocation, ShowUserInfo, ToggleNodeFavourite,
-};
-use crate::View::DeviceListView;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
@@ -31,15 +26,20 @@ use crate::device::SubscriptionEvent::{
 };
 use crate::device_list::{DeviceList, RadioType};
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
-    fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
-    text_input_style, tooltip_style,
+    battery_style, button_chip_style, channel_row_style, count_style, fav_button_style,
+    scrollbar_style, text_input_button_style, text_input_container_style, text_input_style,
+    tooltip_style, DAY_SEPARATOR_STYLE,
 };
 use crate::widgets::battery::{Battery, BatteryState};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
+use crate::Message::{
+    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, OpenUrl,
+    RemoveNodeAlias, ShowLocation, ShowUserInfo, ToggleNodeFavourite,
+};
+use crate::View::DeviceListView;
+use crate::{icons, MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    Button, Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
+    button, container, scrollable, text, text_input, tooltip, Button, Column, Container, Row, Space,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
 #[cfg(feature = "meshcore")]
@@ -1036,7 +1036,6 @@ impl Device {
         };
 
         if add_buttons {
-            node_row = node_row.push(Space::new().width(Fill));
             node_row = self.add_buttons(node_row, node_id, favourite, config)
         }
 
@@ -1188,11 +1187,11 @@ pub fn long_name(nodes: &HashMap<NodeId, MCNodeInfo>, from: NodeId) -> &str {
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
-    use crate::Message::Navigation;
     use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
     use crate::device::DeviceViewMessage::{ClearFilter, SearchInput};
     use crate::device::SubscriberMessage::{Connect, Disconnect};
     use crate::test_helper;
+    use crate::Message::Navigation;
     use btleplug::api::BDAddr;
 
     fn test_position(lat: f64, lon: f64) -> MCPosition {
