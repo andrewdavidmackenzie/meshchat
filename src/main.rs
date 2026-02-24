@@ -4,6 +4,18 @@
 #[cfg(not(any(feature = "meshtastic", feature = "meshcore")))]
 compile_error!("At least one of 'meshtastic' or 'meshcore' features must be enabled");
 
+use crate::channel_id::{ChannelId, NodeId};
+use crate::config::{load_config, Config, HistoryLength};
+use crate::device::ConnectionState::Connected;
+use crate::device::DeviceViewMessage;
+use crate::device::DeviceViewMessage::DisconnectRequest;
+#[cfg(any(feature = "meshtastic", feature = "meshcore"))]
+use crate::device::DeviceViewMessage::SubscriptionMessage;
+use crate::device::{Device, TimeStamp};
+use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
+use crate::discovery::ble_discovery;
+use crate::notification::{Notification, Notifications};
+use crate::styles::{modal_style, picker_header_style, tooltip_style};
 #[cfg(feature = "auto-update")]
 use crate::Message::UpdateChecked;
 use crate::Message::{
@@ -16,23 +28,11 @@ use crate::Message::{
     ToggleShowUserUpdates,
 };
 use crate::View::{DeviceListView, DeviceView};
-use crate::channel_id::{ChannelId, NodeId};
-use crate::config::{Config, HistoryLength, load_config};
-use crate::device::ConnectionState::Connected;
-use crate::device::DeviceViewMessage;
-use crate::device::DeviceViewMessage::DisconnectRequest;
-#[cfg(any(feature = "meshtastic", feature = "meshcore"))]
-use crate::device::DeviceViewMessage::SubscriptionMessage;
-use crate::device::{Device, TimeStamp};
-use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
-use crate::discovery::ble_discovery;
-use crate::notification::{Notification, Notifications};
-use crate::styles::{modal_style, picker_header_style, tooltip_style};
 use iced::font::Weight;
 use iced::keyboard::key;
-use iced::widget::{Column, center, container, mouse_area, opaque, operation, stack, text};
-use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
-use iced::{Element, Fill, event};
+use iced::widget::{center, container, mouse_area, opaque, operation, stack, text, Column};
+use iced::{clipboard, keyboard, window, Center, Event, Font, Point, Size, Subscription, Task};
+use iced::{event, Element, Fill};
 #[cfg(feature = "auto-update")]
 use self_update::Status;
 use std::cmp::PartialEq;
@@ -91,7 +91,7 @@ impl fmt::Display for MCUser {
 }
 
 /// A Node's Info as represented in the App, maybe a superset of User attributes from different meshes
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MCNodeInfo {
     pub node_id: NodeId,
     pub user: Option<MCUser>,
@@ -676,8 +676,8 @@ impl MeshChat {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::View::DeviceListView;
     use crate::channel_view_entry::MCMessage::NewTextMessage;
+    use crate::View::DeviceListView;
     use iced::keyboard::key::NativeCode::MacOS;
     use iced::keyboard::{Key, Location};
 

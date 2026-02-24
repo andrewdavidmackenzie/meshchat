@@ -1,4 +1,3 @@
-use crate::MeshChat;
 use crate::channel_view::{ChannelView, ChannelViewMessage};
 use crate::channel_view_entry::{ChannelViewEntry, MCMessage};
 use crate::config::{Config, HistoryLength};
@@ -16,12 +15,8 @@ use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
     DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
+use crate::MeshChat;
 
-use crate::Message::{
-    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, OpenUrl,
-    RemoveNodeAlias, ShowLocation, ShowUserInfo, ToggleNodeFavourite,
-};
-use crate::View::DeviceListView;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
@@ -31,15 +26,20 @@ use crate::device::SubscriptionEvent::{
 };
 use crate::device_list::{DeviceList, RadioType};
 use crate::styles::{
-    DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
-    fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
-    text_input_style, tooltip_style,
+    battery_style, button_chip_style, channel_row_style, count_style, fav_button_style,
+    scrollbar_style, text_input_button_style, text_input_container_style, text_input_style,
+    tooltip_style, DAY_SEPARATOR_STYLE,
 };
 use crate::widgets::battery::{Battery, BatteryState};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
+use crate::Message::{
+    AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, OpenUrl,
+    RemoveNodeAlias, ShowLocation, ShowUserInfo, ToggleNodeFavourite,
+};
+use crate::View::DeviceListView;
+use crate::{icons, MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    Button, Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
+    button, container, scrollable, text, text_input, tooltip, Button, Column, Container, Row, Space,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
 #[cfg(feature = "meshcore")]
@@ -1036,6 +1036,7 @@ impl Device {
         };
 
         if add_buttons {
+            node_row = node_row.push(Space::new().width(Fill));
             node_row = self.add_buttons(node_row, node_id, favourite, config)
         }
 
@@ -1077,7 +1078,8 @@ impl Device {
                 tooltip(
                     button(text("ⓘ"))
                         .style(fav_button_style)
-                        .on_press(ShowUserInfo(user.clone())),
+                        .on_press(ShowUserInfo(user.clone()))
+                        .width(36),
                     "Show node's User info",
                     tooltip::Position::Left,
                 )
@@ -1096,7 +1098,8 @@ impl Device {
                 tooltip(
                     button(text("📌"))
                         .style(fav_button_style)
-                        .on_press(ShowLocation(position.clone())),
+                        .on_press(ShowLocation(position.clone()))
+                        .width(36),
                     "Show node position in maps",
                     tooltip::Position::Left,
                 )
@@ -1185,38 +1188,18 @@ pub fn long_name(nodes: &HashMap<NodeId, MCNodeInfo>, from: NodeId) -> &str {
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
-    use crate::Message::Navigation;
     use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
     use crate::device::DeviceViewMessage::{ClearFilter, SearchInput};
     use crate::device::SubscriberMessage::{Connect, Disconnect};
     use crate::test_helper;
+    use crate::Message::Navigation;
     use btleplug::api::BDAddr;
 
     fn test_position(lat: f64, lon: f64) -> MCPosition {
         MCPosition {
             latitude: lat,
             longitude: lon,
-            altitude: None,
-            time: 0,
-            location_source: 0,
-            altitude_source: 0,
-            timestamp: 0,
-            timestamp_millis_adjust: 0,
-            altitude_hae: None,
-            altitude_geoidal_separation: None,
-            pdop: 0,
-            hdop: 0,
-            vdop: 0,
-            gps_accuracy: 0,
-            ground_speed: None,
-            ground_track: None,
-            fix_quality: 0,
-            fix_type: 0,
-            sats_in_view: 0,
-            sensor_id: 0,
-            next_update: 0,
-            seq_number: 0,
-            precision_bits: 0,
+            ..Default::default()
         }
     }
 
@@ -1297,12 +1280,8 @@ mod tests {
                     long_name: "Test User".into(),
                     short_name: "TEST".into(),
                     hw_model_str: "TBEAM".into(),
-                    hw_model: 0,
-                    is_licensed: false,
                     role_str: "CLIENT".into(),
-                    role: 0,
-                    public_key: vec![],
-                    is_unmessagable: false,
+                    ..Default::default()
                 }),
                 position: None,
                 is_ignored: false,
@@ -1318,9 +1297,7 @@ mod tests {
             12345,
             MCNodeInfo {
                 node_id: 12345,
-                user: None,
-                position: None,
-                is_ignored: false,
+                ..Default::default()
             },
         );
         assert_eq!(short_name(&nodes, 12345), "????");
@@ -1344,12 +1321,8 @@ mod tests {
                     long_name: "Test User Long Name".into(),
                     short_name: "TEST".into(),
                     hw_model_str: "TBEAM".into(),
-                    hw_model: 0,
-                    is_licensed: false,
                     role_str: "CLIENT".into(),
-                    role: 0,
-                    public_key: vec![],
-                    is_unmessagable: false,
+                    ..Default::default()
                 }),
                 position: None,
                 is_ignored: false,
@@ -1597,12 +1570,8 @@ mod tests {
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
                 hw_model_str: "TBEAM".into(),
-                hw_model: 0,
-                is_licensed: false,
                 role_str: "CLIENT".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1644,12 +1613,8 @@ mod tests {
             long_name: "My Name".into(),
             short_name: "ME".into(),
             hw_model_str: "TBEAM".into(),
-            hw_model: 0,
-            is_licensed: false,
             role_str: "CLIENT".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
 
         let node_info = MCNodeInfo {
@@ -1686,13 +1651,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test".into(),
                 short_name: "T".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1721,9 +1680,7 @@ mod tests {
         // Add my node first
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -1751,9 +1708,7 @@ mod tests {
         // Add a node first
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -1762,13 +1717,7 @@ mod tests {
             id: "updated".into(),
             long_name: "Updated Name".into(),
             short_name: "UPD".into(),
-            hw_model_str: "".into(),
-            hw_model: 0,
-            is_licensed: false,
-            role_str: "".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
         device_view.update_node_user(12345, &user);
 
@@ -1811,13 +1760,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Original Name".into(),
                 short_name: "ON".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1844,13 +1787,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Original Name".into(),
                 short_name: "ON".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1872,9 +1809,7 @@ mod tests {
 
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -2032,7 +1967,7 @@ mod tests {
         let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
-        // The same channel should return Task::none equivalent behaviour
+        // The same channel should return Task::none equivalent behavior
         let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
         assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
     }
@@ -2136,13 +2071,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test".into(),
                 short_name: "T".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2154,13 +2083,7 @@ mod tests {
             id: "updated".into(),
             long_name: "Updated Name".into(),
             short_name: "UPD".into(),
-            hw_model_str: "".into(),
-            hw_model: 0,
-            is_licensed: false,
-            role_str: "".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
 
         let _ = device_view.update(SubscriptionMessage(NewNodeInfo(
@@ -2194,9 +2117,7 @@ mod tests {
         // Add a node first
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -2237,13 +2158,7 @@ mod tests {
             id: "test".into(),
             long_name: "Test".into(),
             short_name: "T".into(),
-            hw_model_str: "".into(),
-            hw_model: 0,
-            is_licensed: false,
-            role_str: "".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
         // Should not panic when updating the user for an unknown node
         device_view.update_node_user(99999, &user);
@@ -2385,9 +2300,7 @@ mod tests {
 
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -2604,13 +2517,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2636,13 +2543,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Original Name".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2667,13 +2568,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2700,13 +2595,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: Some(test_position(37.7749, -122.4194)),
             is_ignored: false,
@@ -2779,13 +2668,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2893,13 +2776,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
