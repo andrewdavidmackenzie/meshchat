@@ -238,32 +238,34 @@ pub fn count_style(theme: &Theme) -> Style {
     }
 }
 
-pub fn fav_button_style(_theme: &Theme, status: Status) -> button::Style {
+pub fn fav_button_style(theme: &Theme, status: Status) -> button::Style {
+    let palette = theme.palette();
+
     match status {
         Status::Active => button::Style {
             background: Some(Background::Color(Color::TRANSPARENT)),
-            text_color: Color::WHITE,
+            text_color: palette.text,
             border: NO_BORDER,
             shadow: NO_SHADOW,
             snap: false,
         },
         Status::Hovered => button::Style {
             background: Some(Background::Color(CYAN)),
-            text_color: Color::WHITE,
+            text_color: palette.text,
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
             snap: false,
         },
         Status::Pressed => button::Style {
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
-            text_color: Color::WHITE,
+            text_color: palette.text,
             border: BUTTON_BORDER_ACTIVE,
             shadow: NO_SHADOW,
             snap: false,
         },
         Status::Disabled => button::Style {
             background: Some(Background::Color(Color::TRANSPARENT)),
-            text_color: Color::WHITE,
+            text_color: COLOR_GRAY_40,
             border: BUTTON_BORDER_DISABLED,
             shadow: NO_SHADOW,
             snap: false,
