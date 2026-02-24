@@ -91,7 +91,7 @@ impl fmt::Display for MCUser {
 }
 
 /// A Node's Info as represented in the App, maybe a superset of User attributes from different meshes
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MCNodeInfo {
     pub node_id: NodeId,
     pub user: Option<MCUser>,

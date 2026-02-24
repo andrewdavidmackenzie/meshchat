@@ -1077,7 +1077,8 @@ impl Device {
                 tooltip(
                     button(text("ⓘ"))
                         .style(fav_button_style)
-                        .on_press(ShowUserInfo(user.clone())),
+                        .on_press(ShowUserInfo(user.clone()))
+                        .width(36),
                     "Show node's User info",
                     tooltip::Position::Left,
                 )
@@ -1096,7 +1097,8 @@ impl Device {
                 tooltip(
                     button(text("📌"))
                         .style(fav_button_style)
-                        .on_press(ShowLocation(position.clone())),
+                        .on_press(ShowLocation(position.clone()))
+                        .width(36),
                     "Show node position in maps",
                     tooltip::Position::Left,
                 )
@@ -1196,27 +1198,7 @@ mod tests {
         MCPosition {
             latitude: lat,
             longitude: lon,
-            altitude: None,
-            time: 0,
-            location_source: 0,
-            altitude_source: 0,
-            timestamp: 0,
-            timestamp_millis_adjust: 0,
-            altitude_hae: None,
-            altitude_geoidal_separation: None,
-            pdop: 0,
-            hdop: 0,
-            vdop: 0,
-            gps_accuracy: 0,
-            ground_speed: None,
-            ground_track: None,
-            fix_quality: 0,
-            fix_type: 0,
-            sats_in_view: 0,
-            sensor_id: 0,
-            next_update: 0,
-            seq_number: 0,
-            precision_bits: 0,
+            ..Default::default()
         }
     }
 
@@ -1297,12 +1279,8 @@ mod tests {
                     long_name: "Test User".into(),
                     short_name: "TEST".into(),
                     hw_model_str: "TBEAM".into(),
-                    hw_model: 0,
-                    is_licensed: false,
                     role_str: "CLIENT".into(),
-                    role: 0,
-                    public_key: vec![],
-                    is_unmessagable: false,
+                    ..Default::default()
                 }),
                 position: None,
                 is_ignored: false,
@@ -1318,9 +1296,7 @@ mod tests {
             12345,
             MCNodeInfo {
                 node_id: 12345,
-                user: None,
-                position: None,
-                is_ignored: false,
+                ..Default::default()
             },
         );
         assert_eq!(short_name(&nodes, 12345), "????");
@@ -1344,12 +1320,8 @@ mod tests {
                     long_name: "Test User Long Name".into(),
                     short_name: "TEST".into(),
                     hw_model_str: "TBEAM".into(),
-                    hw_model: 0,
-                    is_licensed: false,
                     role_str: "CLIENT".into(),
-                    role: 0,
-                    public_key: vec![],
-                    is_unmessagable: false,
+                    ..Default::default()
                 }),
                 position: None,
                 is_ignored: false,
@@ -1597,12 +1569,8 @@ mod tests {
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
                 hw_model_str: "TBEAM".into(),
-                hw_model: 0,
-                is_licensed: false,
                 role_str: "CLIENT".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1644,12 +1612,8 @@ mod tests {
             long_name: "My Name".into(),
             short_name: "ME".into(),
             hw_model_str: "TBEAM".into(),
-            hw_model: 0,
-            is_licensed: false,
             role_str: "CLIENT".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
 
         let node_info = MCNodeInfo {
@@ -1686,13 +1650,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test".into(),
                 short_name: "T".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1721,9 +1679,7 @@ mod tests {
         // Add my node first
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -1751,9 +1707,7 @@ mod tests {
         // Add a node first
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -1762,13 +1716,7 @@ mod tests {
             id: "updated".into(),
             long_name: "Updated Name".into(),
             short_name: "UPD".into(),
-            hw_model_str: "".into(),
-            hw_model: 0,
-            is_licensed: false,
-            role_str: "".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
         device_view.update_node_user(12345, &user);
 
@@ -1811,13 +1759,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Original Name".into(),
                 short_name: "ON".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1844,13 +1786,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Original Name".into(),
                 short_name: "ON".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -1872,9 +1808,7 @@ mod tests {
 
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -2032,7 +1966,7 @@ mod tests {
         let mut device_view = Device::default();
         device_view.viewing_channel = Some(ChannelId::Channel(0));
 
-        // The same channel should return Task::none equivalent behaviour
+        // The same channel should return Task::none equivalent behavior
         let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
         assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
     }
@@ -2136,13 +2070,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test".into(),
                 short_name: "T".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2154,13 +2082,7 @@ mod tests {
             id: "updated".into(),
             long_name: "Updated Name".into(),
             short_name: "UPD".into(),
-            hw_model_str: "".into(),
-            hw_model: 0,
-            is_licensed: false,
-            role_str: "".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
 
         let _ = device_view.update(SubscriptionMessage(NewNodeInfo(
@@ -2194,9 +2116,7 @@ mod tests {
         // Add a node first
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -2237,13 +2157,7 @@ mod tests {
             id: "test".into(),
             long_name: "Test".into(),
             short_name: "T".into(),
-            hw_model_str: "".into(),
-            hw_model: 0,
-            is_licensed: false,
-            role_str: "".into(),
-            role: 0,
-            public_key: vec![],
-            is_unmessagable: false,
+            ..Default::default()
         };
         // Should not panic when updating the user for an unknown node
         device_view.update_node_user(99999, &user);
@@ -2385,9 +2299,7 @@ mod tests {
 
         let node_info = MCNodeInfo {
             node_id: 12345,
-            user: None,
-            position: None,
-            is_ignored: false,
+            ..Default::default()
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
@@ -2604,13 +2516,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2636,13 +2542,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Original Name".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2667,13 +2567,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2700,13 +2594,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: Some(test_position(37.7749, -122.4194)),
             is_ignored: false,
@@ -2779,13 +2667,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
@@ -2893,13 +2775,7 @@ mod tests {
                 id: "test".into(),
                 long_name: "Test User".into(),
                 short_name: "TEST".into(),
-                hw_model_str: "".into(),
-                hw_model: 0,
-                is_licensed: false,
-                role_str: "".into(),
-                role: 0,
-                public_key: vec![],
-                is_unmessagable: false,
+                ..Default::default()
             }),
             position: None,
             is_ignored: false,
