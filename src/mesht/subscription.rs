@@ -16,7 +16,7 @@ use crate::device::SubscriptionEvent::{
 };
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
-use crate::{MCChannel, MCNodeInfo, MCPosition, channel_id};
+use crate::{MCChannel, MCNodeInfo, MCPosition, MeshChat, channel_id};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -189,7 +189,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 AlertMessage(message),
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -215,7 +215,7 @@ impl MyRouter {
                                 mesh_packet.id,
                                 mesh_packet.from as u64,
                                 mcmessage,
-                                mesh_packet.rx_time,
+                                MeshChat::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));

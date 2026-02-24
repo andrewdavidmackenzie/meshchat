@@ -57,7 +57,6 @@ impl RadioCache {
     }
 }
 /// A stream of [SubscriptionEvent] for comms between the app and the radio
-///
 pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
     stream::channel(
         100,
@@ -581,7 +580,7 @@ async fn handle_new_channel_message(
         channel_message.sender_timestamp as MessageId,
         *node_id,
         MCMessage::NewTextMessage(text.to_string()),
-        channel_message.sender_timestamp,
+        MeshChat::now(),
     );
 
     gui_sender

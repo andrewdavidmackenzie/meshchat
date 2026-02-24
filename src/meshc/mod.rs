@@ -7,7 +7,7 @@ use crate::channel_id::{MessageId, NodeId};
 use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriptionEvent;
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
+use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
 use meshcore_rs::ContactMessage;
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;
@@ -160,7 +160,7 @@ impl From<ContactMessage> for SubscriptionEvent {
             contact_message.sender_timestamp as MessageId,
             node_id,
             MCMessage::NewTextMessage(contact_message.text),
-            contact_message.sender_timestamp,
+            MeshChat::now(),
         )
     }
 }
@@ -308,11 +308,12 @@ mod test {
 
     #[test]
     fn contact_message_to_subscription_event() {
+        let timestamp = MeshChat::now();
         let message = ContactMessage {
             sender_prefix: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
             path_len: 0,
             txt_type: 0,
-            sender_timestamp: 1234567891,
+            sender_timestamp: timestamp,
             text: "Direct message".to_string(),
             snr: Some(10.5),
             signature: None,
@@ -328,7 +329,7 @@ mod test {
         let expected_node_id = 0xAABB_CCDD_EEFF_0000_u64;
         assert_eq!(channel_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
-        assert_eq!(timestamp, 1234567891);
+        assert_eq!(timestamp, timestamp);
         assert_eq!(msg.to_string(), "Direct message");
     }
 
