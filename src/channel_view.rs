@@ -1,5 +1,5 @@
 use crate::Message::DeviceViewEvent;
-use crate::channel_id::{ChannelId, NodeId};
+use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, MessageUnseen,
     PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
@@ -34,8 +34,8 @@ use iced::{Center, Element, Fill, Font, Padding, Task};
 use ringmap::RingMap;
 use std::collections::HashMap;
 
-const MESSAGE_INPUT_ID: &str = "message_input";
-const CHANNEL_VIEW_SCROLLABLE: &str = "channel_view_scrollable";
+pub const MESSAGE_INPUT_ID: Id = Id::new("message_input");
+const CHANNEL_VIEW_SCROLLABLE_ID: Id = Id::new("channel_view_scrollable");
 
 #[derive(Debug, Clone)]
 pub enum ChannelViewMessage {
@@ -57,10 +57,10 @@ pub enum ChannelViewMessage {
 #[derive(Debug, Default)]
 pub struct ChannelView {
     channel_id: ChannelId,
-    message: String,                         // text message typed in so far
-    entries: RingMap<u32, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by timestamp
+    message: String,                               // text message typed in so far
+    entries: RingMap<MessageId, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by timestamp
     my_node_num: NodeId,
-    preparing_reply: Option<u32>,
+    preparing_reply_to: Option<MessageId>,
     emoji_picker: EmojiPicker,
 }
 
@@ -148,7 +148,7 @@ impl ChannelView {
 
         if mine {
             // scroll to the end of messages to see the message I just sent
-            operation::snap_to(Id::from(CHANNEL_VIEW_SCROLLABLE), RelativeOffset::END)
+            operation::snap_to(CHANNEL_VIEW_SCROLLABLE_ID, RelativeOffset::END)
         } else {
             Task::none()
         }
@@ -156,7 +156,7 @@ impl ChannelView {
 
     /// Cancel any interactive modes underway
     pub fn cancel_interactive(&mut self) {
-        self.preparing_reply = None;
+        self.preparing_reply_to = None;
     }
 
     /// Update the [ChannelView] state based on a [ChannelViewMessage]
@@ -177,7 +177,7 @@ impl ChannelView {
                     let msg = self.message.clone();
                     self.message = String::new();
                     let channel_id = self.channel_id;
-                    self.preparing_reply = None;
+                    self.preparing_reply_to = None;
                     Task::perform(empty(), move |_| {
                         DeviceViewEvent(DeviceViewMessage::SendTextMessage(
                             msg,
@@ -191,9 +191,11 @@ impl ChannelView {
             }
             PrepareReply(entry_id) => {
                 if self.entries.contains_key(&entry_id) {
-                    self.preparing_reply = Some(entry_id);
+                    self.preparing_reply_to = Some(entry_id);
+                    operation::focus(MESSAGE_INPUT_ID)
+                } else {
+                    Task::none()
                 }
-                Task::none()
             }
             CancelPrepareReply => {
                 self.cancel_interactive();
@@ -232,7 +234,7 @@ impl ChannelView {
                 https://github.com/andrewdavidmackenzie/meshchat/releases/latest ",
                 );
                 // and shift the focus to it in case the user wants to add to it or edit it
-                operation::focus(Id::new(MESSAGE_INPUT_ID))
+                operation::focus(MESSAGE_INPUT_ID)
             }
         }
     }
@@ -331,7 +333,7 @@ impl ChannelView {
                     let scrollbar = Scrollbar::new().width(10.0);
                     scrollable::Direction::Vertical(scrollbar)
                 })
-                .id(Id::new(CHANNEL_VIEW_SCROLLABLE))
+                .id(CHANNEL_VIEW_SCROLLABLE_ID)
                 .style(scrollbar_style)
                 .width(Fill)
                 .height(Fill)
@@ -373,7 +375,7 @@ impl ChannelView {
             .push(channel_buttons);
 
         // If we are replying to a message, add a row at the bottom of the channel view with the original text
-        if let Some(entry_id) = &self.preparing_reply {
+        if let Some(entry_id) = &self.preparing_reply_to {
             column = self.replying_to(column, entry_id);
         }
 
@@ -509,7 +511,7 @@ impl ChannelView {
         if !self.message.is_empty() {
             send_button = send_button.on_press(DeviceViewEvent(ChannelMsg(
                 self.channel_id,
-                SendMessage(self.preparing_reply),
+                SendMessage(self.preparing_reply_to),
             )));
         }
 
@@ -537,13 +539,13 @@ impl ChannelView {
                         text_input("Type your message here", &self.message)
                             .style(text_input_style)
                             .padding([4, 4])
-                            .id(Id::new(MESSAGE_INPUT_ID))
+                            .id(MESSAGE_INPUT_ID)
                             .on_input(|s| {
                                 DeviceViewEvent(ChannelMsg(self.channel_id, MessageInput(s)))
                             })
                             .on_submit(DeviceViewEvent(ChannelMsg(
                                 self.channel_id,
-                                SendMessage(self.preparing_reply),
+                                SendMessage(self.preparing_reply_to),
                             ))),
                     )
                     .push(Space::new().width(4.0))
@@ -692,7 +694,7 @@ mod test {
         // Use the actual message ID (1), not an index
         let _ = channel_view.update(PrepareReply(1));
 
-        assert_eq!(channel_view.preparing_reply, Some(1));
+        assert_eq!(channel_view.preparing_reply_to, Some(1));
     }
 
     #[test]
@@ -712,7 +714,7 @@ mod test {
         // Use a non-existent message ID (999) - should not set preparing_reply
         let _ = channel_view.update(PrepareReply(999));
 
-        assert!(channel_view.preparing_reply.is_none());
+        assert!(channel_view.preparing_reply_to.is_none());
     }
 
     #[test]
@@ -721,10 +723,10 @@ mod test {
         let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
         let _ = channel_view.new_message(message, &HistoryLength::All);
         let _ = channel_view.update(PrepareReply(1)); // Use actual message ID
-        assert!(channel_view.preparing_reply.is_some());
+        assert!(channel_view.preparing_reply_to.is_some());
 
         let _ = channel_view.update(CancelPrepareReply);
-        assert!(channel_view.preparing_reply.is_none());
+        assert!(channel_view.preparing_reply_to.is_none());
     }
 
     #[test]
@@ -733,10 +735,10 @@ mod test {
         let message = ChannelViewEntry::new(1, 1, NewTextMessage("test".into()), now_secs());
         let _ = channel_view.new_message(message, &HistoryLength::All);
         let _ = channel_view.update(PrepareReply(1)); // Use actual message ID
-        assert!(channel_view.preparing_reply.is_some());
+        assert!(channel_view.preparing_reply_to.is_some());
 
         channel_view.cancel_interactive();
-        assert!(channel_view.preparing_reply.is_none());
+        assert!(channel_view.preparing_reply_to.is_none());
     }
 
     #[test]
@@ -801,7 +803,7 @@ mod test {
         let _ = channel_view.update(MessageInput("Reply text".into()));
 
         let _ = channel_view.update(SendMessage(Some(1)));
-        assert!(channel_view.preparing_reply.is_none());
+        assert!(channel_view.preparing_reply_to.is_none());
     }
 
     #[test]
@@ -938,7 +940,7 @@ mod test {
         assert_eq!(channel_view.channel_id, ChannelId::default());
         assert!(channel_view.message.is_empty());
         assert!(channel_view.entries.is_empty());
-        assert!(channel_view.preparing_reply.is_none());
+        assert!(channel_view.preparing_reply_to.is_none());
     }
 
     #[test]

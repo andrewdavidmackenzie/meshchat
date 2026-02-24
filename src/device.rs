@@ -1,5 +1,5 @@
 use crate::MeshChat;
-use crate::channel_view::{ChannelView, ChannelViewMessage};
+use crate::channel_view::{ChannelView, ChannelViewMessage, MESSAGE_INPUT_ID};
 use crate::channel_view_entry::{ChannelViewEntry, MCMessage};
 use crate::config::{Config, HistoryLength};
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
@@ -39,7 +39,8 @@ use crate::widgets::battery::{Battery, BatteryState};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
-    Button, Column, Container, Row, Space, button, container, scrollable, text, text_input, tooltip,
+    Button, Column, Container, Id, Row, Space, button, container, operation, scrollable, text,
+    text_input, tooltip,
 };
 use iced::{Bottom, Center, Element, Fill, Padding, Task};
 #[cfg(feature = "meshcore")]
@@ -65,6 +66,8 @@ impl Default for ConnectionState {
 
 /// Time in EPOC in seconds timestamp
 pub type TimeStamp = u32;
+
+const CHANNEL_SEARCH_ID: Id = Id::new("message_input");
 
 /// Events are Messages sent from the subscription to the GUI
 #[derive(Debug, Clone)]
@@ -311,9 +314,16 @@ impl Device {
             if let Connected(ble_device, radio_type) = &self.connection_state {
                 let device = ble_device.clone();
                 let radio = *radio_type;
-                return Task::perform(empty(), move |_| {
-                    Message::DeviceAndChannelChange(Some((device, radio)), channel_id)
-                });
+
+                let input_to_focus = match self.viewing_channel {
+                    None => CHANNEL_SEARCH_ID,
+                    Some(_channel) => MESSAGE_INPUT_ID,
+                };
+
+                // Focus on the correct input text and then save the config change
+                return operation::focus(input_to_focus).chain(Task::perform(empty(), move |_| {
+                    Message::DeviceAndChannelConfigChange(Some((device, radio)), channel_id)
+                }));
             }
         }
         Task::none()
@@ -348,7 +358,7 @@ impl Device {
                         let channel_id = self.viewing_channel;
                         let device = ble_device.clone();
                         Task::perform(empty(), move |_| {
-                            Message::DeviceAndChannelChange(
+                            Message::DeviceAndChannelConfigChange(
                                 Some((device, radio_type)),
                                 channel_id,
                             )
@@ -1005,7 +1015,7 @@ impl Device {
         } else if let Some(editing_node_id) = self.editing_alias
             && editing_node_id == node_id
         {
-            text_input("Enter alias for this user name", &self.alias)
+            text_input("Enter alias for this Node", &self.alias)
                 .on_input(|s| DeviceViewEvent(AliasInput(s)))
                 .on_submit(AddNodeAlias(editing_node_id, self.alias.clone()))
                 .style(text_input_style)
@@ -1140,6 +1150,7 @@ impl Device {
                         text_input("Search for Channel or Node", &self.filter)
                             .style(text_input_style)
                             .padding([4, 4])
+                            .id(CHANNEL_SEARCH_ID)
                             .on_input(|s| DeviceViewEvent(SearchInput(s))),
                     )
                     .push(Space::new().width(4.0))
