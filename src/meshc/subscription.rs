@@ -41,8 +41,10 @@ struct RadioCache {
     self_info: SelfInfo,
     device_info: DeviceInfoData,
     known_channels: HashSet<u8>,
+    /// Contact Name (String), Contact Node ID (NodeId)
     known_contacts: HashMap<String, NodeId>,
-    pending_ack: HashMap<u32, ChannelId>,
+    /// Messages that have been sent (by MessageId) that are pending an ACK (ChannelId for the message)
+    pending_ack: HashMap<MessageId, ChannelId>,
 }
 
 impl RadioCache {
@@ -374,7 +376,7 @@ async fn send_text_message(
             gui_sender
                 .send(MCMessageReceived(
                     channel_id,
-                    MeshChat::now() as MessageId,
+                    MeshChat::now().into(),
                     radio_cache.self_id,
                     msg,
                     MeshChat::now(),
@@ -568,17 +570,20 @@ async fn handle_new_channel_message(
     // extract the node name, look it up and get the node ID or else default to a node id of 0
     let (node_id, text) = if let Some((node_name, text)) = channel_message.text.split_once(": ") {
         (
-            radio_cache.known_contacts.get(node_name).unwrap_or(&0),
+            match radio_cache.known_contacts.get(node_name) {
+                Some(node_id) => *node_id,
+                None => NodeId::from(0u64),
+            },
             text,
         )
     } else {
-        (&0, channel_message.text.as_str())
+        (NodeId::from(0u64), channel_message.text.as_str())
     };
 
     let mcmessage = MCMessageReceived(
         Channel(channel_message.channel_idx as i32),
-        channel_message.sender_timestamp as MessageId,
-        *node_id,
+        channel_message.sender_timestamp.into(),
+        node_id,
         MCMessage::NewTextMessage(text.to_string()),
         MeshChat::now(),
     );
@@ -764,7 +769,7 @@ mod tests {
     #[test]
     fn radio_cache_default() {
         let cache = RadioCache::default();
-        assert_eq!(cache.self_id, 0);
+        assert_eq!(cache.self_id, NodeId::from(0u64));
         assert!(cache.known_channels.is_empty());
     }
 
@@ -784,10 +789,10 @@ mod tests {
     #[test]
     fn radio_cache_self_id() {
         let cache = RadioCache {
-            self_id: 0x0102_0304_0506_0708,
+            self_id: NodeId::from(0x0102_0304_0506_0708u64),
             ..Default::default()
         };
-        assert_eq!(cache.self_id, 0x0102_0304_0506_0708);
+        assert_eq!(cache.self_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 
     // Tests for handle_self_info
@@ -804,14 +809,14 @@ mod tests {
         handle_self_info(&mut radio_cache, self_info, &mut sender).await;
 
         // Check radio_cache was updated
-        assert_eq!(radio_cache.self_id, 0x0102_0304_0506_0708);
+        assert_eq!(radio_cache.self_id, NodeId::from(0x0102_0304_0506_0708u64));
 
         // Check MyNodeNum event was sent
         let event1 = receiver.next().await.expect("Expected MyNodeNum event");
         let MyNodeNum(node_id) = event1 else {
             unreachable!("Expected MyNodeNum event")
         };
-        assert_eq!(node_id, 0x0102_0304_0506_0708);
+        assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
 
         // Check MyUserInfo event was sent
         let event2 = receiver.next().await.expect("Expected MyUserInfo event");
@@ -994,12 +999,12 @@ mod tests {
         let self_info = create_test_self_info("CafeNode", public_key, 0, 0);
 
         let mut radio_cache = RadioCache::default();
-        assert_eq!(radio_cache.self_id, 0);
+        assert_eq!(radio_cache.self_id, NodeId::from(0u64));
 
         let (mut sender, _receiver) = create_test_channel();
         handle_self_info(&mut radio_cache, self_info, &mut sender).await;
 
-        assert_eq!(radio_cache.self_id, 0xDEAD_BEEF_CAFE_BABE);
+        assert_eq!(radio_cache.self_id, NodeId::from(0xDEAD_BEEF_CAFE_BABEu64));
     }
 
     // Test battery info with max u16 value
@@ -1150,10 +1155,7 @@ mod tests {
         if let MCMessageReceived(_, _, _, _, timestamp) = event {
             assert!(
                 timestamp >= before && timestamp <= after,
-                "Timestamp should be local time between {} and {}, got {}",
-                before,
-                after,
-                timestamp
+                "Timestamp should be local time",
             );
         } else {
             unreachable!("Expected MCMessageReceived event, got {:?}", event);
@@ -1188,10 +1190,7 @@ mod tests {
         if let MCMessageReceived(_, _, _, _, timestamp) = event {
             assert!(
                 timestamp >= before && timestamp <= after,
-                "Timestamp should be local time between {} and {}, got {}",
-                before,
-                after,
-                timestamp
+                "Timestamp should be local time",
             );
         } else {
             unreachable!("Expected MCMessageReceived event, got {:?}", event);

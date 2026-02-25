@@ -5,8 +5,8 @@ pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{MessageId, NodeId};
 use crate::channel_view_entry::MCMessage;
-use crate::device::SubscriptionEvent;
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
+use crate::device::{SubscriptionEvent, TimeStamp};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
 use meshcore_rs::ContactMessage;
 use meshcore_rs::commands::Destination;
@@ -157,7 +157,7 @@ impl From<ContactMessage> for SubscriptionEvent {
         let node_id = node_id_from_prefix(&contact_message.sender_prefix);
         MCMessageReceived(
             Node(node_id),
-            contact_message.sender_timestamp as MessageId,
+            contact_message.sender_timestamp.into(),
             node_id,
             MCMessage::NewTextMessage(contact_message.text),
             MeshChat::now(),
@@ -174,30 +174,37 @@ impl From<ChannelInfoData> for SubscriptionEvent {
     }
 }
 
+impl From<TimeStamp> for MessageId {
+    fn from(value: TimeStamp) -> Self {
+        MessageId::from(<TimeStamp as Into<u32>>::into(value))
+    }
+}
+
 pub fn node_id_from_prefix(prefix: &[u8; 6]) -> NodeId {
     let mut bytes = [0u8; 8];
     bytes[0..6].copy_from_slice(prefix);
-    u64::from_be_bytes(bytes)
+    NodeId::from(u64::from_be_bytes(bytes))
 }
 
 pub fn node_id_to_destination(node_id: &NodeId) -> Destination {
-    Bytes(node_id.to_be_bytes().to_vec())
+    let inner: u64 = node_id.into();
+    Bytes(inner.to_be_bytes().to_vec())
 }
 
 pub fn node_id_from_public_key(public_key: &[u8; 32]) -> NodeId {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&public_key[0..8]);
-    u64::from_be_bytes(bytes)
+    NodeId::from(u64::from_be_bytes(bytes))
 }
 
 pub fn node_id_from_bytes(public_key: Vec<u8>) -> NodeId {
     let mut bytes = [0u8; 8];
     bytes.copy_from_slice(&public_key[0..8]);
-    u64::from_be_bytes(bytes)
+    NodeId::from(u64::from_be_bytes(bytes))
 }
 
 pub fn message_id_from_expected_ack(expected_ack: [u8; 4]) -> MessageId {
-    u32::from_be_bytes(expected_ack)
+    MessageId::from(u32::from_be_bytes(expected_ack))
 }
 
 #[cfg(test)]
@@ -228,7 +235,7 @@ mod test {
     fn node_id_from_prefix_all_zeros() {
         let prefix = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         let node_id = node_id_from_prefix(&prefix);
-        assert_eq!(node_id, 0);
+        assert_eq!(node_id, NodeId::from(0u64));
     }
 
     #[test]
@@ -236,7 +243,7 @@ mod test {
         let prefix = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
         let node_id = node_id_from_prefix(&prefix);
         // Expected: 0xFF_FF_FF_FF_FF_FF_00_00 in big-endian
-        assert_eq!(node_id, 0xFFFF_FFFF_FFFF_0000);
+        assert_eq!(node_id, NodeId::from(0xFFFF_FFFF_FFFF_0000u64));
     }
 
     #[test]
@@ -244,7 +251,7 @@ mod test {
         let prefix = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
         let node_id = node_id_from_prefix(&prefix);
         // Expected: 0x01_02_03_04_05_06_00_00 in big-endian
-        assert_eq!(node_id, 0x0102_0304_0506_0000);
+        assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0000u64));
     }
 
     // Tests for node_id_from_public_key
@@ -254,14 +261,14 @@ mod test {
         let mut public_key = [0u8; 32];
         public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
         let node_id = node_id_from_public_key(&public_key);
-        assert_eq!(node_id, 0x0102_0304_0506_0708);
+        assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 
     #[test]
     fn node_id_from_public_key_all_zeros() {
         let public_key = [0u8; 32];
         let node_id = node_id_from_public_key(&public_key);
-        assert_eq!(node_id, 0);
+        assert_eq!(node_id, NodeId::from(0u64));
     }
 
     #[test]
@@ -270,7 +277,7 @@ mod test {
         public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
         let node_id = node_id_from_public_key(&public_key);
         // Only the first 8 bytes should matter
-        assert_eq!(node_id, 0x0102_0304_0506_0708);
+        assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 
     #[test]
@@ -278,7 +285,7 @@ mod test {
         let mut public_key = [0u8; 32];
         public_key[0..8].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
         let node_id = node_id_from_public_key(&public_key);
-        assert_eq!(node_id, u64::MAX);
+        assert_eq!(node_id, NodeId::from(u64::MAX));
     }
 
     // Tests for message_id_from_expected_ack
@@ -287,21 +294,21 @@ mod test {
     fn message_id_from_expected_ack_basic() {
         let expected_ack = [0x01, 0x02, 0x03, 0x04];
         let message_id = message_id_from_expected_ack(expected_ack);
-        assert_eq!(message_id, 0x01020304);
+        assert_eq!(message_id, MessageId::from(0x01020304));
     }
 
     #[test]
     fn message_id_from_expected_ack_all_zeros() {
         let expected_ack = [0x00, 0x00, 0x00, 0x00];
         let message_id = message_id_from_expected_ack(expected_ack);
-        assert_eq!(message_id, 0);
+        assert_eq!(message_id, MessageId::from(0));
     }
 
     #[test]
     fn message_id_from_expected_ack_max_value() {
         let expected_ack = [0xFF, 0xFF, 0xFF, 0xFF];
         let message_id = message_id_from_expected_ack(expected_ack);
-        assert_eq!(message_id, u32::MAX);
+        assert_eq!(message_id, MessageId::from(u32::MAX));
     }
 
     // Tests for From<ContactMessage> for SubscriptionEvent
@@ -327,16 +334,13 @@ mod test {
         };
 
         // Direct message should use Node channel ID
-        let expected_node_id = 0xAABB_CCDD_EEFF_0000_u64;
+        let expected_node_id = NodeId::from(0xAABB_CCDD_EEFF_0000_u64);
         assert_eq!(channel_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
         // Timestamp should be local time (from MeshChat::now()), not the sender_timestamp
         assert!(
             event_timestamp >= before_conversion && event_timestamp <= after_conversion,
-            "Event timestamp should be a local timestamp between {} and {}, got {}",
-            before_conversion,
-            after_conversion,
-            event_timestamp
+            "Event timestamp should be a local timestamp",
         );
         assert_eq!(msg.to_string(), "Direct message");
     }
@@ -410,7 +414,7 @@ mod test {
 
         let node_info: MCNodeInfo = (&advert).into();
 
-        assert_eq!(node_info.node_id, 0x1122_3344_5566_0000);
+        assert_eq!(node_info.node_id, NodeId::from(0x1122_3344_5566_0000u64));
         assert!(!node_info.is_ignored);
 
         let user = node_info.user.expect("Expected user");
@@ -462,7 +466,7 @@ mod test {
 
         let node_info: MCNodeInfo = contact.into();
 
-        assert_eq!(node_info.node_id, 0xAABB_CCDD_EEFF_0000);
+        assert_eq!(node_info.node_id, NodeId::from(0xAABB_CCDD_EEFF_0000u64));
         assert!(!node_info.is_ignored);
 
         let user = node_info.user.expect("Expected user");
@@ -478,7 +482,7 @@ mod test {
 
     #[test]
     fn node_id_to_destination_basic() {
-        let node_id: NodeId = 0x0102_0304_0506_0000;
+        let node_id: NodeId = NodeId::from(0x0102_0304_0506_0000u64);
         let destination = node_id_to_destination(&node_id);
 
         let Bytes(bytes) = destination else {
@@ -491,7 +495,7 @@ mod test {
 
     #[test]
     fn node_id_to_destination_extracts_prefix() {
-        let node_id: NodeId = 0xAABB_CCDD_EEFF_0000;
+        let node_id: NodeId = NodeId::from(0xAABB_CCDD_EEFF_0000u64);
         let destination = node_id_to_destination(&node_id);
         let prefix = destination.prefix().expect("Should extract prefix");
         assert_eq!(prefix, [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
@@ -580,21 +584,21 @@ mod test {
     fn node_id_from_bytes_basic() {
         let bytes = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
         let node_id = node_id_from_bytes(bytes);
-        assert_eq!(node_id, 0x0102_0304_0506_0708);
+        assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 
     #[test]
     fn node_id_from_bytes_all_zeros() {
         let bytes = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         let node_id = node_id_from_bytes(bytes);
-        assert_eq!(node_id, 0);
+        assert_eq!(node_id, NodeId::from(0u64));
     }
 
     #[test]
     fn node_id_from_bytes_all_ones() {
         let bytes = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
         let node_id = node_id_from_bytes(bytes);
-        assert_eq!(node_id, u64::MAX);
+        assert_eq!(node_id, NodeId::from(u64::MAX));
     }
 
     #[test]
@@ -604,7 +608,7 @@ mod test {
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0xAA, 0xBB, 0xCC,
         ];
         let node_id = node_id_from_bytes(bytes);
-        assert_eq!(node_id, 0x0102_0304_0506_0708);
+        assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 
     // Tests for From<Neighbour> for MCNodeInfo
@@ -619,7 +623,7 @@ mod test {
 
         let node_info: MCNodeInfo = neighbour.into();
 
-        assert_eq!(node_info.node_id, 0x1122_3344_5566_7788);
+        assert_eq!(node_info.node_id, NodeId::from(0x1122_3344_5566_7788u64));
         assert!(!node_info.is_ignored);
         assert!(node_info.position.is_none());
 
@@ -637,7 +641,7 @@ mod test {
 
         let node_info: MCNodeInfo = neighbour.into();
 
-        assert_eq!(node_info.node_id, 0);
+        assert_eq!(node_info.node_id, NodeId::from(0u64));
     }
 
     // Tests for From<DiscoverEntry> for MCNodeInfo
@@ -651,7 +655,7 @@ mod test {
 
         let node_info: MCNodeInfo = entry.into();
 
-        assert_eq!(node_info.node_id, 0xAABB_CCDD_EEFF_0011);
+        assert_eq!(node_info.node_id, NodeId::from(0xAABB_CCDD_EEFF_0011u64));
         assert!(!node_info.is_ignored);
         assert!(node_info.position.is_none());
 
