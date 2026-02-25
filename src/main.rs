@@ -799,8 +799,8 @@ mod tests {
     fn test_view_equality() {
         assert_eq!(DeviceView(None), DeviceView(None));
         assert_eq!(
-            DeviceView(Some(ChannelId::Channel(0))),
-            DeviceView(Some(ChannelId::Channel(0)))
+            DeviceView(Some(ChannelId::Channel(0.into()))),
+            DeviceView(Some(ChannelId::Channel(0.into())))
         );
         assert_ne!(DeviceListView, DeviceView(None));
     }

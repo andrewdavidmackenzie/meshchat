@@ -1,5 +1,5 @@
 use crate::channel_id::ChannelId::{Channel, Node};
-use crate::channel_id::{ChannelId, MessageId, NodeId};
+use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
 use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
 };
@@ -360,15 +360,12 @@ async fn send_text_message(
 ) -> meshcore_rs::Result<()> {
     match channel_id {
         Channel(channel_index) => {
-            let chan_idx: u8 = channel_index
-                .try_into()
-                .map_err(|_| Error::Channel("Invalid Channel Number".to_string()))?;
             // No message sent info returned for a channel message
             meshcore
                 .commands()
                 .lock()
                 .await
-                .send_channel_msg(chan_idx, &text, None)
+                .send_channel_msg(channel_index.into(), &text, None)
                 .await?;
 
             // Reflect the message back into the GUI
@@ -581,7 +578,7 @@ async fn handle_new_channel_message(
     };
 
     let mcmessage = MCMessageReceived(
-        Channel(channel_message.channel_idx as i32),
+        Channel(ChannelIndex::from(channel_message.channel_idx)),
         channel_message.sender_timestamp.into(),
         node_id,
         MCMessage::NewTextMessage(text.to_string()),

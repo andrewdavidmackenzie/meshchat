@@ -577,7 +577,7 @@ mod test {
 
     #[tokio::test]
     async fn message_ordering_test() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         assert!(
             channel_view.messages.is_empty(),
             "Initial entries list should be empty"
@@ -644,13 +644,13 @@ mod test {
 
     #[test]
     fn test_initial_unread_count() {
-        let channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         assert_eq!(channel_view.unread_count(true, true), 0);
     }
 
     #[test]
     fn test_unread_count() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(1u64),
@@ -663,7 +663,7 @@ mod test {
 
     #[test]
     fn test_replying_valid_entry() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(1u64),
@@ -680,7 +680,7 @@ mod test {
 
     #[test]
     fn test_replying_invalid_entry() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(1u64),
@@ -697,7 +697,7 @@ mod test {
 
     #[test]
     fn test_cancel_prepare_reply() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(1u64),
@@ -714,7 +714,7 @@ mod test {
 
     #[test]
     fn test_cancel_interactive() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(1u64),
@@ -731,7 +731,7 @@ mod test {
 
     #[test]
     fn test_message_input() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         assert!(channel_view.message.is_empty());
 
         let _ = channel_view.update(MessageInput("Hello".into()));
@@ -740,7 +740,7 @@ mod test {
 
     #[test]
     fn test_message_input_max_length() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Message longer than 200 chars should be rejected
         let long_message = "a".repeat(250);
@@ -755,7 +755,7 @@ mod test {
 
     #[test]
     fn test_clear_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let _ = channel_view.update(MessageInput("Hello".into()));
         assert!(!channel_view.message.is_empty());
 
@@ -765,7 +765,7 @@ mod test {
 
     #[test]
     fn test_send_message_empty() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         // Empty message should not trigger a send task
         let _ = channel_view.update(SendMessage(None));
         // No crash, message still empty
@@ -774,7 +774,7 @@ mod test {
 
     #[test]
     fn test_send_message_clears_text() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let _ = channel_view.update(MessageInput("Hello world".into()));
         assert!(!channel_view.message.is_empty());
 
@@ -784,7 +784,7 @@ mod test {
 
     #[test]
     fn test_send_message_clears_preparing_reply() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(1u64),
@@ -801,7 +801,7 @@ mod test {
 
     #[test]
     fn test_ack_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(42),
             NodeId::from(1u64),
@@ -830,14 +830,14 @@ mod test {
 
     #[test]
     fn test_ack_nonexistent_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         // Should not panic
         channel_view.ack(MessageId::from(999));
     }
 
     #[test]
     fn test_message_seen() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(42),
             NodeId::from(1u64),
@@ -868,7 +868,7 @@ mod test {
 
     #[test]
     fn test_trim_history_by_number() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add 5 messages
         for i in 0..5 {
@@ -903,7 +903,7 @@ mod test {
 
     #[test]
     fn test_trim_history_by_duration() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let now = MeshChat::now();
 
         // Add an old message (2 hours ago)
@@ -936,7 +936,7 @@ mod test {
 
     #[test]
     fn test_emoji_reply_adds_to_existing_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add the original message
         let original = ChannelViewEntry::new(
@@ -978,7 +978,7 @@ mod test {
 
     #[test]
     fn test_my_message_scrolls() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
 
         // Message from me (node 100)
         let my_message = ChannelViewEntry::new(
@@ -998,7 +998,7 @@ mod test {
 
     #[test]
     fn test_others_message_no_scroll() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
 
         // Message from someone else (node 200)
         let other_message = ChannelViewEntry::new(
@@ -1014,7 +1014,7 @@ mod test {
 
     #[test]
     fn test_channel_view_debug() {
-        let channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let debug_str = format!("{:?}", channel_view);
         assert!(debug_str.contains("ChannelView"));
     }
@@ -1035,7 +1035,7 @@ mod test {
 
     #[test]
     fn test_message_unseen() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let message = ChannelViewEntry::new(
             MessageId::from(42),
             NodeId::from(1u64),
@@ -1070,34 +1070,34 @@ mod test {
 
     #[test]
     fn test_pick_channel() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let _task = channel_view.update(super::ChannelViewMessage::PickChannel(Some(
-            ChannelId::Channel(1),
+            ChannelId::Channel(1.into()),
         )));
         // Should return a Task, not panic
     }
 
     #[test]
     fn test_pick_channel_none() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let _task = channel_view.update(super::ChannelViewMessage::PickChannel(None));
         // Should return a Task, not panic
     }
 
     #[test]
     fn test_reply_with_emoji() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         let _task = channel_view.update(super::ChannelViewMessage::ReplyWithEmoji(
             MessageId::from(42),
             "👍".into(),
-            ChannelId::Channel(0),
+            ChannelId::Channel(0.into()),
         ));
         // Should return a Task, not panic
     }
 
     #[test]
     fn test_share_meshchat() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         assert!(channel_view.message.is_empty());
 
         let _task = channel_view.update(super::ChannelViewMessage::ShareMeshChat);
@@ -1107,7 +1107,7 @@ mod test {
 
     #[test]
     fn test_unread_count_with_position_hidden() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add a text message
         let text_msg = ChannelViewEntry::new(
@@ -1140,7 +1140,7 @@ mod test {
 
     #[test]
     fn test_unread_count_with_user_hidden() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add a text message
         let text_msg = ChannelViewEntry::new(
@@ -1180,7 +1180,7 @@ mod test {
 
     #[test]
     fn test_emoji_reply_to_nonexistent_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Try to add emoji reply to the message that doesn't exist
         let emoji_reply = ChannelViewEntry::new(
@@ -1197,14 +1197,14 @@ mod test {
 
     #[test]
     fn test_message_seen_nonexistent() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
         // Should not panic when marking a nonexistent message as seen
         let _ = channel_view.update(MessageSeen(MessageId::from(999)));
     }
 
     #[test]
     fn test_trim_history_all() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add many messages
         for i in 0..10 {
@@ -1223,7 +1223,7 @@ mod test {
 
     #[test]
     fn test_multiple_emoji_replies() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add the original message
         let original = ChannelViewEntry::new(
@@ -1273,7 +1273,7 @@ mod test {
 
     #[test]
     fn test_text_message_reply() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add the original message
         let original = ChannelViewEntry::new(
@@ -1302,7 +1302,7 @@ mod test {
 
     #[test]
     fn test_alert_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(0u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         let alert = ChannelViewEntry::new(
             MessageId::from(1),
@@ -1357,14 +1357,14 @@ mod test {
 
     #[test]
     fn test_send_button_empty_message() {
-        let channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let _button = channel_view.send_button();
         // Button should be disabled when the message is empty
     }
 
     #[test]
     fn test_send_button_with_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let _ = channel_view.update(MessageInput("Hello".into()));
         let _button = channel_view.send_button();
         // Button should be enabled when the message is not empty
@@ -1372,14 +1372,14 @@ mod test {
 
     #[test]
     fn test_clear_button_empty_message() {
-        let channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let _button = channel_view.clear_button();
         // Button should be disabled when the message is empty
     }
 
     #[test]
     fn test_clear_button_with_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let _ = channel_view.update(MessageInput("Hello".into()));
         let _button = channel_view.clear_button();
         // Button should be enabled when the message is not empty
@@ -1387,14 +1387,14 @@ mod test {
 
     #[test]
     fn test_input_box_empty() {
-        let channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let _element = channel_view.input_box();
         // Should not panic
     }
 
     #[test]
     fn test_input_box_with_message() {
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let _ = channel_view.update(MessageInput("Hello world".into()));
         let _element = channel_view.input_box();
         // Should not panic
@@ -1411,7 +1411,7 @@ mod test {
     fn test_replying_to_with_valid_entry() {
         use iced::widget::Column;
 
-        let mut channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         let message = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(200u64),
@@ -1430,7 +1430,7 @@ mod test {
     fn test_replying_to_with_invalid_entry() {
         use iced::widget::Column;
 
-        let channel_view = ChannelView::new(ChannelId::Channel(0), NodeId::from(100u64));
+        let channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
         // No messages in the channel view
 
         let column: Column<crate::Message> = Column::new();

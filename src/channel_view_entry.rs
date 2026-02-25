@@ -1352,7 +1352,7 @@ mod tests {
             MeshChat::now(),
         );
         let emoji_picker = EmojiPicker::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let column: Column<Message> = Column::new();
 
         let result = entry.top_row(
@@ -1406,7 +1406,7 @@ mod tests {
             MeshChat::now(),
         );
         let emoji_picker = EmojiPicker::new();
-        let channel_id = ChannelId::Channel(1);
+        let channel_id = ChannelId::Channel(1.into());
         let column: Column<Message> = Column::new();
 
         let result = entry.top_row(
@@ -1433,7 +1433,7 @@ mod tests {
             MeshChat::now(),
         );
         let emoji_picker = EmojiPicker::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let column: Column<Message> = Column::new();
 
         let result = entry.top_row(
@@ -1559,7 +1559,7 @@ mod tests {
             MeshChat::now(),
         );
         let emoji_picker = EmojiPicker::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
 
         let result = entry.menu_bar("TN", "test message".to_string(), &emoji_picker, &channel_id);
         let _ = result;
@@ -1600,7 +1600,7 @@ mod tests {
             MeshChat::now(),
         );
         let emoji_picker = EmojiPicker::new();
-        let channel_id = ChannelId::Channel(1);
+        let channel_id = ChannelId::Channel(1.into());
 
         let result = entry.menu_bar("", "test".to_string(), &emoji_picker, &channel_id);
         let _ = result;
@@ -1619,7 +1619,7 @@ mod tests {
             MeshChat::now(),
         );
         let emoji_picker = EmojiPicker::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
 
         let result = entry.menu_bar("LM", long_msg.to_string(), &emoji_picker, &channel_id);
         let _ = result;
@@ -1637,7 +1637,7 @@ mod tests {
             MeshChat::now(),
         );
         let emoji_picker = EmojiPicker::new();
-        let channel_id = ChannelId::Channel(2);
+        let channel_id = ChannelId::Channel(2.into());
 
         let result = entry.menu_bar(
             "РУ",
@@ -1662,7 +1662,7 @@ mod tests {
         );
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
@@ -1702,7 +1702,7 @@ mod tests {
                 is_ignored: false,
             },
         );
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, false, &emoji_picker);
@@ -1722,7 +1722,7 @@ mod tests {
         );
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
@@ -1752,7 +1752,7 @@ mod tests {
             MeshChat::now(),
         );
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = reply.view(&entries, &nodes, &channel_id, false, &emoji_picker);
@@ -1797,7 +1797,7 @@ mod tests {
         );
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
@@ -1817,7 +1817,7 @@ mod tests {
         );
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
@@ -1849,7 +1849,7 @@ mod tests {
         );
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
@@ -1872,7 +1872,7 @@ mod tests {
 
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
@@ -1894,7 +1894,7 @@ mod tests {
 
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);
@@ -1934,7 +1934,7 @@ mod tests {
         );
         let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
-        let channel_id = ChannelId::Channel(0);
+        let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
 
         let element = entry.view(&entries, &nodes, &channel_id, true, &emoji_picker);

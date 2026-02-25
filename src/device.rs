@@ -23,7 +23,7 @@ use crate::Message::{
 };
 use crate::View::DeviceListView;
 use crate::channel_id::ChannelId::Node;
-use crate::channel_id::{ChannelId, MessageId, NodeId};
+use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
 use crate::device::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
@@ -579,7 +579,7 @@ impl Device {
         {
             if let Some(my_node_num) = self.my_node_id {
                 self.channels.push(channel);
-                let channel_id = ChannelId::Channel((self.channels.len() - 1) as i32);
+                let channel_id = ChannelId::Channel(ChannelIndex::from(self.channels.len() - 1));
                 self.channel_views
                     .insert(channel_id, ChannelView::new(channel_id, my_node_num));
             }
@@ -678,7 +678,7 @@ impl Device {
         // possibly add a node/channel name button next
         match &self.viewing_channel {
             Some(ChannelId::Channel(channel_index)) => {
-                let index = *channel_index as usize;
+                let index: usize = (*channel_index).into();
                 if let Some(channel) = self.channels.get(index) {
                     let channel_name = format!("🛜  {}", channel.name);
                     header = header.push(button(text(channel_name)).style(button_chip_style))
@@ -831,7 +831,7 @@ impl Device {
                 .push(self.section_header(format!("Channels ({})", self.channels.len())));
 
             for (index, channel_name) in filtered_channels {
-                let channel_id = ChannelId::Channel(index as i32);
+                let channel_id = ChannelId::Channel(index.into());
                 if let Some(channel_view) = self.channel_views.get(&channel_id) {
                     let channel_row = Self::channel_row(
                         channel_name,
@@ -1609,7 +1609,7 @@ mod tests {
         assert!(
             device_view
                 .channel_views
-                .contains_key(&ChannelId::Channel(0))
+                .contains_key(&ChannelId::Channel(0.into()))
         );
     }
 
@@ -1899,14 +1899,17 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.viewing_channel.is_none());
 
-        let _ = device_view.update(ShowChannel(Some(ChannelId::Channel(0))));
-        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+        let _ = device_view.update(ShowChannel(Some(ChannelId::Channel(0.into()))));
+        assert_eq!(
+            device_view.viewing_channel,
+            Some(ChannelId::Channel(0.into()))
+        );
     }
 
     #[test]
     fn test_show_channel_none() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         let _ = device_view.update(ShowChannel(None));
         assert!(device_view.viewing_channel.is_none());
@@ -1947,12 +1950,12 @@ mod tests {
         assert!(
             device_view
                 .channel_views
-                .contains_key(&ChannelId::Channel(0))
+                .contains_key(&ChannelId::Channel(0.into()))
         );
         assert!(
             device_view
                 .channel_views
-                .contains_key(&ChannelId::Channel(1))
+                .contains_key(&ChannelId::Channel(1.into()))
         );
     }
 
@@ -1961,7 +1964,7 @@ mod tests {
         let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(SubscriptionMessage(MessageACK(
-            ChannelId::Channel(0),
+            ChannelId::Channel(0.into()),
             MessageId::from(123),
         )));
     }
@@ -1971,7 +1974,7 @@ mod tests {
         let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(ChannelMsg(
-            ChannelId::Channel(0),
+            ChannelId::Channel(0.into()),
             ChannelViewMessage::MessageInput("test".into()),
         ));
     }
@@ -2037,26 +2040,32 @@ mod tests {
     #[test]
     fn test_channel_change_no_change() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         // The same channel should return Task::none equivalent behavior
-        let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
-        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+        let _task = device_view.channel_change(Some(ChannelId::Channel(0.into())));
+        assert_eq!(
+            device_view.viewing_channel,
+            Some(ChannelId::Channel(0.into()))
+        );
     }
 
     #[test]
     fn test_channel_change_to_different_channel() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
-        let _task = device_view.channel_change(Some(ChannelId::Channel(1)));
-        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(1)));
+        let _task = device_view.channel_change(Some(ChannelId::Channel(1.into())));
+        assert_eq!(
+            device_view.viewing_channel,
+            Some(ChannelId::Channel(1.into()))
+        );
     }
 
     #[test]
     fn test_channel_change_to_none() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         let _task = device_view.channel_change(None);
         assert_eq!(device_view.viewing_channel, None);
@@ -2067,14 +2076,17 @@ mod tests {
         let mut device_view = Device::default();
         device_view.viewing_channel = None;
 
-        let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
-        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+        let _task = device_view.channel_change(Some(ChannelId::Channel(0.into())));
+        assert_eq!(
+            device_view.viewing_channel,
+            Some(ChannelId::Channel(0.into()))
+        );
     }
 
     #[test]
     fn test_channel_change_to_node() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         let _task = device_view.channel_change(Some(Node(NodeId::from(12345u64))));
         assert_eq!(
@@ -2125,7 +2137,7 @@ mod tests {
         let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(SubscriptionMessage(MCMessageReceived(
-            ChannelId::Channel(0),
+            ChannelId::Channel(0.into()),
             MessageId::from(1),
             NodeId::from(100u64),
             MCMessage::NewTextMessage("test".into()),
@@ -2244,7 +2256,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.forwarding_message.is_none());
 
-        let _ = device_view.update(ForwardMessage(ChannelId::Channel(0)));
+        let _ = device_view.update(ForwardMessage(ChannelId::Channel(0.into())));
         // Should not panic, forwarding_message is None
     }
 
@@ -2253,7 +2265,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.my_position.is_none());
 
-        let _ = device_view.update(SendPositionMessage(ChannelId::Channel(0)));
+        let _ = device_view.update(SendPositionMessage(ChannelId::Channel(0.into())));
         // Should not panic, no position available
     }
 
@@ -2262,7 +2274,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.my_user.is_none());
 
-        let _ = device_view.update(SendSelfInfoMessage(ChannelId::Channel(0)));
+        let _ = device_view.update(SendSelfInfoMessage(ChannelId::Channel(0.into())));
         // Should not panic, no user info available
     }
 
@@ -2298,7 +2310,7 @@ mod tests {
 
         // Send a message to the channel
         let _ = device_view.update(ChannelMsg(
-            ChannelId::Channel(0),
+            ChannelId::Channel(0.into()),
             ChannelViewMessage::MessageInput("test".into()),
         ));
         // Should not panic
@@ -2318,7 +2330,7 @@ mod tests {
 
         // ACK a message (message doesn't need to exist for ack)
         let _ = device_view.update(SubscriptionMessage(MessageACK(
-            ChannelId::Channel(0),
+            ChannelId::Channel(0.into()),
             MessageId::from(123),
         )));
         // Should not panic
@@ -2382,7 +2394,7 @@ mod tests {
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         // Don't set exit_pending so we don't exit
         device_view.exit_pending = false;
@@ -2435,7 +2447,7 @@ mod tests {
             name: "TestChannel".into(),
         };
         let _ = device_view.update(SubscriptionMessage(NewChannel(channel)));
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         device_view.cancel_interactive();
 
@@ -2459,15 +2471,18 @@ mod tests {
         let _ = device_view.update(SubscriptionMessage(NewChannel(channel)));
 
         // Change to that channel
-        let _task = device_view.channel_change(Some(ChannelId::Channel(0)));
-        assert_eq!(device_view.viewing_channel, Some(ChannelId::Channel(0)));
+        let _task = device_view.channel_change(Some(ChannelId::Channel(0.into())));
+        assert_eq!(
+            device_view.viewing_channel,
+            Some(ChannelId::Channel(0.into()))
+        );
     }
 
     #[cfg(feature = "meshtastic")]
     #[test]
     fn test_connected_event_with_viewing_channel() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         let _ = device_view.update(SubscriptionMessage(ConnectedEvent(
             "device1".into(),
@@ -2556,7 +2571,7 @@ mod tests {
         })));
 
         // Set viewing channel
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         let config = Config::default();
         let _element = device_view.view(&config);
@@ -2727,7 +2742,7 @@ mod tests {
             name: "TestChannel".into(),
         })));
 
-        device_view.viewing_channel = Some(ChannelId::Channel(0));
+        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
 
         let device_list_view = DeviceList::default();
         let config = Config::default();
@@ -2821,12 +2836,17 @@ mod tests {
     fn test_channel_row() {
         let select = |channel_id: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_id)));
 
-        let _element = Device::channel_row("Test Channel".into(), 0, ChannelId::Channel(0), select);
+        let _element = Device::channel_row(
+            "Test Channel".into(),
+            0,
+            ChannelId::Channel(0.into()),
+            select,
+        );
 
         let _element = Device::channel_row(
             "Channel with unread".into(),
             5,
-            ChannelId::Channel(1),
+            ChannelId::Channel(1.into()),
             select,
         );
     }

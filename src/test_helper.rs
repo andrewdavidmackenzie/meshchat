@@ -35,7 +35,7 @@ impl MeshChat {
         let channel_view = self
             .device
             .channel_views
-            .get_mut(&ChannelId::Channel(0))
+            .get_mut(&ChannelId::Channel(0.into()))
             .expect("Could not get channel view");
         let _ = channel_view.new_message(channel_view_entry, &HistoryLength::All);
     }

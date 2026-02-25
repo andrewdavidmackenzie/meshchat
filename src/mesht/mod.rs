@@ -1,5 +1,5 @@
-use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::{Channel, Node};
+use crate::channel_id::{ChannelId, ChannelIndex};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::{NodeInfo, Position, User};
@@ -146,12 +146,18 @@ impl From<&meshtastic::protobufs::Channel> for MCChannel {
     }
 }
 
+impl From<ChannelIndex> for MeshChannel {
+    fn from(value: ChannelIndex) -> Self {
+        MeshChannel::from(<ChannelIndex as Into<u32>>::into(value))
+    }
+}
+
 impl ChannelId {
     pub fn to_destination(self) -> (PacketDestination, MeshChannel) {
         match self {
             Channel(channel_number) => (
                 PacketDestination::Broadcast,
-                MeshChannel::from(channel_number as u32),
+                MeshChannel::from(channel_number),
             ),
             Node(node_id) => (
                 PacketDestination::Node(NodeId::new(node_id.into())),
@@ -173,7 +179,7 @@ mod test {
 
     #[test]
     fn test_to_channel() {
-        let channel_id = Channel(0);
+        let channel_id = Channel(0.into());
         let (destination, channel) = channel_id.to_destination();
         assert!(
             matches!(destination, PacketDestination::Broadcast),

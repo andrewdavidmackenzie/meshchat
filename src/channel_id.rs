@@ -4,6 +4,57 @@ use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 
 #[derive(Debug, Default, Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Copy)]
+pub struct ChannelIndex(u8);
+
+impl From<i32> for ChannelIndex {
+    fn from(value: i32) -> Self {
+        ChannelIndex(value as u8)
+    }
+}
+
+impl From<u32> for ChannelIndex {
+    fn from(value: u32) -> Self {
+        ChannelIndex(value as u8)
+    }
+}
+
+impl From<u8> for ChannelIndex {
+    fn from(value: u8) -> Self {
+        ChannelIndex(value)
+    }
+}
+
+impl From<usize> for ChannelIndex {
+    fn from(value: usize) -> Self {
+        ChannelIndex(value as u8)
+    }
+}
+
+impl From<ChannelIndex> for i32 {
+    fn from(value: ChannelIndex) -> Self {
+        value.0 as i32
+    }
+}
+
+impl From<ChannelIndex> for u32 {
+    fn from(value: ChannelIndex) -> Self {
+        value.0 as u32
+    }
+}
+
+impl From<ChannelIndex> for u8 {
+    fn from(value: ChannelIndex) -> Self {
+        value.0
+    }
+}
+
+impl From<ChannelIndex> for usize {
+    fn from(value: ChannelIndex) -> Self {
+        value.0 as usize
+    }
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, Hash, PartialEq, Eq, Clone, Copy)]
 pub struct NodeId(u64);
 
 impl From<u64> for NodeId {
@@ -65,13 +116,13 @@ impl Display for MessageId {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub enum ChannelId {
-    Channel(i32), // Channel::index 0..7
-    Node(NodeId), // NodeInfo::node number
+    Channel(ChannelIndex), // Channel::index 0..7
+    Node(NodeId),          // NodeInfo::node number
 }
 
 impl Default for ChannelId {
     fn default() -> Self {
-        Channel(0)
+        Channel(0.into())
     }
 }
 
@@ -89,14 +140,14 @@ mod tests {
     #[test]
     fn test_default_is_channel_zero() {
         let channel_id = ChannelId::default();
-        assert_eq!(channel_id, Channel(0));
+        assert_eq!(channel_id, Channel(0.into()));
     }
 
     #[test]
     fn test_channel_equality() {
-        let ch1 = Channel(1);
-        let ch2 = Channel(1);
-        let ch3 = Channel(2);
+        let ch1 = Channel(1.into());
+        let ch2 = Channel(1.into());
+        let ch3 = Channel(2.into());
         assert_eq!(ch1, ch2);
         assert_ne!(ch1, ch3);
     }
@@ -112,14 +163,14 @@ mod tests {
 
     #[test]
     fn test_channel_and_node_not_equal() {
-        let channel = Channel(1);
+        let channel = Channel(1.into());
         let node = Node(NodeId(1));
         assert_ne!(channel, node);
     }
 
     #[test]
     fn test_display_channel() {
-        let channel = Channel(5);
+        let channel = Channel(5.into());
         let display = format!("{}", channel);
         assert!(display.contains("Channel"));
         assert!(display.contains("5"));
@@ -135,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_clone() {
-        let original = Channel(3);
+        let original = Channel(3.into());
         let cloned = original;
         assert_eq!(original, cloned);
     }
@@ -145,19 +196,19 @@ mod tests {
         use std::collections::HashMap;
 
         let mut map: HashMap<ChannelId, &str> = HashMap::new();
-        map.insert(Channel(0), "channel_0");
+        map.insert(Channel(0.into()), "channel_0");
         map.insert(Node(NodeId(100)), "node_100");
 
-        assert_eq!(map.get(&Channel(0)), Some(&"channel_0"));
+        assert_eq!(map.get(&Channel(0.into())), Some(&"channel_0"));
         assert_eq!(map.get(&Node(NodeId(100))), Some(&"node_100"));
-        assert_eq!(map.get(&Channel(1)), None);
+        assert_eq!(map.get(&Channel(1.into())), None);
     }
 
     #[test]
     fn test_debug_format() {
-        let channel = Channel(2);
+        let channel = Channel(2.into());
         let debug = format!("{:?}", channel);
-        assert_eq!(debug, "Channel(2)");
+        assert_eq!(debug, "Channel(ChannelIndex(2))");
 
         let node = Node(NodeId(999));
         let debug = format!("{:?}", node);

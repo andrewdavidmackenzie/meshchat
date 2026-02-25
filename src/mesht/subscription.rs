@@ -66,7 +66,7 @@ impl MyRouter {
     fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
         if mesh_packet.to == u32::MAX {
             // Destined for a channel
-            ChannelId::Channel(mesh_packet.channel as i32)
+            ChannelId::Channel(mesh_packet.channel.into())
         } else {
             // Destined for a Node
             if Some(mesh_packet.from) == self.my_node_num {
@@ -168,7 +168,7 @@ impl MyRouter {
                     // An ACK
                     let channel_id = if mesh_packet.from == mesh_packet.to {
                         // To a channel broadcast message
-                        ChannelId::Channel(mesh_packet.channel as i32)
+                        ChannelId::Channel(mesh_packet.channel.into())
                     } else {
                         // To a DM to a Node
                         Node(channel_id::NodeId::from(mesh_packet.from))
@@ -823,7 +823,7 @@ mod tests {
         let packet = create_mesh_packet(2000, u32::MAX, 0, 1);
         let channel_id = router.channel_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(0));
+        assert_eq!(channel_id, ChannelId::Channel(0.into()));
     }
 
     #[test]
@@ -835,7 +835,7 @@ mod tests {
         let packet = create_mesh_packet(2000, u32::MAX, 1, 1);
         let channel_id = router.channel_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(1));
+        assert_eq!(channel_id, ChannelId::Channel(1.into()));
     }
 
     #[test]
@@ -847,7 +847,7 @@ mod tests {
         let packet = create_mesh_packet(2000, u32::MAX, 5, 1);
         let channel_id = router.channel_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(5));
+        assert_eq!(channel_id, ChannelId::Channel(5.into()));
     }
 
     // Test channel_id_from_packet - DM from me to another node
@@ -1137,7 +1137,7 @@ mod tests {
             .expect("Failed to receive MCMessageReceived event for new text message");
         assert!(
             matches!(&event, MCMessageReceived(channel_id, id, from, msg, _timestamp)
-                if *channel_id == ChannelId::Channel(0) && *id == MessageId::from(123) && *from == channel_id::NodeId::from(2000u64)
+                if *channel_id == ChannelId::Channel(0.into()) && *id == MessageId::from(123) && *from == channel_id::NodeId::from(2000u64)
                 && matches!(msg, NewTextMessage(text) if text == "Hello world")),
             "Expected MCMessageReceived with channel 0, id 123, from 2000, NewTextMessage('Hello world'), got {:?}",
             event
@@ -1201,7 +1201,7 @@ mod tests {
             .expect("Failed to receive MessageACK event for broadcast");
         assert!(
             matches!(&event, MessageACK(channel_id, request_id)
-                if *channel_id == ChannelId::Channel(0) && *request_id == MessageId::from(789)),
+                if *channel_id == ChannelId::Channel(0.into()) && *request_id == MessageId::from(789)),
             "Expected MessageACK(Channel(0), 789), got {:?}",
             event
         );
