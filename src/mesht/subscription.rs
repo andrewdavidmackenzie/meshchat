@@ -369,7 +369,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                             &mut api,
                                             &mut my_router,
                                             channel_id,
-                                            reply_to_id.map(|id| id.into()),
+                                            reply_to_id.map(u32::from),
                                             text,
                                         )
                                         .await;
