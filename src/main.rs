@@ -224,10 +224,6 @@ fn main() -> iced::Result {
 
     #[allow(unused_mut)]
     let mut window_settings = window::Settings {
-        size: Size {
-            width: 600.0,
-            height: 800.0,
-        },
         exit_on_close_request: false,
         resizable: true,
         ..Default::default()
