@@ -90,7 +90,7 @@ panic = "deny"
 denylist = ["hot", "debug"]
 # Skip combinations that don't include at least one radio protocol
 skip_feature_sets = [
-    [],              # no features
+    [], # no features
     ["auto-update"], # only auto-update without radio support
 ]
 
@@ -119,5 +119,5 @@ depends = ["libdbus-1-3", "libbluetooth3"]
 # Bundle libs into AppImage for portability across distros
 # Source: https://docs.crabnebula.dev/packager/configuration/
 [package.metadata.packager.appimage]
-# Note: find -name is used, which supports globs, but exact names are safer
+# Note: `find -name` is used, which supports globs, but exact names are safer
 libs = ["libdbus-1.so.3", "libbluetooth.so.3"]

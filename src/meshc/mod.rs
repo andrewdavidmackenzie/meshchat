@@ -30,12 +30,13 @@ impl From<&SelfInfo> for MCPosition {
 
 impl From<&AdvertisementData> for MCNodeInfo {
     fn from(advert: &AdvertisementData) -> Self {
+        let node_id: NodeId = (&advert.prefix).into();
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
-            node_id: node_id_from_prefix(&advert.prefix),
+            node_id,
             user: Some(MCUser {
                 #[allow(clippy::unwrap_used)]
-                id: node_id_from_prefix(&advert.prefix).to_string(),
+                id: node_id.to_string(),
                 long_name: advert.name.to_string(),
                 short_name: advert.name.to_string(), // Use prefix in hex?
                 ..Default::default()
@@ -52,7 +53,7 @@ impl From<&AdvertisementData> for MCNodeInfo {
 
 impl From<Contact> for MCNodeInfo {
     fn from(contact: Contact) -> Self {
-        let node_id = node_id_from_prefix(&contact.prefix());
+        let node_id = (&contact.prefix()).into();
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
             node_id,
@@ -84,7 +85,7 @@ impl From<ChannelInfoData> for MCChannel {
 
 impl From<Neighbour> for MCNodeInfo {
     fn from(neighbour: Neighbour) -> Self {
-        let node_id = node_id_from_bytes(neighbour.pubkey);
+        let node_id = neighbour.pubkey.into();
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
             node_id,
@@ -103,7 +104,7 @@ impl From<Neighbour> for MCNodeInfo {
 
 impl From<AdvertResponseData> for MCNodeInfo {
     fn from(advert: AdvertResponseData) -> Self {
-        let node_id = node_id_from_public_key(&advert.pubkey);
+        let node_id = (&advert.pubkey).into();
         let position = if let Some(lat) = advert.lat
             && let Some(long) = advert.lon
         {
@@ -134,7 +135,7 @@ impl From<AdvertResponseData> for MCNodeInfo {
 
 impl From<DiscoverEntry> for MCNodeInfo {
     fn from(discovery: DiscoverEntry) -> Self {
-        let node_id = node_id_from_bytes(discovery.pubkey);
+        let node_id = discovery.pubkey.into();
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
             node_id,
@@ -154,7 +155,7 @@ impl From<DiscoverEntry> for MCNodeInfo {
 /// Convert from a ContactMessage to a SubscriptionEvent::MCMessageReceived
 impl From<ContactMessage> for SubscriptionEvent {
     fn from(contact_message: ContactMessage) -> Self {
-        let node_id = node_id_from_prefix(&contact_message.sender_prefix);
+        let node_id = (&contact_message.sender_prefix).into();
         MCMessageReceived(
             Node(node_id),
             contact_message.sender_timestamp.into(),
@@ -180,41 +181,47 @@ impl From<TimeStamp> for MessageId {
     }
 }
 
-pub fn node_id_from_prefix(prefix: &[u8; 6]) -> NodeId {
-    let mut bytes = [0u8; 8];
-    bytes[0..6].copy_from_slice(prefix);
-    NodeId::from(u64::from_be_bytes(bytes))
+impl From<&[u8; 6]> for NodeId {
+    fn from(value: &[u8; 6]) -> Self {
+        let mut bytes = [0u8; 8];
+        bytes[0..6].copy_from_slice(value);
+        NodeId::from(u64::from_be_bytes(bytes))
+    }
 }
 
-pub fn node_id_to_destination(node_id: &NodeId) -> Destination {
-    let inner: u64 = node_id.into();
-    Bytes(inner.to_be_bytes().to_vec())
+impl From<NodeId> for Destination {
+    fn from(value: NodeId) -> Self {
+        let inner: u64 = value.into();
+        Bytes(inner.to_be_bytes().to_vec())
+    }
 }
 
-pub fn node_id_from_public_key(public_key: &[u8; 32]) -> NodeId {
-    let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(&public_key[0..8]);
-    NodeId::from(u64::from_be_bytes(bytes))
+impl From<&[u8; 32]> for NodeId {
+    fn from(value: &[u8; 32]) -> Self {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&value[0..8]);
+        NodeId::from(u64::from_be_bytes(bytes))
+    }
 }
 
-pub fn node_id_from_bytes(public_key: Vec<u8>) -> NodeId {
-    let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(&public_key[0..8]);
-    NodeId::from(u64::from_be_bytes(bytes))
+impl From<Vec<u8>> for NodeId {
+    fn from(value: Vec<u8>) -> Self {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&value[0..8]);
+        NodeId::from(u64::from_be_bytes(bytes))
+    }
 }
 
-pub fn message_id_from_expected_ack(expected_ack: [u8; 4]) -> MessageId {
-    MessageId::from(u32::from_be_bytes(expected_ack))
+impl From<[u8; 4]> for MessageId {
+    fn from(value: [u8; 4]) -> Self {
+        MessageId::from(u32::from_be_bytes(value))
+    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
-    use crate::meshc::{
-        message_id_from_expected_ack, node_id_from_bytes, node_id_from_prefix,
-        node_id_from_public_key, node_id_to_destination,
-    };
     use meshcore_rs::events::{
         AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour, SelfInfo,
     };
@@ -224,8 +231,8 @@ mod test {
     #[test]
     fn roundtrip_prefix_nodeid() {
         let prefix = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
-        let node_id = node_id_from_prefix(&prefix);
-        let destination = node_id_to_destination(&node_id);
+        let node_id: NodeId = (&prefix).into();
+        let destination: Destination = node_id.into();
         let prefix2 = destination.prefix().expect("Failed to get prefix");
 
         assert_eq!(prefix, prefix2, "Failed to roundtrip prefix via node id");
@@ -234,14 +241,14 @@ mod test {
     #[test]
     fn node_id_from_prefix_all_zeros() {
         let prefix = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let node_id = node_id_from_prefix(&prefix);
+        let node_id: NodeId = (&prefix).into();
         assert_eq!(node_id, NodeId::from(0u64));
     }
 
     #[test]
     fn node_id_from_prefix_all_ones() {
         let prefix = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-        let node_id = node_id_from_prefix(&prefix);
+        let node_id: NodeId = (&prefix).into();
         // Expected: 0xFF_FF_FF_FF_FF_FF_00_00 in big-endian
         assert_eq!(node_id, NodeId::from(0xFFFF_FFFF_FFFF_0000u64));
     }
@@ -249,7 +256,7 @@ mod test {
     #[test]
     fn node_id_from_prefix_sequential() {
         let prefix = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
-        let node_id = node_id_from_prefix(&prefix);
+        let node_id: NodeId = (&prefix).into();
         // Expected: 0x01_02_03_04_05_06_00_00 in big-endian
         assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0000u64));
     }
@@ -260,14 +267,14 @@ mod test {
     fn node_id_from_public_key_basic() {
         let mut public_key = [0u8; 32];
         public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
-        let node_id = node_id_from_public_key(&public_key);
+        let node_id: NodeId = (&public_key).into();
         assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 
     #[test]
     fn node_id_from_public_key_all_zeros() {
         let public_key = [0u8; 32];
-        let node_id = node_id_from_public_key(&public_key);
+        let node_id: NodeId = (&public_key).into();
         assert_eq!(node_id, NodeId::from(0u64));
     }
 
@@ -275,7 +282,7 @@ mod test {
     fn node_id_from_public_key_ignores_trailing_bytes() {
         let mut public_key = [0xAA; 32]; // All bytes set to 0xAA
         public_key[0..8].copy_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
-        let node_id = node_id_from_public_key(&public_key);
+        let node_id: NodeId = (&public_key).into();
         // Only the first 8 bytes should matter
         assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
@@ -284,7 +291,7 @@ mod test {
     fn node_id_from_public_key_max_value() {
         let mut public_key = [0u8; 32];
         public_key[0..8].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
-        let node_id = node_id_from_public_key(&public_key);
+        let node_id: NodeId = (&public_key).into();
         assert_eq!(node_id, NodeId::from(u64::MAX));
     }
 
@@ -293,21 +300,21 @@ mod test {
     #[test]
     fn message_id_from_expected_ack_basic() {
         let expected_ack = [0x01, 0x02, 0x03, 0x04];
-        let message_id = message_id_from_expected_ack(expected_ack);
+        let message_id: MessageId = expected_ack.into();
         assert_eq!(message_id, MessageId::from(0x01020304));
     }
 
     #[test]
     fn message_id_from_expected_ack_all_zeros() {
         let expected_ack = [0x00, 0x00, 0x00, 0x00];
-        let message_id = message_id_from_expected_ack(expected_ack);
+        let message_id: MessageId = expected_ack.into();
         assert_eq!(message_id, MessageId::from(0));
     }
 
     #[test]
     fn message_id_from_expected_ack_max_value() {
         let expected_ack = [0xFF, 0xFF, 0xFF, 0xFF];
-        let message_id = message_id_from_expected_ack(expected_ack);
+        let message_id: MessageId = expected_ack.into();
         assert_eq!(message_id, MessageId::from(u32::MAX));
     }
 
@@ -483,7 +490,7 @@ mod test {
     #[test]
     fn node_id_to_destination_basic() {
         let node_id: NodeId = NodeId::from(0x0102_0304_0506_0000u64);
-        let destination = node_id_to_destination(&node_id);
+        let destination = node_id.into();
 
         let Bytes(bytes) = destination else {
             unreachable!("Expected Bytes destination")
@@ -496,7 +503,7 @@ mod test {
     #[test]
     fn node_id_to_destination_extracts_prefix() {
         let node_id: NodeId = NodeId::from(0xAABB_CCDD_EEFF_0000u64);
-        let destination = node_id_to_destination(&node_id);
+        let destination: Destination = node_id.into();
         let prefix = destination.prefix().expect("Should extract prefix");
         assert_eq!(prefix, [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
     }
@@ -582,32 +589,32 @@ mod test {
 
     #[test]
     fn node_id_from_bytes_basic() {
-        let bytes = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
-        let node_id = node_id_from_bytes(bytes);
+        let bytes: Vec<u8> = vec![0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
+        let node_id: NodeId = bytes.into();
         assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 
     #[test]
     fn node_id_from_bytes_all_zeros() {
-        let bytes = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let node_id = node_id_from_bytes(bytes);
+        let bytes: Vec<u8> = vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let node_id: NodeId = bytes.into();
         assert_eq!(node_id, NodeId::from(0u64));
     }
 
     #[test]
     fn node_id_from_bytes_all_ones() {
-        let bytes = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-        let node_id = node_id_from_bytes(bytes);
+        let bytes: Vec<u8> = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let node_id: NodeId = bytes.into();
         assert_eq!(node_id, NodeId::from(u64::MAX));
     }
 
     #[test]
     fn node_id_from_bytes_longer_input() {
         // Only the first 8 bytes should be used
-        let bytes = vec![
+        let bytes: Vec<u8> = vec![
             0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0xAA, 0xBB, 0xCC,
         ];
-        let node_id = node_id_from_bytes(bytes);
+        let node_id: NodeId = bytes.into();
         assert_eq!(node_id, NodeId::from(0x0102_0304_0506_0708u64));
     }
 

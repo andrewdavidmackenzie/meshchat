@@ -11,13 +11,10 @@ use crate::device::SubscriptionEvent::{
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
-use crate::meshc::{
-    message_id_from_expected_ack, node_id_from_prefix, node_id_from_public_key,
-    node_id_to_destination,
-};
 use crate::{MCPosition, MCUser, MeshChat};
 use futures::{SinkExt, Stream};
 use iced::stream;
+use meshcore_rs::commands::Destination;
 use meshcore_rs::events::{
     BatteryInfo, ChannelInfoData, Contact, DeviceInfoData, EventPayload, NeighboursData, SelfInfo,
 };
@@ -49,8 +46,9 @@ struct RadioCache {
 
 impl RadioCache {
     fn user(&self) -> MCUser {
+        let node_id: NodeId = (&self.self_info.public_key).into();
         MCUser {
-            id: node_id_from_public_key(&self.self_info.public_key).to_string(),
+            id: node_id.to_string(),
             long_name: self.self_info.name.clone(),
             short_name: self.self_info.name.clone(),
             hw_model_str: self.device_info.model.clone().unwrap_or("".into()),
@@ -386,10 +384,10 @@ async fn send_text_message(
                 .commands()
                 .lock()
                 .await
-                .send_msg(node_id_to_destination(&node_id), &text, None)
+                .send_msg(<NodeId as Into<Destination>>::into(node_id), &text, None)
                 .await?;
 
-            let message_id = message_id_from_expected_ack(message_sent_info.expected_ack);
+            let message_id: MessageId = message_sent_info.expected_ack.into();
 
             // Mark this sent message as pending an ACK
             radio_cache.pending_ack.insert(message_id, Node(node_id));
@@ -472,13 +470,13 @@ async fn handle_self_info(
     self_info: SelfInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) {
-    radio_cache.self_id = node_id_from_public_key(&self_info.public_key);
+    radio_cache.self_id = (&self_info.public_key).into();
 
     // update the info stored in radio_cache
     radio_cache.self_info = self_info.clone();
 
     gui_sender
-        .send(MyNodeNum(node_id_from_public_key(&self_info.public_key)))
+        .send(MyNodeNum((&self_info.public_key).into()))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 
@@ -514,7 +512,7 @@ async fn handle_new_contact(
     contact: Contact,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) {
-    let node_id = node_id_from_prefix(&contact.prefix());
+    let node_id = (&contact.prefix()).into();
     radio_cache
         .known_contacts
         .insert(contact.adv_name.clone(), node_id);
@@ -687,7 +685,7 @@ async fn handle_radio_event(
         }
         EventType::Ack => {
             if let EventPayload::Ack { tag } = meshcore_event.payload {
-                let message_id = message_id_from_expected_ack(tag);
+                let message_id: MessageId = tag.into();
                 if let Some(channel_id) = radio_cache.pending_ack.remove(&message_id) {
                     gui_sender
                         .send(MessageACK(channel_id, message_id))
