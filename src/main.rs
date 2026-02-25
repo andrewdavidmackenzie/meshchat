@@ -65,7 +65,7 @@ mod mesht;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// A User as represented in the App, maybe a superset of User attributes from different meshes
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MCUser {
     pub id: String,
     pub long_name: String,
@@ -151,7 +151,7 @@ struct MeshChat {
     show_user: Option<MCUser>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MCChannel {
     pub index: i32,
     pub name: String,
@@ -257,10 +257,12 @@ impl MeshChat {
 
     /// Get the current time in epoch as u32
     pub fn now() -> TimeStamp {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs() as u32
+        TimeStamp::from(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as u32,
+        )
     }
 
     /// Return the title of the app, which is used in the window title bar.
@@ -690,7 +692,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: 0,
+            timestamp: TimeStamp::from(0),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -797,8 +799,8 @@ mod tests {
     fn test_view_equality() {
         assert_eq!(DeviceView(None), DeviceView(None));
         assert_eq!(
-            DeviceView(Some(ChannelId::Channel(0))),
-            DeviceView(Some(ChannelId::Channel(0)))
+            DeviceView(Some(ChannelId::Channel(0.into()))),
+            DeviceView(Some(ChannelId::Channel(0.into())))
         );
         assert_ne!(DeviceListView, DeviceView(None));
     }
@@ -834,7 +836,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: 0,
+            timestamp: TimeStamp::from(0),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -868,7 +870,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: 0,
+            timestamp: TimeStamp::from(0),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -897,21 +899,21 @@ mod tests {
     fn test_now_returns_valid_timestamp() {
         let now = MeshChat::now();
         // Should be a reasonable recent timestamp (after 2020)
-        assert!(now > 1577836800); // Jan 1, 2020
+        assert!(now > TimeStamp::from(1577836800)); // Jan 1, 2020
     }
 
     #[test]
     fn test_toggle_node_favourite() {
         let mut meshchat = test_helper::test_app();
-        assert!(!meshchat.config.fav_nodes.contains(&12345));
+        assert!(!meshchat.config.fav_nodes.contains(&NodeId::from(12345u64)));
 
         // Toggle on
-        let _ = meshchat.update(ToggleNodeFavourite(12345));
-        assert!(meshchat.config.fav_nodes.contains(&12345));
+        let _ = meshchat.update(ToggleNodeFavourite(NodeId::from(12345u64)));
+        assert!(meshchat.config.fav_nodes.contains(&NodeId::from(12345u64)));
 
         // Toggle off
-        let _ = meshchat.update(ToggleNodeFavourite(12345));
-        assert!(!meshchat.config.fav_nodes.contains(&12345));
+        let _ = meshchat.update(ToggleNodeFavourite(NodeId::from(12345u64)));
+        assert!(!meshchat.config.fav_nodes.contains(&NodeId::from(12345u64)));
     }
 
     #[test]
@@ -919,9 +921,9 @@ mod tests {
         let mut meshchat = test_helper::test_app();
         assert!(meshchat.config.aliases.is_empty());
 
-        let _ = meshchat.update(AddNodeAlias(123, "My Friend".to_string()));
+        let _ = meshchat.update(AddNodeAlias(NodeId::from(123u64), "My Friend".to_string()));
         assert_eq!(
-            meshchat.config.aliases.get(&123),
+            meshchat.config.aliases.get(&NodeId::from(123_u64)),
             Some(&"My Friend".to_string())
         );
     }
@@ -929,18 +931,21 @@ mod tests {
     #[test]
     fn test_add_empty_node_alias() {
         let mut meshchat = test_helper::test_app();
-        let _ = meshchat.update(AddNodeAlias(123, "".to_string()));
+        let _ = meshchat.update(AddNodeAlias(NodeId::from(123u64), "".to_string()));
         // Empty alias should not be added
-        assert!(!meshchat.config.aliases.contains_key(&123));
+        assert!(!meshchat.config.aliases.contains_key(&NodeId::from(123u64)));
     }
 
     #[test]
     fn test_remove_node_alias() {
         let mut meshchat = test_helper::test_app();
-        meshchat.config.aliases.insert(123, "Friend".to_string());
+        meshchat
+            .config
+            .aliases
+            .insert(NodeId::from(123u64), "Friend".to_string());
 
-        let _ = meshchat.update(RemoveNodeAlias(123));
-        assert!(!meshchat.config.aliases.contains_key(&123));
+        let _ = meshchat.update(RemoveNodeAlias(NodeId::from(123u64)));
+        assert!(!meshchat.config.aliases.contains_key(&NodeId::from(123u64)));
     }
 
     #[test]

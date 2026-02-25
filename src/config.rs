@@ -402,6 +402,7 @@ pub fn load_config() -> Task<Message> {
 mod tests {
     use crate::config::{Config, HistoryLength, ONE_DAY_IN_SECONDS, load, save};
     use btleplug::api::BDAddr;
+    use std::collections::{HashMap, HashSet};
     use std::io;
     use std::time::Duration;
     use tokio::fs::File;
@@ -682,9 +683,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_fav_nodes_saved() {
-        let mut fav_nodes = std::collections::HashSet::new();
-        fav_nodes.insert(123);
-        fav_nodes.insert(456);
+        let mut fav_nodes: HashSet<NodeId> = HashSet::new();
+        fav_nodes.insert(NodeId::from(123u64));
+        fav_nodes.insert(NodeId::from(456u64));
 
         let config = Config {
             fav_nodes,
@@ -705,14 +706,14 @@ mod tests {
             .expect("Could not load config file");
 
         assert_eq!(returned.fav_nodes.len(), 2);
-        assert!(returned.fav_nodes.contains(&123));
-        assert!(returned.fav_nodes.contains(&456));
+        assert!(returned.fav_nodes.contains(&NodeId::from(123u64)));
+        assert!(returned.fav_nodes.contains(&NodeId::from(456u64)));
     }
 
     #[tokio::test]
     async fn test_aliases_saved() {
-        let mut aliases = std::collections::HashMap::new();
-        aliases.insert(123, "My Friend".to_string());
+        let mut aliases: HashMap<NodeId, String> = HashMap::new();
+        aliases.insert(NodeId::from(123u64), "My Friend".to_string());
 
         let config = Config {
             aliases,
@@ -733,12 +734,15 @@ mod tests {
             .expect("Could not load config file");
 
         assert_eq!(returned.aliases.len(), 1);
-        assert_eq!(returned.aliases.get(&123), Some(&"My Friend".to_string()));
+        assert_eq!(
+            returned.aliases.get(&NodeId::from(123u64)),
+            Some(&"My Friend".to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_device_aliases_saved() {
-        let mut device_aliases = std::collections::HashMap::new();
+        let mut device_aliases = HashMap::new();
         device_aliases.insert("AA:BB:CC:DD:EE:FF".to_string(), "My Radio".to_string());
 
         let config = Config {
@@ -836,6 +840,7 @@ mod tests {
     }
 
     // Tests for WindowPosition and WindowSize
+    use crate::channel_id::NodeId;
     use crate::config::{WindowPosition, WindowSize};
     use crate::device_list::RadioType;
     use iced::{Point, Size};

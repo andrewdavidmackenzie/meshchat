@@ -66,7 +66,7 @@ impl MyRouter {
     fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
         if mesh_packet.to == u32::MAX {
             // Destined for a channel
-            ChannelId::Channel(mesh_packet.channel as i32)
+            ChannelId::Channel(mesh_packet.channel.into())
         } else {
             // Destined for a Node
             if Some(mesh_packet.from) == self.my_node_num {
@@ -106,7 +106,7 @@ impl MyRouter {
                 self.my_node_num = Some(my_node_info.my_node_num);
 
                 self.gui_sender
-                    .send(MyNodeNum(my_node_info.my_node_num as u64))
+                    .send(MyNodeNum(my_node_info.my_node_num.into()))
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
@@ -135,7 +135,7 @@ impl MyRouter {
                 self.gui_sender
                     .send(RadioNotification(
                         notification.message.clone(),
-                        notification.time,
+                        notification.time.into(),
                     ))
                     .await
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -168,14 +168,14 @@ impl MyRouter {
                     // An ACK
                     let channel_id = if mesh_packet.from == mesh_packet.to {
                         // To a channel broadcast message
-                        ChannelId::Channel(mesh_packet.channel as i32)
+                        ChannelId::Channel(mesh_packet.channel.into())
                     } else {
                         // To a DM to a Node
                         Node(channel_id::NodeId::from(mesh_packet.from))
                     };
 
                     self.gui_sender
-                        .send(MessageACK(channel_id, data.request_id))
+                        .send(MessageACK(channel_id, data.request_id.into()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
@@ -186,8 +186,8 @@ impl MyRouter {
                         self.gui_sender
                             .send(MCMessageReceived(
                                 channel_id,
-                                mesh_packet.id,
-                                mesh_packet.from as u64,
+                                mesh_packet.id.into(),
+                                mesh_packet.from.into(),
                                 AlertMessage(message),
                                 MeshChat::now(),
                             ))
@@ -204,16 +204,16 @@ impl MyRouter {
                             // Emoji reply to an earlier message
                             if data.emoji == 0 {
                                 // Text reply to an earlier message
-                                TextMessageReply(data.reply_id, message)
+                                TextMessageReply(data.reply_id.into(), message)
                             } else {
-                                EmojiReply(data.reply_id, message)
+                                EmojiReply(data.reply_id.into(), message)
                             }
                         };
                         self.gui_sender
                             .send(MCMessageReceived(
                                 channel_id,
-                                mesh_packet.id,
-                                mesh_packet.from as u64,
+                                mesh_packet.id.into(),
+                                mesh_packet.from.into(),
                                 mcmessage,
                                 MeshChat::now(),
                             ))
@@ -229,8 +229,8 @@ impl MyRouter {
                         self.gui_sender
                             .send(NewNodePosition(
                                 channel_id,
-                                mesh_packet.id,
-                                mesh_packet.from as u64,
+                                mesh_packet.id.into(),
+                                mesh_packet.from.into(),
                                 mcposition,
                                 MeshChat::now(),
                             ))
@@ -256,8 +256,8 @@ impl MyRouter {
                         self.gui_sender
                             .send(NewNodeInfo(
                                 channel_id,
-                                mesh_packet.id,
-                                mesh_packet.from as u64,
+                                mesh_packet.id.into(),
+                                mesh_packet.from.into(),
                                 (&user).into(),
                                 MeshChat::now(),
                             ))
@@ -369,7 +369,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                             &mut api,
                                             &mut my_router,
                                             channel_id,
-                                            reply_to_id,
+                                            reply_to_id.map(u32::from),
                                             text,
                                         )
                                         .await;
@@ -433,7 +433,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                             &mut api,
                                             &mut my_router,
                                             channel_id,
-                                            reply_to_id,
+                                            reply_to_id.into(),
                                             emoji,
                                         )
                                         .await;
@@ -625,6 +625,8 @@ async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Erro
 #[allow(clippy::panic)]
 mod tests {
     use super::*;
+    use crate::channel_id::MessageId;
+    use crate::device::TimeStamp;
     use futures_channel::mpsc;
     use meshtastic::Message;
     use meshtastic::protobufs::{
@@ -821,7 +823,7 @@ mod tests {
         let packet = create_mesh_packet(2000, u32::MAX, 0, 1);
         let channel_id = router.channel_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(0));
+        assert_eq!(channel_id, ChannelId::Channel(0.into()));
     }
 
     #[test]
@@ -833,7 +835,7 @@ mod tests {
         let packet = create_mesh_packet(2000, u32::MAX, 1, 1);
         let channel_id = router.channel_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(1));
+        assert_eq!(channel_id, ChannelId::Channel(1.into()));
     }
 
     #[test]
@@ -845,7 +847,7 @@ mod tests {
         let packet = create_mesh_packet(2000, u32::MAX, 5, 1);
         let channel_id = router.channel_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(5));
+        assert_eq!(channel_id, ChannelId::Channel(5.into()));
     }
 
     // Test channel_id_from_packet - DM from me to another node
@@ -860,7 +862,7 @@ mod tests {
         let channel_id = router.channel_id_from_packet(&packet);
 
         // Should be in node 2000's channel (the recipient)
-        assert_eq!(channel_id, Node(2000));
+        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u64)));
     }
 
     // Test channel_id_from_packet - DM from another node to me
@@ -875,7 +877,7 @@ mod tests {
         let channel_id = router.channel_id_from_packet(&packet);
 
         // Should be in node 2000's channel (the sender)
-        assert_eq!(channel_id, Node(2000));
+        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u32)));
     }
 
     // Test channel_id_from_packet - DM between two other nodes (edge case)
@@ -890,7 +892,7 @@ mod tests {
         let channel_id = router.channel_id_from_packet(&packet);
 
         // Should be in node 2000's channel (the sender)
-        assert_eq!(channel_id, Node(2000));
+        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u32)));
     }
 
     // Test channel_id_from_packet with my_node_num not set
@@ -904,7 +906,7 @@ mod tests {
         let channel_id = router.channel_id_from_packet(&packet);
 
         // Since my_node_num is None, from != my_node_num, so uses Node(from)
-        assert_eq!(channel_id, Node(2000));
+        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u32)));
     }
 
     // Test DeviceState enum
@@ -945,7 +947,12 @@ mod tests {
         let event = receiver
             .try_recv()
             .expect("Failed to receive MyNodeNum event");
-        assert!(matches!(event, MyNodeNum(12345)));
+        match event {
+            MyNodeNum(node_id) => {
+                assert_eq!(node_id, channel_id::NodeId::from(12345u64))
+            }
+            _ => panic!("Unexpected MyNodeNum event"),
+        }
     }
 
     #[allow(deprecated)]
@@ -1081,7 +1088,13 @@ mod tests {
         let event = receiver
             .try_recv()
             .expect("Failed to receive RadioNotification event");
-        assert!(matches!(event, RadioNotification(msg, 1234567890) if msg == "Test notification"));
+        match event {
+            RadioNotification(msg, timestamp) => {
+                assert_eq!(msg, "Test notification");
+                assert_eq!(timestamp, TimeStamp::from(1234567890u32));
+            }
+            _ => panic!("Unexpected RadioNotification event"),
+        }
     }
 
     #[tokio::test]
@@ -1124,7 +1137,7 @@ mod tests {
             .expect("Failed to receive MCMessageReceived event for new text message");
         assert!(
             matches!(&event, MCMessageReceived(channel_id, id, from, msg, _timestamp)
-                if *channel_id == ChannelId::Channel(0) && *id == 123 && *from == 2000
+                if *channel_id == ChannelId::Channel(0.into()) && *id == MessageId::from(123) && *from == channel_id::NodeId::from(2000u64)
                 && matches!(msg, NewTextMessage(text) if text == "Hello world")),
             "Expected MCMessageReceived with channel 0, id 123, from 2000, NewTextMessage('Hello world'), got {:?}",
             event
@@ -1146,7 +1159,7 @@ mod tests {
             .expect("Failed to receive MCMessageReceived event for text reply");
         assert!(
             matches!(&event, MCMessageReceived(_, _, _, msg, _)
-                if matches!(msg, TextMessageReply(reply_id, text) if *reply_id == 456 && text == "Reply text")),
+                if matches!(msg, TextMessageReply(reply_id, text) if *reply_id == MessageId::from(456) && text == "Reply text")),
             "Expected MCMessageReceived with TextMessageReply(456, 'Reply text'), got {:?}",
             event
         );
@@ -1167,7 +1180,7 @@ mod tests {
             .expect("Failed to receive MCMessageReceived event for emoji reply");
         assert!(
             matches!(&event, MCMessageReceived(_, _, _, msg, _)
-                if matches!(msg, EmojiReply(reply_id, emoji) if *reply_id == 456 && emoji == "👍")),
+                if matches!(msg, EmojiReply(reply_id, emoji) if *reply_id == MessageId::from(456) && emoji == "👍")),
             "Expected MCMessageReceived with EmojiReply(456, '👍'), got {:?}",
             event
         );
@@ -1188,7 +1201,7 @@ mod tests {
             .expect("Failed to receive MessageACK event for broadcast");
         assert!(
             matches!(&event, MessageACK(channel_id, request_id)
-                if *channel_id == ChannelId::Channel(0) && *request_id == 789),
+                if *channel_id == ChannelId::Channel(0.into()) && *request_id == MessageId::from(789)),
             "Expected MessageACK(Channel(0), 789), got {:?}",
             event
         );
@@ -1209,7 +1222,7 @@ mod tests {
             .expect("Failed to receive MessageACK event for DM");
         assert!(
             matches!(&event, MessageACK(channel_id, request_id)
-                if *channel_id == Node(2000) && *request_id == 789),
+                if *channel_id == Node(channel_id::NodeId::from(2000u32)) && *request_id == MessageId::from(789)),
             "Expected MessageACK(Node(2000), 789), got {:?}",
             event
         );
@@ -1260,7 +1273,11 @@ mod tests {
         let event = receiver
             .try_recv()
             .expect("Failed to receive MyNodeNum event from PacketRouter");
-        assert!(matches!(event, MyNodeNum(99999)));
+        let node_id = channel_id::NodeId::from(99999u64);
+        match event {
+            MyNodeNum(num_received) => assert_eq!(num_received, node_id),
+            _ => panic!("Expected MyNodeNum event, got {:?}", event),
+        }
     }
 
     #[test]
@@ -1298,10 +1315,7 @@ mod tests {
         if let MCMessageReceived(_, _, _, _, timestamp) = event {
             assert!(
                 timestamp >= before && timestamp <= after,
-                "Timestamp should be local time between {} and {}, got {}",
-                before,
-                after,
-                timestamp
+                "Timestamp should be local time ",
             );
         } else {
             unreachable!("Expected MCMessageReceived event, got {:?}", event);
@@ -1325,10 +1339,7 @@ mod tests {
         if let MCMessageReceived(_, _, _, _, timestamp) = event {
             assert!(
                 timestamp >= before && timestamp <= after,
-                "Timestamp should be local time between {} and {}, got {}",
-                before,
-                after,
-                timestamp
+                "Timestamp should be local time",
             );
         } else {
             unreachable!("Expected MCMessageReceived event, got {:?}", event);
@@ -1352,10 +1363,7 @@ mod tests {
         if let MCMessageReceived(_, _, _, _, timestamp) = event {
             assert!(
                 timestamp >= before && timestamp <= after,
-                "Timestamp should be local time between {} and {}, got {}",
-                before,
-                after,
-                timestamp
+                "Timestamp should be local time",
             );
         } else {
             unreachable!("Expected MCMessageReceived event, got {:?}", event);
@@ -1377,10 +1385,7 @@ mod tests {
         if let NewNodePosition(_, _, _, _, timestamp) = event {
             assert!(
                 timestamp >= before && timestamp <= after,
-                "Timestamp should be local time between {} and {}, got {}",
-                before,
-                after,
-                timestamp
+                "Timestamp should be local time",
             );
         } else {
             unreachable!("Expected NewNodePosition event, got {:?}", event);
@@ -1402,10 +1407,7 @@ mod tests {
         if let NewNodeInfo(_, _, _, _, timestamp) = event {
             assert!(
                 timestamp >= before && timestamp <= after,
-                "Timestamp should be local time between {} and {}, got {}",
-                before,
-                after,
-                timestamp
+                "Timestamp should be local time",
             );
         } else {
             unreachable!("Expected NewNodeInfo event, got {:?}", event);

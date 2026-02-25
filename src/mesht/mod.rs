@@ -1,5 +1,5 @@
-use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::{Channel, Node};
+use crate::channel_id::{ChannelId, ChannelIndex};
 use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::{NodeInfo, Position, User};
@@ -49,7 +49,7 @@ impl From<MCUser> for User {
 impl From<&NodeInfo> for MCNodeInfo {
     fn from(node_info: &NodeInfo) -> Self {
         MCNodeInfo {
-            node_id: node_info.num as u64,
+            node_id: node_info.num.into(),
             user: node_info.user.as_ref().map(|u| u.into()),
             position: node_info.position.as_ref().map(|p| p.into()),
             is_ignored: node_info.is_ignored,
@@ -68,7 +68,7 @@ impl From<&Position> for MCPosition {
         MCPosition {
             latitude,
             longitude,
-            timestamp: position.timestamp,
+            timestamp: position.timestamp.into(),
             altitude: position.altitude,
             time: position.time,
             location_source: position.location_source,
@@ -101,7 +101,7 @@ impl Into<Position> for MCPosition {
         Position {
             latitude_i: Some(lat),
             longitude_i: Some(long),
-            timestamp: self.timestamp,
+            timestamp: self.timestamp.into(),
             altitude: self.altitude,
             time: self.time,
             location_source: self.location_source,
@@ -146,15 +146,21 @@ impl From<&meshtastic::protobufs::Channel> for MCChannel {
     }
 }
 
+impl From<ChannelIndex> for MeshChannel {
+    fn from(value: ChannelIndex) -> Self {
+        MeshChannel::from(<ChannelIndex as Into<u32>>::into(value))
+    }
+}
+
 impl ChannelId {
     pub fn to_destination(self) -> (PacketDestination, MeshChannel) {
         match self {
             Channel(channel_number) => (
                 PacketDestination::Broadcast,
-                MeshChannel::from(channel_number as u32),
+                MeshChannel::from(channel_number),
             ),
             Node(node_id) => (
-                PacketDestination::Node(NodeId::new(node_id as u32)),
+                PacketDestination::Node(NodeId::new(node_id.into())),
                 MeshChannel::default(),
             ),
         }
@@ -165,13 +171,15 @@ impl ChannelId {
 #[allow(clippy::panic)]
 mod test {
     use super::*;
+    use crate::channel_id;
+    use crate::device::TimeStamp;
     use meshtastic::packet::PacketDestination;
     use meshtastic::protobufs::{ChannelSettings, Position, User};
     use meshtastic::types::MeshChannel;
 
     #[test]
     fn test_to_channel() {
-        let channel_id = Channel(0);
+        let channel_id = Channel(0.into());
         let (destination, channel) = channel_id.to_destination();
         assert!(
             matches!(destination, PacketDestination::Broadcast),
@@ -183,7 +191,7 @@ mod test {
 
     #[test]
     fn test_to_node_destination() {
-        let channel_id = Node(12345);
+        let channel_id = Node(channel_id::NodeId::from(12345u32));
         let (destination, channel) = channel_id.to_destination();
         assert!(
             matches!(destination, PacketDestination::Node(_)),
@@ -270,7 +278,7 @@ mod test {
         assert!((mc_position.latitude - 50.0).abs() < 0.0001);
         assert!((mc_position.longitude - 1.0).abs() < 0.0001);
         assert_eq!(mc_position.altitude, Some(100));
-        assert_eq!(mc_position.timestamp, 12345);
+        assert_eq!(mc_position.timestamp, TimeStamp::from(12345));
         assert_eq!(mc_position.time, 67890);
     }
 
@@ -283,7 +291,7 @@ mod test {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: 0,
+            timestamp: TimeStamp::from(0),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -391,7 +399,7 @@ mod test {
 
         let mc_node_info: MCNodeInfo = (&node_info).into();
 
-        assert_eq!(mc_node_info.node_id, 12345);
+        assert_eq!(mc_node_info.node_id, channel_id::NodeId::from(12345_u32));
         assert!(mc_node_info.user.is_some());
         assert_eq!(
             mc_node_info
@@ -424,7 +432,7 @@ mod test {
 
         let mc_node_info: MCNodeInfo = (&node_info).into();
 
-        assert_eq!(mc_node_info.node_id, 99999);
+        assert_eq!(mc_node_info.node_id, channel_id::NodeId::from(99999_u32));
         assert!(mc_node_info.user.is_none());
         assert!(mc_node_info.position.is_some());
         assert!(mc_node_info.is_ignored);
