@@ -7,7 +7,7 @@ use crate::channel_id::{MessageId, NodeId};
 use crate::channel_view_entry::MCMessage;
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
 use crate::device::{SubscriptionEvent, TimeStamp};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
+use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
 use meshcore_rs::ContactMessage;
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;

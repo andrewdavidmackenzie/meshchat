@@ -9,6 +9,7 @@ use crate::device::SubscriberMessage::{
 };
 use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
 
+use crate::channel_id;
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
     DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
@@ -16,7 +17,7 @@ use crate::device::SubscriptionEvent::{
 };
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
-use crate::{MCChannel, MCNodeInfo, MCPosition, MeshChat, channel_id};
+use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MeshChat};
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;

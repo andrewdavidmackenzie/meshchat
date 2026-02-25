@@ -11,7 +11,6 @@ use crate::device::SubscriptionEvent::{
 use crate::device::{SubscriberMessage, SubscriptionEvent};
 use crate::device_list::RadioType;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
-use crate::{MCPosition, MCUser, MeshChat};
 use futures::{SinkExt, Stream};
 use iced::stream;
 use meshcore_rs::commands::Destination;
@@ -25,6 +24,7 @@ use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 
 use crate::channel_view_entry::MCMessage;
+use crate::meshchat::{MCPosition, MCUser, MeshChat};
 use tokio::time::{Duration, timeout};
 
 enum DeviceState {

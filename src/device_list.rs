@@ -8,10 +8,11 @@ use crate::device::{ConnectionState, Device};
 use crate::device_list::DeviceListEvent::{
     AliasInput, BLEMeshRadioFound, BLERadioLost, CriticalError, Error, Scanning, StartEditingAlias,
 };
+use crate::meshchat::View;
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
 use crate::widgets::easing;
 use crate::widgets::linear::Linear;
-use crate::{MeshChat, Message, View};
+use crate::{MeshChat, Message};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Id, Row, Space, button, container, image, operation, scrollable, text,

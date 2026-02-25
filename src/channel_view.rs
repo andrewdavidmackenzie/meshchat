@@ -13,12 +13,13 @@ use crate::device::DeviceViewMessage::{
     StopForwardingMessage,
 };
 use crate::device::{Device, DeviceViewMessage};
+use crate::meshchat::MCNodeInfo;
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
     text_input_button_style, text_input_container_style, text_input_style, tooltip_style,
 };
 use crate::widgets::emoji_picker::{EmojiPicker, PickerMessage};
-use crate::{MCNodeInfo, MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
+use crate::{MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
 use iced::font::Style::Italic;
@@ -573,6 +574,7 @@ mod test {
     use crate::channel_view_entry::MCMessage::{EmojiReply, NewTextMessage};
     use crate::config::HistoryLength;
     use crate::device::TimeStamp;
+    use crate::meshchat::{MCPosition, MCUser};
     use std::time::Duration;
 
     #[tokio::test]
@@ -1122,7 +1124,7 @@ mod test {
         let pos_msg = ChannelViewEntry::new(
             MessageId::from(2),
             NodeId::from(1u64),
-            crate::channel_view_entry::MCMessage::PositionMessage(crate::MCPosition {
+            crate::channel_view_entry::MCMessage::PositionMessage(MCPosition {
                 latitude: 0.0,
                 longitude: 0.0,
                 ..Default::default()
@@ -1155,7 +1157,7 @@ mod test {
         let user_msg = ChannelViewEntry::new(
             MessageId::from(2),
             NodeId::from(1u64),
-            crate::channel_view_entry::MCMessage::UserMessage(crate::MCUser {
+            crate::channel_view_entry::MCMessage::UserMessage(MCUser {
                 id: "test".into(),
                 long_name: "Test".into(),
                 short_name: "T".into(),
