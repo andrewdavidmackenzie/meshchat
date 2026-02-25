@@ -1,6 +1,6 @@
 use crate::channel_id::ChannelId::{Channel, Node};
 use crate::channel_id::{ChannelId, ChannelIndex};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser};
+use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::{NodeInfo, Position, User};
 use meshtastic::types::{MeshChannel, NodeId};
@@ -172,6 +172,7 @@ mod test {
     use super::*;
     use crate::channel_id;
     use crate::device::TimeStamp;
+    use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser};
     use meshtastic::packet::PacketDestination;
     use meshtastic::protobufs::{ChannelSettings, Position, User};
     use meshtastic::types::MeshChannel;

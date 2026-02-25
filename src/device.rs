@@ -1,4 +1,3 @@
-use crate::MeshChat;
 use crate::channel_view::{ChannelView, ChannelViewMessage, MESSAGE_INPUT_ID};
 use crate::channel_view_entry::{ChannelViewEntry, MCMessage};
 use crate::config::{Config, HistoryLength};
@@ -16,12 +15,12 @@ use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
     DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
+use crate::{MeshChat, Message, icons};
 
 use crate::Message::{
     AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, OpenUrl,
     RemoveNodeAlias, ShowLocation, ShowUserInfo, ToggleNodeFavourite,
 };
-use crate::View::DeviceListView;
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
 use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
@@ -30,13 +29,14 @@ use crate::device::SubscriptionEvent::{
     NewNodePosition, RadioNotification,
 };
 use crate::device_list::{DeviceList, RadioType};
+use crate::meshchat::View::DeviceListView;
+use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, View};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
     fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
     text_input_style, tooltip_style,
 };
 use crate::widgets::battery::{Battery, BatteryState};
-use crate::{MCChannel, MCNodeInfo, MCPosition, MCUser, Message, View, icons};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Button, Column, Container, Id, Row, Space, button, container, operation, scrollable, text,

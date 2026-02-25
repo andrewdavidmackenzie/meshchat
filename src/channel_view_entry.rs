@@ -1,3 +1,4 @@
+use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view::ChannelViewMessage;
@@ -7,13 +8,13 @@ use crate::channel_view_entry::MCMessage::{
 };
 use crate::device::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
 use crate::device::{TimeStamp, long_name, short_name};
+use crate::meshchat::{MCNodeInfo, MCPosition, MCUser};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
     alert_message_style, bubble_style, button_chip_style, menu_button_style, message_text_style,
     tooltip_style,
 };
 use crate::widgets::emoji_picker::EmojiPicker;
-use crate::{MCNodeInfo, MCPosition, MCUser, Message};
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::advanced::text::Span;
@@ -516,6 +517,7 @@ mod tests {
     use crate::channel_view_entry::MCMessage::{
         AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
     };
+    use crate::meshchat::MCNodeInfo;
     use chrono::Datelike;
     use ringmap::RingMap;
 

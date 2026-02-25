@@ -4,7 +4,8 @@ use crate::config::HistoryLength;
 use crate::device::Device;
 use crate::device::DeviceViewMessage::SubscriptionMessage;
 use crate::device::SubscriptionEvent::MyNodeNum;
-use crate::{MCChannel, MeshChat, channel_view_entry};
+use crate::meshchat::MCChannel;
+use crate::{MeshChat, channel_view_entry};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static MESSAGE_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
