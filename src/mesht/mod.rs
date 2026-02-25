@@ -93,35 +93,34 @@ impl From<&Position> for MCPosition {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<Position> for MCPosition {
-    fn into(self) -> Position {
-        let lat = (self.latitude * 10_000_000.0) as i32;
-        let long = (self.longitude * 10_000_000.0) as i32;
+impl From<MCPosition> for Position {
+    fn from(value: MCPosition) -> Position {
+        let lat = (value.latitude * 10_000_000.0) as i32;
+        let long = (value.longitude * 10_000_000.0) as i32;
         Position {
             latitude_i: Some(lat),
             longitude_i: Some(long),
-            timestamp: self.timestamp.into(),
-            altitude: self.altitude,
-            time: self.time,
-            location_source: self.location_source,
-            altitude_source: self.altitude_source,
-            timestamp_millis_adjust: self.timestamp_millis_adjust,
-            altitude_hae: self.altitude_hae,
-            altitude_geoidal_separation: self.altitude_geoidal_separation,
-            pdop: self.pdop,
-            hdop: self.hdop,
-            vdop: self.vdop,
-            gps_accuracy: self.gps_accuracy,
-            ground_speed: self.ground_speed,
-            ground_track: self.ground_track,
-            fix_quality: self.fix_quality,
-            fix_type: self.fix_type,
-            sats_in_view: self.sats_in_view,
-            sensor_id: self.sensor_id,
-            next_update: self.next_update,
-            seq_number: self.seq_number,
-            precision_bits: self.precision_bits,
+            timestamp: value.timestamp.into(),
+            altitude: value.altitude,
+            time: value.time,
+            location_source: value.location_source,
+            altitude_source: value.altitude_source,
+            timestamp_millis_adjust: value.timestamp_millis_adjust,
+            altitude_hae: value.altitude_hae,
+            altitude_geoidal_separation: value.altitude_geoidal_separation,
+            pdop: value.pdop,
+            hdop: value.hdop,
+            vdop: value.vdop,
+            gps_accuracy: value.gps_accuracy,
+            ground_speed: value.ground_speed,
+            ground_track: value.ground_track,
+            fix_quality: value.fix_quality,
+            fix_type: value.fix_type,
+            sats_in_view: value.sats_in_view,
+            sensor_id: value.sensor_id,
+            next_update: value.next_update,
+            seq_number: value.seq_number,
+            precision_bits: value.precision_bits,
         }
     }
 }
