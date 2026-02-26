@@ -1,7 +1,7 @@
 use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
-use crate::channel_view::ChannelViewMessage;
-use crate::channel_view::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyWithEmoji};
+use crate::conversation::ChannelViewMessage;
+use crate::conversation::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyWithEmoji};
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
 use crate::device::{TimeStamp, long_name, short_name};

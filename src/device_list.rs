@@ -65,7 +65,7 @@ pub struct DeviceInfo {
 
 #[derive(Default)]
 pub struct DeviceList {
-    device_list: HashMap<String, DeviceInfo>, // BLE address -> DeviceInfo
+    devices: HashMap<String, DeviceInfo>, // BLE address -> DeviceInfo
     alias: String,
     editing_alias: Option<String>,
     scanning: bool,
@@ -80,7 +80,7 @@ impl DeviceList {
         match device_list_event {
             BLEMeshRadioFound(device, radio_type) => {
                 if let std::collections::hash_map::Entry::Vacant(vacant_entry) =
-                    self.device_list.entry(device.clone())
+                    self.devices.entry(device.clone())
                 {
                     vacant_entry.insert(DeviceInfo {
                         original_name: device,
@@ -89,7 +89,7 @@ impl DeviceList {
                 }
             }
             BLERadioLost(device) => {
-                let _ = self.device_list.remove(&device);
+                let _ = self.devices.remove(&device);
             }
             Error(e) => {
                 return Task::perform(empty(), move |_| {
@@ -217,13 +217,13 @@ impl DeviceList {
         config: &'a Config,
         connection_state: &'a ConnectionState,
     ) -> Element<'a, Message> {
-        if self.device_list.is_empty() {
+        if self.devices.is_empty() {
             return self.empty_view();
         }
 
         let mut main_col = Column::new();
 
-        for (ble_device, device_info) in &self.device_list {
+        for (ble_device, device_info) in &self.devices {
             let mut device_row = Row::new().align_y(Center).padding(2);
 
             // Add firmware icon based on the radio type (using static handles)
@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn test_default() {
         let view = DeviceList::default();
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
         assert!(view.alias.is_empty());
         assert!(view.editing_alias.is_none());
     }
@@ -408,15 +408,15 @@ mod tests {
     #[test]
     fn test_ble_radio_found() {
         let mut view = DeviceList::default();
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
 
         let _ = view.update(BLEMeshRadioFound(
             "AA:BB:CC:DD:EE:FF".to_string(),
             RadioType::Meshtastic,
         ));
 
-        assert_eq!(view.device_list.len(), 1);
-        assert!(view.device_list.contains_key("AA:BB:CC:DD:EE:FF"));
+        assert_eq!(view.devices.len(), 1);
+        assert!(view.devices.contains_key("AA:BB:CC:DD:EE:FF"));
     }
 
     #[cfg(feature = "meshtastic")]
@@ -434,7 +434,7 @@ mod tests {
         ));
 
         // Should still only have 1 entry
-        assert_eq!(view.device_list.len(), 1);
+        assert_eq!(view.devices.len(), 1);
     }
 
     #[cfg(feature = "meshtastic")]
@@ -451,7 +451,7 @@ mod tests {
             RadioType::Meshtastic,
         ));
 
-        assert_eq!(view.device_list.len(), 2);
+        assert_eq!(view.devices.len(), 2);
     }
 
     #[test]
@@ -462,10 +462,10 @@ mod tests {
             "AA:BB:CC:DD:EE:FF".to_string(),
             RadioType::Meshtastic,
         ));
-        assert_eq!(view.device_list.len(), 1);
+        assert_eq!(view.devices.len(), 1);
 
         let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
     }
 
     #[test]
@@ -474,7 +474,7 @@ mod tests {
 
         // Losing a device that was never found should not panic
         let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
     }
 
     #[test]
@@ -575,7 +575,7 @@ mod tests {
             "AA:BB:CC:DD:EE:FF".to_string(),
             RadioType::Meshtastic,
         ));
-        assert_eq!(view.device_list.len(), 1);
+        assert_eq!(view.devices.len(), 1);
 
         // Start aliasing
         let _ = view.update(StartEditingAlias("AA:BB:CC:DD:EE:FF".to_string()));
@@ -599,7 +599,7 @@ mod tests {
 
         // Lose the device
         let _ = view.update(BLERadioLost("AA:BB:CC:DD:EE:FF".to_string()));
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
     }
 
     #[cfg(feature = "meshtastic")]
@@ -669,22 +669,22 @@ mod tests {
         let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
         let _ = view.update(BLEMeshRadioFound("device2".into(), RadioType::Meshtastic));
         let _ = view.update(BLEMeshRadioFound("device3".into(), RadioType::Meshtastic));
-        assert_eq!(view.device_list.len(), 3);
+        assert_eq!(view.devices.len(), 3);
 
         // Remove one
         let _ = view.update(BLERadioLost("device2".into()));
-        assert_eq!(view.device_list.len(), 2);
-        assert!(view.device_list.contains_key("device1"));
-        assert!(!view.device_list.contains_key("device2"));
-        assert!(view.device_list.contains_key("device3"));
+        assert_eq!(view.devices.len(), 2);
+        assert!(view.devices.contains_key("device1"));
+        assert!(!view.devices.contains_key("device2"));
+        assert!(view.devices.contains_key("device3"));
 
         // Remove another
         let _ = view.update(BLERadioLost("device1".into()));
-        assert_eq!(view.device_list.len(), 1);
+        assert_eq!(view.devices.len(), 1);
 
         // Remove last
         let _ = view.update(BLERadioLost("device3".into()));
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
     }
 
     #[test]
@@ -746,7 +746,7 @@ mod tests {
 
         // Device is lost while editing
         let _ = view.update(BLERadioLost("device1".into()));
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
 
         // Editing state is still preserved (caller needs to handle this)
         assert_eq!(view.editing_alias, Some("device1".into()));
@@ -786,13 +786,13 @@ mod tests {
         let long_name = "B".repeat(100);
 
         let _ = view.update(BLEMeshRadioFound(long_name.clone(), RadioType::Meshtastic));
-        assert!(view.device_list.contains_key(&long_name));
+        assert!(view.devices.contains_key(&long_name));
     }
 
     #[test]
     fn test_device_list_view_default_values() {
         let view = DeviceList::default();
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
         assert!(view.alias.is_empty());
         assert!(view.editing_alias.is_none());
     }
@@ -801,17 +801,17 @@ mod tests {
     #[test]
     fn test_ble_meshcore_radio_found() {
         let mut view = DeviceList::default();
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
 
         let _ = view.update(BLEMeshRadioFound(
             "AA:BB:CC:DD:EE:FF".to_string(),
             RadioType::MeshCore,
         ));
 
-        assert_eq!(view.device_list.len(), 1);
-        assert!(view.device_list.contains_key("AA:BB:CC:DD:EE:FF"));
+        assert_eq!(view.devices.len(), 1);
+        assert!(view.devices.contains_key("AA:BB:CC:DD:EE:FF"));
         assert_eq!(
-            view.device_list
+            view.devices
                 .get("AA:BB:CC:DD:EE:FF")
                 .expect("Device should exist after BLEMeshCoreRadioFound event")
                 .radio_type,
@@ -834,7 +834,7 @@ mod tests {
         ));
 
         // Should still only have 1 entry
-        assert_eq!(view.device_list.len(), 1);
+        assert_eq!(view.devices.len(), 1);
     }
 
     #[cfg(feature = "meshtastic")]
@@ -930,7 +930,7 @@ mod tests {
         ));
 
         let device_info = view
-            .device_list
+            .devices
             .get("AA:BB:CC:DD:EE:FF")
             .expect("Device should exist after BLEMeshRadioFound event");
         assert_eq!(device_info.radio_type, RadioType::Meshtastic);
@@ -951,12 +951,12 @@ mod tests {
         // Add some devices
         let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
         let _ = view.update(BLEMeshRadioFound("device2".into(), RadioType::Meshtastic));
-        assert_eq!(view.device_list.len(), 2);
+        assert_eq!(view.devices.len(), 2);
 
         // Remove all
         let _ = view.update(BLERadioLost("device1".into()));
         let _ = view.update(BLERadioLost("device2".into()));
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
     }
 
     // View function tests - verify Element creation without panicking
@@ -1304,7 +1304,7 @@ mod tests {
         let view = DeviceList::default();
         // scanning is false by default, device_list is empty
         assert!(!view.scanning);
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
 
         let config = Config::default();
         let connection_state = Disconnected(None, None);
@@ -1319,7 +1319,7 @@ mod tests {
         // Set scanning to true
         let _ = view.update(Scanning(true));
         assert!(view.scanning);
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
 
         let config = Config::default();
         let connection_state = Disconnected(None, None);
@@ -1350,11 +1350,11 @@ mod tests {
         // Start scanning and find a device
         let _ = view.update(Scanning(true));
         let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
-        assert_eq!(view.device_list.len(), 1);
+        assert_eq!(view.devices.len(), 1);
 
         // Lose the device while still scanning
         let _ = view.update(BLERadioLost("device1".into()));
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
         assert!(view.scanning);
 
         let config = Config::default();
@@ -1374,7 +1374,7 @@ mod tests {
         // Stop scanning without finding any devices
         let _ = view.update(Scanning(false));
         assert!(!view.scanning);
-        assert!(view.device_list.is_empty());
+        assert!(view.devices.is_empty());
 
         let config = Config::default();
         let connection_state = Disconnected(None, None);

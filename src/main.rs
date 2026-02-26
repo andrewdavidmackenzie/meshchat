@@ -9,8 +9,8 @@ use iced::window;
 
 mod meshchat;
 
-mod channel_view;
 mod config;
+mod conversation;
 mod device;
 mod device_list;
 mod discovery;
