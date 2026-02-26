@@ -22,7 +22,7 @@ use crate::timestamp::TimeStamp;
 use crate::widgets::emoji_picker::{EmojiPicker, PickerMessage};
 use crate::{MeshChat, Message, icons, message::MCMessage};
 use chrono::prelude::DateTime;
-use chrono::{Datelike, Local, Utc};
+use chrono::{Datelike, Local};
 use iced::font::Style::Italic;
 use iced::font::Weight;
 use iced::padding::right;
@@ -83,14 +83,6 @@ impl Conversation {
         if let Some(entry) = self.messages.get_mut(&message_id) {
             entry.ack();
         }
-    }
-
-    /// Get the time now as a [DateTime<Local>]
-    fn now_local() -> DateTime<Local> {
-        let timestamp = TimeStamp::now();
-        let datetime_utc =
-            DateTime::<Utc>::from_timestamp_millis(timestamp.into()).unwrap_or_default();
-        datetime_utc.with_timezone(&Local)
     }
 
     /// Remove older messages according to the passed in history_length setting
@@ -1411,13 +1403,6 @@ mod test {
         let _ = channel_view.update(MessageInput("Hello world".into()));
         let _element = channel_view.input_box();
         // Should not panic
-    }
-
-    #[test]
-    fn test_now_local() {
-        let now = Conversation::now_local();
-        // Should return current local time
-        assert!(now.timestamp() > 0);
     }
 
     #[test]
