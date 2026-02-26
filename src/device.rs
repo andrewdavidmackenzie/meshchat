@@ -67,17 +67,29 @@ impl Default for ConnectionState {
 
 /// Time in EPOC in seconds timestamp
 #[derive(PartialEq, PartialOrd, Debug, Default, Clone, Copy)]
-pub struct TimeStamp(u32);
+pub struct TimeStamp(u64);
+
+impl From<u64> for TimeStamp {
+    fn from(value: u64) -> Self {
+        TimeStamp(value)
+    }
+}
 
 impl From<u32> for TimeStamp {
     fn from(value: u32) -> Self {
-        TimeStamp(value)
+        TimeStamp(value as u64)
+    }
+}
+
+impl From<TimeStamp> for u64 {
+    fn from(value: TimeStamp) -> Self {
+        value.0
     }
 }
 
 impl From<TimeStamp> for u32 {
     fn from(value: TimeStamp) -> Self {
-        value.0
+        value.0 as u32
     }
 }
 
@@ -1489,7 +1501,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             MCContent::NewTextMessage("test".into()),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         );
         let _ = device_view.update(StartForwardingMessage(entry));
 
@@ -1503,7 +1515,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             MCContent::NewTextMessage("test".into()),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         );
         let _ = device_view.update(StartForwardingMessage(entry));
         assert!(device_view.forwarding_message.is_some());
@@ -2117,7 +2129,7 @@ mod tests {
         let mut device_view = Device::default();
         let _ = device_view.update(SubscriptionMessage(RadioNotification(
             "Test notification".into(),
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         )));
         // Should not panic, returns a task
     }
@@ -2138,7 +2150,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             MCContent::NewTextMessage("test".into()),
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         )));
     }
 
@@ -2175,7 +2187,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(12345u64),
             user,
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         )));
 
         // User should be updated
@@ -2213,7 +2225,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(12345u64),
             position,
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         )));
 
         // Position should be updated

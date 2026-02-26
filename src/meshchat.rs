@@ -200,7 +200,7 @@ impl MeshChat {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_secs() as u32,
+                .as_secs(),
         )
     }
 
@@ -667,7 +667,7 @@ pub(crate) mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -811,7 +811,7 @@ pub(crate) mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -845,7 +845,7 @@ pub(crate) mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -874,7 +874,7 @@ pub(crate) mod tests {
     fn test_now_returns_valid_timestamp() {
         let now = MeshChat::now();
         // Should be a reasonable recent timestamp (after 2020)
-        assert!(now > TimeStamp::from(1577836800)); // Jan 1, 2020
+        assert!(now > TimeStamp::from(1577836800u64)); // Jan 1, 2020
     }
 
     #[test]

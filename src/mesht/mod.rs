@@ -278,7 +278,7 @@ mod test {
         assert!((mc_position.latitude - 50.0).abs() < 0.0001);
         assert!((mc_position.longitude - 1.0).abs() < 0.0001);
         assert_eq!(mc_position.altitude, Some(100));
-        assert_eq!(mc_position.timestamp, TimeStamp::from(12345));
+        assert_eq!(mc_position.timestamp, TimeStamp::from(12345u64));
         assert_eq!(mc_position.time, 67890);
     }
 
@@ -291,7 +291,7 @@ mod test {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,

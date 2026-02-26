@@ -1,7 +1,7 @@
 use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::conversation::ChannelViewMessage;
-use crate::conversation::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyWithEmoji};
+use crate::conversation::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::DeviceMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
 use crate::device::{TimeStamp, long_name, short_name};
@@ -358,14 +358,12 @@ impl MCMessage {
         // Add the emoji row outside the bubble, below it
         message_column = self.emoji_row(nodes, message_column);
 
+        let message_id = self.message_id;
         sensor(message_column)
-            .on_show(|_| {
-                DeviceViewEvent(ChannelMsg(*conversation_id, MessageSeen(self.message_id)))
+            .on_show(move |_| {
+                println!("Sending MessageSeen {}", message_id);
+                DeviceViewEvent(ChannelMsg(*conversation_id, MessageSeen(message_id)))
             })
-            .on_hide(DeviceViewEvent(ChannelMsg(
-                *conversation_id,
-                MessageUnseen(self.message_id),
-            )))
             .into()
     }
 
@@ -747,13 +745,13 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("old".into()),
-            TimeStamp::from(1000),
+            TimeStamp::from(1000u64),
         );
         let newer = MCMessage::new(
             MessageId::from(2),
             NodeId::from(100u64),
             NewTextMessage("new".into()),
-            TimeStamp::from(2000),
+            TimeStamp::from(2000u64),
         );
 
         let ordering =
@@ -819,7 +817,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -853,7 +851,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -887,7 +885,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -983,7 +981,7 @@ mod tests {
             time: 1234567890,
             location_source: 1,
             altitude_source: 1,
-            timestamp: TimeStamp::from(1234567890),
+            timestamp: TimeStamp::from(1234567890u64),
             timestamp_millis_adjust: 0,
             altitude_hae: Some(11),
             altitude_geoidal_separation: Some(0),
@@ -1767,7 +1765,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,

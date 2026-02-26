@@ -177,7 +177,7 @@ impl From<ChannelInfoData> for DeviceEvent {
 
 impl From<TimeStamp> for MessageId {
     fn from(value: TimeStamp) -> Self {
-        MessageId::from(<TimeStamp as Into<u32>>::into(value))
+        MessageId::from(<TimeStamp as Into<u64>>::into(value))
     }
 }
 
@@ -301,14 +301,14 @@ mod test {
     fn message_id_from_expected_ack_basic() {
         let expected_ack = [0x01, 0x02, 0x03, 0x04];
         let message_id: MessageId = expected_ack.into();
-        assert_eq!(message_id, MessageId::from(0x01020304));
+        assert_eq!(message_id, MessageId::from(0x01020304u64));
     }
 
     #[test]
     fn message_id_from_expected_ack_all_zeros() {
         let expected_ack = [0x00, 0x00, 0x00, 0x00];
         let message_id: MessageId = expected_ack.into();
-        assert_eq!(message_id, MessageId::from(0));
+        assert_eq!(message_id, MessageId::from(0u64));
     }
 
     #[test]

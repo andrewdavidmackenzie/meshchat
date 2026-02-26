@@ -94,17 +94,35 @@ impl Display for NodeId {
 }
 
 #[derive(Debug, Default, Hash, PartialEq, Eq, Clone, Copy)]
-pub struct MessageId(u32);
+pub struct MessageId(u64);
+
+impl From<u64> for MessageId {
+    fn from(value: u64) -> Self {
+        MessageId(value)
+    }
+}
+
+impl From<i32> for MessageId {
+    fn from(value: i32) -> Self {
+        MessageId(value as u64)
+    }
+}
 
 impl From<u32> for MessageId {
     fn from(value: u32) -> Self {
-        MessageId(value)
+        MessageId(value as u64)
+    }
+}
+
+impl From<MessageId> for u64 {
+    fn from(value: MessageId) -> Self {
+        value.0
     }
 }
 
 impl From<MessageId> for u32 {
     fn from(value: MessageId) -> Self {
-        value.0
+        value.0 as u32
     }
 }
 

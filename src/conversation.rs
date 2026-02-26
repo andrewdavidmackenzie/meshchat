@@ -1,8 +1,8 @@
 use crate::Message::DeviceViewEvent;
 use crate::config::{Config, HistoryLength};
 use crate::conversation::ChannelViewMessage::{
-    CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, MessageUnseen,
-    PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
+    CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, PickChannel,
+    PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::DeviceMessage::{
@@ -46,7 +46,6 @@ pub enum ChannelViewMessage {
     PrepareReply(MessageId),        // entry_id
     CancelPrepareReply,
     MessageSeen(MessageId),
-    MessageUnseen(MessageId),
     PickChannel(Option<ConversationId>),
     ReplyWithEmoji(MessageId, String, ConversationId), // Send an emoji reply
     EmojiPickerMsg(Box<PickerMessage<ChannelViewMessage>>),
@@ -210,7 +209,6 @@ impl Conversation {
                 }
                 Task::none()
             }
-            MessageUnseen(_) => Task::none(),
             PickChannel(conversation_id) => Task::perform(empty(), move |_| {
                 DeviceViewEvent(ShowChannel(conversation_id))
             }),
@@ -899,7 +897,7 @@ mod test {
             Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
 
         // Add 5 messages
-        for i in 0..5 {
+        for i in 0u64..5u64 {
             let message = MCMessage::new(
                 MessageId::from(i),
                 NodeId::from(1u64),
@@ -915,7 +913,7 @@ mod test {
             MessageId::from(5),
             NodeId::from(1u64),
             NewTextMessage("msg 5".into()),
-            TimeStamp::from(5),
+            TimeStamp::from(5u64),
         );
         let _ = channel_view.new_message(message, &HistoryLength::NumberOfMessages(3));
         assert_eq!(channel_view.messages.len(), 3);
@@ -936,7 +934,7 @@ mod test {
         let now = MeshChat::now();
 
         // Add an old message (2 hours ago)
-        let old_time = now - TimeStamp::from(7200);
+        let old_time = now - TimeStamp::from(7200u64);
         let old_message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
@@ -1064,42 +1062,6 @@ mod test {
         let msg = PrepareReply(MessageId::from(42));
         let cloned = msg.clone();
         assert!(matches!(cloned, PrepareReply(id) if id == MessageId::from(42)));
-    }
-
-    #[test]
-    fn test_message_unseen() {
-        let mut channel_view =
-            Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
-        let message = MCMessage::new(
-            MessageId::from(42),
-            NodeId::from(1u64),
-            NewTextMessage("test".into()),
-            MeshChat::now(),
-        );
-        let _ = channel_view.new_message(message, &HistoryLength::All);
-
-        // Mark seen first
-        let _ = channel_view.update(MessageSeen(MessageId::from(42)));
-        assert!(
-            channel_view
-                .messages
-                .get(&MessageId::from(42))
-                .expect("Entry with id 42 should exist after adding message")
-                .seen()
-        );
-
-        // MessageUnseen should not change anything (currently a no-op)
-        let _ = channel_view.update(super::ChannelViewMessage::MessageUnseen(MessageId::from(
-            42,
-        )));
-        // Still seen (MessageUnseen is a no-op)
-        assert!(
-            channel_view
-                .messages
-                .get(&MessageId::from(42))
-                .expect("Entry with id 42 should still exist after MessageUnseen")
-                .seen()
-        );
     }
 
     #[test]
@@ -1250,7 +1212,7 @@ mod test {
             Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
 
         // Add many messages
-        for i in 0..10 {
+        for i in 0u64..10u64 {
             let message = MCMessage::new(
                 MessageId::from(i),
                 NodeId::from(1u64),
