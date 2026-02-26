@@ -198,6 +198,8 @@ impl MyRouter {
                 Ok(PortNum::TextMessageApp) => {
                     let conversation_id = self.conversation_id_from_packet(mesh_packet);
                     if let Ok(message) = String::from_utf8(data.payload.clone()) {
+                        println!("Sending Message to GUI from Router {}", message);
+
                         let mcmessage = if data.reply_id == 0 {
                             NewTextMessage(message)
                         } else {
@@ -490,6 +492,8 @@ async fn send_text_message(
     text: String,
 ) -> Result<(), Error> {
     let (packet_destination, mesh_channel) = conversation_id.to_destination();
+
+    println!("Sending message: {}", text);
 
     stream_api
         .send_mesh_packet(
