@@ -5,11 +5,11 @@ use crate::conversation::ChannelViewMessage::{
     PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
-use crate::device::DeviceViewMessage::{
+use crate::device::DeviceMessage::{
     ChannelMsg, ForwardMessage, SendPositionMessage, SendSelfInfoMessage, ShowChannel,
     StopForwardingMessage,
 };
-use crate::device::{Device, DeviceViewMessage};
+use crate::device::{Device, DeviceMessage};
 use crate::meshchat::MCNodeInfo;
 use crate::message::MCContent::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -180,7 +180,7 @@ impl Conversation {
                     let conversation_id = self.conversation_id;
                     self.preparing_reply_to = None;
                     Task::perform(empty(), move |_| {
-                        DeviceViewEvent(DeviceViewMessage::SendTextMessage(
+                        DeviceViewEvent(DeviceMessage::SendTextMessage(
                             msg,
                             conversation_id,
                             reply_to_id,
@@ -216,7 +216,7 @@ impl Conversation {
             }),
             ReplyWithEmoji(message_id, emoji, conversation_id) => {
                 Task::perform(empty(), move |_| {
-                    DeviceViewEvent(DeviceViewMessage::SendEmojiReplyMessage(
+                    DeviceViewEvent(DeviceMessage::SendEmojiReplyMessage(
                         message_id,
                         emoji,
                         conversation_id,
@@ -427,7 +427,7 @@ impl Conversation {
                 .style(picker_header_style)
                 .padding(4),
             )
-            .push(device_view.channel_and_node_list(config, false, select));
+            .push(device_view.conversation_list(config, false, select));
         let picker = container(inner_picker)
             .style(tooltip_style)
             .width(400)

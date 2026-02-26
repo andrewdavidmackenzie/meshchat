@@ -4,8 +4,8 @@ pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a
 
 use crate::conversation_id::ConversationId::Node;
 use crate::conversation_id::{MessageId, NodeId};
-use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
-use crate::device::{SubscriptionEvent, TimeStamp};
+use crate::device::DeviceEvent::{MCMessageReceived, NewChannel};
+use crate::device::{DeviceEvent, TimeStamp};
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
 use crate::message::MCContent;
 use meshcore_rs::ContactMessage;
@@ -153,7 +153,7 @@ impl From<DiscoverEntry> for MCNodeInfo {
 }
 
 /// Convert from a ContactMessage to a SubscriptionEvent::MCMessageReceived
-impl From<ContactMessage> for SubscriptionEvent {
+impl From<ContactMessage> for DeviceEvent {
     fn from(contact_message: ContactMessage) -> Self {
         let node_id = (&contact_message.sender_prefix).into();
         MCMessageReceived(
@@ -166,7 +166,7 @@ impl From<ContactMessage> for SubscriptionEvent {
     }
 }
 
-impl From<ChannelInfoData> for SubscriptionEvent {
+impl From<ChannelInfoData> for DeviceEvent {
     fn from(channel: ChannelInfoData) -> Self {
         NewChannel(MCChannel {
             index: channel.channel_idx as i32,
@@ -221,7 +221,7 @@ impl From<[u8; 4]> for MessageId {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
+    use crate::device::DeviceEvent::{MCMessageReceived, NewChannel};
     use meshcore_rs::events::{
         AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour, SelfInfo,
     };
@@ -333,7 +333,7 @@ mod test {
             signature: None,
         };
 
-        let event: SubscriptionEvent = message.into();
+        let event: DeviceEvent = message.into();
         let after_conversion = MeshChat::now();
 
         let MCMessageReceived(conversation_id, _msg_id, from, msg, event_timestamp) = event else {
@@ -362,7 +362,7 @@ mod test {
             secret: [0u8; 16],
         };
 
-        let event: SubscriptionEvent = channel_info.into();
+        let event: DeviceEvent = channel_info.into();
 
         let NewChannel(channel) = event else {
             unreachable!("Expected NewChannel event")
@@ -380,7 +380,7 @@ mod test {
             secret: [0xFF; 16],
         };
 
-        let event: SubscriptionEvent = channel_info.into();
+        let event: DeviceEvent = channel_info.into();
 
         let NewChannel(channel) = event else {
             unreachable!("Expected NewChannel event")
@@ -398,7 +398,7 @@ mod test {
             secret: [0u8; 16],
         };
 
-        let event: SubscriptionEvent = channel_info.into();
+        let event: DeviceEvent = channel_info.into();
 
         let NewChannel(channel) = event else {
             unreachable!("Expected NewChannel event")

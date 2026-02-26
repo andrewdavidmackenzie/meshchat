@@ -12,10 +12,10 @@ use crate::Message::{
 use crate::config::{Config, HistoryLength, load_config};
 use crate::conversation_id::{ConversationId, NodeId};
 use crate::device::ConnectionState::Connected;
-use crate::device::DeviceViewMessage;
-use crate::device::DeviceViewMessage::DisconnectRequest;
+use crate::device::DeviceMessage;
+use crate::device::DeviceMessage::DisconnectRequest;
 #[cfg(any(feature = "meshtastic", feature = "meshcore"))]
-use crate::device::DeviceViewMessage::SubscriptionMessage;
+use crate::device::DeviceMessage::SubscriptionMessage;
 use crate::device::{Device, TimeStamp};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;
@@ -123,7 +123,7 @@ pub struct MCChannel {
 pub enum Message {
     Navigation(View),
     DeviceListViewEvent(DeviceListEvent),
-    DeviceViewEvent(DeviceViewMessage),
+    DeviceViewEvent(DeviceMessage),
     Exit,
     ConfigLoaded(Config),
     DeviceAndChannelConfigChange(Option<(String, RadioType)>, Option<ConversationId>),
@@ -280,7 +280,7 @@ impl MeshChat {
                 if let Some((ble_device_name, radio_type)) = &self.config.ble_device
                     && self.config.auto_reconnect
                 {
-                    tasks.push(self.device.update(DeviceViewMessage::ConnectRequest(
+                    tasks.push(self.device.update(DeviceMessage::ConnectRequest(
                         ble_device_name.clone(),
                         *radio_type,
                         self.config.conversation_id,
@@ -609,7 +609,7 @@ impl MeshChat {
             View::DeviceListView => Task::none(),
             View::DeviceView(conversation_id) => self
                 .device
-                .update(DeviceViewMessage::ShowChannel(*conversation_id)),
+                .update(DeviceMessage::ShowChannel(*conversation_id)),
         }
     }
 }
@@ -618,7 +618,7 @@ impl MeshChat {
 pub(crate) mod tests {
     use super::*;
     use crate::conversation_id::MessageId;
-    use crate::device::SubscriptionEvent::MyNodeNum;
+    use crate::device::DeviceEvent::MyNodeNum;
     use crate::meshchat::View::DeviceListView;
     use crate::message;
     use crate::message::MCContent;

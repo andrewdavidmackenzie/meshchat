@@ -3,7 +3,7 @@ use crate::Message::{
 };
 use crate::config::Config;
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-use crate::device::DeviceViewMessage::{ConnectRequest, DisconnectRequest};
+use crate::device::DeviceMessage::{ConnectRequest, DisconnectRequest};
 use crate::device::{ConnectionState, Device};
 use crate::device_list::DeviceListEvent::{
     AliasInput, BLEMeshRadioFound, BLERadioLost, CriticalError, Error, Scanning, StartEditingAlias,

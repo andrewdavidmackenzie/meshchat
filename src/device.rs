@@ -1,18 +1,18 @@
 use crate::config::{Config, HistoryLength};
 use crate::conversation::{ChannelViewMessage, Conversation, MESSAGE_INPUT_ID};
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-use crate::device::DeviceViewMessage::{
+use crate::device::DeviceCommand::{
+    Connect, Disconnect, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
+};
+use crate::device::DeviceEvent::{
+    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
+    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
+};
+use crate::device::DeviceMessage::{
     AliasInput, ChannelMsg, ClearFilter, ConnectRequest, DisconnectRequest, ForwardMessage,
     SearchInput, SendEmojiReplyMessage, SendPositionMessage, SendSelfInfoMessage, SendTextMessage,
     ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
     SubscriptionMessage,
-};
-use crate::device::SubscriberMessage::{
-    Connect, Disconnect, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
-};
-use crate::device::SubscriptionEvent::{
-    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
-    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
 use crate::message::{MCContent, MCMessage};
 use crate::{MeshChat, Message, icons};
@@ -23,7 +23,7 @@ use crate::Message::{
 };
 use crate::conversation_id::ConversationId::Node;
 use crate::conversation_id::{ChannelIndex, ConversationId, MessageId, NodeId};
-use crate::device::SubscriptionEvent::{
+use crate::device::DeviceEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
 };
@@ -99,9 +99,9 @@ const CHANNEL_SEARCH_ID: Id = Id::new("message_input");
 
 /// Events are Messages sent from the subscription to the GUI
 #[derive(Debug, Clone)]
-pub enum SubscriptionEvent {
-    /// The subscription is ready to receive [SubscriberMessage] from the GUI
-    Ready(Sender<SubscriberMessage>, RadioType),
+pub enum DeviceEvent {
+    /// The subscription is ready to receive [DeviceCommand] from the GUI
+    Ready(Sender<DeviceCommand>, RadioType),
     ConnectedEvent(String, RadioType),
     ConnectingEvent(String),
     DisconnectingEvent(String),
@@ -126,7 +126,7 @@ pub enum SubscriptionEvent {
 }
 
 /// Messages sent from the GUI to the subscription
-pub enum SubscriberMessage {
+pub enum DeviceCommand {
     Connect(String, RadioType),
     Disconnect,
     SendText(String, ConversationId, Option<MessageId>), // Optional reply to message id
@@ -140,10 +140,10 @@ pub enum SubscriberMessage {
 }
 
 #[derive(Debug, Clone)]
-pub enum DeviceViewMessage {
+pub enum DeviceMessage {
     ConnectRequest(String, RadioType, Option<ConversationId>),
     DisconnectRequest(bool), // bool is to exit or not
-    SubscriptionMessage(SubscriptionEvent),
+    SubscriptionMessage(DeviceEvent),
     ShowChannel(Option<ConversationId>),
     ChannelMsg(ConversationId, ChannelViewMessage),
     SendTextMessage(String, ConversationId, Option<MessageId>), // optional reply to message id
@@ -163,9 +163,9 @@ pub enum DeviceViewMessage {
 pub struct Device {
     connection_state: ConnectionState,
     #[cfg(feature = "meshtastic")]
-    meshtastic_sender: Option<Sender<SubscriberMessage>>,
+    meshtastic_sender: Option<Sender<DeviceCommand>>,
     #[cfg(feature = "meshcore")]
-    meshcore_sender: Option<Sender<SubscriberMessage>>,
+    meshcore_sender: Option<Sender<DeviceCommand>>,
     my_node_id: Option<NodeId>,
     my_position: Option<MCPosition>,
     my_user: Option<MCUser>,
@@ -220,17 +220,17 @@ impl Device {
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
-    pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
+    pub fn update(&mut self, device_view_message: DeviceMessage) -> Task<Message> {
         match device_view_message {
             ConnectRequest(ble_device, radio_type, conversation_id) => {
-                return self.subscriber_send(
+                return self.device_send(
                     Connect(ble_device, radio_type),
                     Navigation(View::DeviceView(conversation_id)),
                 );
             }
             DisconnectRequest(exit) => {
                 self.exit_pending = exit;
-                return self.subscriber_send(Disconnect, Navigation(DeviceListView));
+                return self.device_send(Disconnect, Navigation(DeviceListView));
             }
             ForwardMessage(conversation_id) => {
                 if let Some(entry) = self.forwarding_message.take() {
@@ -240,27 +240,27 @@ impl Device {
                         entry.message()
                     );
 
-                    return self.subscriber_send(
+                    return self.device_send(
                         SendText(message_text, conversation_id, None),
                         DeviceViewEvent(ShowChannel(Some(conversation_id))),
                     );
                 }
             }
             SendEmojiReplyMessage(reply_to_id, emoji, conversation_id) => {
-                return self.subscriber_send(
+                return self.device_send(
                     SendEmojiReply(emoji, conversation_id, reply_to_id),
                     Message::None,
                 );
             }
             SendTextMessage(message, conversation_id, reply_to_id) => {
-                return self.subscriber_send(
+                return self.device_send(
                     SendText(message, conversation_id, reply_to_id),
                     Message::None,
                 );
             }
             SendPositionMessage(conversation_id) => {
                 if let Some(position) = &self.my_position {
-                    return self.subscriber_send(
+                    return self.device_send(
                         SendPosition(conversation_id, position.clone()),
                         Message::None,
                     );
@@ -268,17 +268,15 @@ impl Device {
             }
             SendSelfInfoMessage(conversation_id) => {
                 if let Some(user) = &self.my_user {
-                    return self.subscriber_send(
-                        SendSelfInfo(conversation_id, user.clone()),
-                        Message::None,
-                    );
+                    return self
+                        .device_send(SendSelfInfo(conversation_id, user.clone()), Message::None);
                 }
             }
             ShowChannel(conversation_id) => {
                 return self.channel_change(conversation_id);
             }
             SubscriptionMessage(subscription_event) => {
-                return self.process_subscription_event(subscription_event);
+                return self.process_device_event(subscription_event);
             }
             ChannelMsg(conversation_id, msg) => {
                 if let Some(channel_view) = self.conversations.get_mut(&conversation_id) {
@@ -302,22 +300,18 @@ impl Device {
 
     /// Send a SubscriberMessage to the device_subscription, if successful, then send `success_message`
     /// and report any errors
-    fn subscriber_send(
-        &mut self,
-        subscriber_message: SubscriberMessage,
-        success_message: Message,
-    ) -> Task<Message> {
+    fn device_send(&mut self, command: DeviceCommand, success_message: Message) -> Task<Message> {
         // Either we are connected and know the radio type of we are disconnected and being asked
         // to connect to a specific type of radio
         let radio_type = if let Connected(_, radio_type) = self.connection_state {
             radio_type
-        } else if let Connect(_, radio_type) = &subscriber_message {
+        } else if let Connect(_, radio_type) = &command {
             *radio_type
         } else {
             return Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)));
         };
 
-        let subscription_sender: Option<Sender<SubscriberMessage>> = match radio_type {
+        let subscription_sender: Option<Sender<DeviceCommand>> = match radio_type {
             #[cfg(feature = "meshtastic")]
             RadioType::Meshtastic => self.meshtastic_sender.clone(),
             #[cfg(feature = "meshcore")]
@@ -325,7 +319,7 @@ impl Device {
         };
 
         if let Some(sender) = subscription_sender {
-            let future = async move { sender.send(subscriber_message).await };
+            let future = async move { sender.send(command).await };
             Task::perform(future, |result| match result {
                 Ok(()) => success_message,
                 Err(e) => AppError(
@@ -392,10 +386,7 @@ impl Device {
     }
 
     /// Process an event sent by the subscription connected to the radio
-    fn process_subscription_event(
-        &mut self,
-        subscription_event: SubscriptionEvent,
-    ) -> Task<Message> {
+    fn process_device_event(&mut self, subscription_event: DeviceEvent) -> Task<Message> {
         match subscription_event {
             ConnectingEvent(mac_address) => {
                 self.connection_state = Connecting(mac_address);
@@ -772,7 +763,7 @@ impl Device {
             |channel_number: ConversationId| DeviceViewEvent(ShowChannel(Some(channel_number)));
 
         // If not viewing a channel/user, show the list of channels and users
-        let channel_and_node_scroll = self.channel_and_node_list(config, true, select);
+        let channel_and_node_scroll = self.conversation_list(config, true, select);
 
         // Add a search box at the top, outside the scrollable area
         Column::new()
@@ -807,23 +798,23 @@ impl Device {
     }
 
     /// Create a list of channels and nodes in this device with a button to select one of them
-    pub fn channel_and_node_list<'a>(
+    pub fn conversation_list<'a>(
         &'a self,
         config: &'a Config,
         add_buttons: bool,
         select: fn(ConversationId) -> Message,
     ) -> Element<'a, Message> {
         // If not viewing a channel/user, show the list of channels and users
-        let mut channels_list = self.channel_list(select);
+        let mut conversation_list = self.channel_list(select);
 
         // Add the favourite nodes to the list if there are any
-        channels_list = self.favourite_nodes(channels_list, config, add_buttons, select);
+        conversation_list = self.favourite_nodes(conversation_list, config, add_buttons, select);
 
         // Add the list of non-favourite nodes
-        channels_list = self.nodes_list(channels_list, config, add_buttons, select);
+        conversation_list = self.nodes_list(conversation_list, config, add_buttons, select);
 
         // Wrap the whole thing in a scrollable area
-        scrollable(channels_list)
+        scrollable(conversation_list)
             .direction({
                 let scrollbar = Scrollbar::new().width(10);
                 scrollable::Direction::Vertical(scrollbar)
@@ -1215,6 +1206,7 @@ impl Device {
         .into()
     }
 }
+
 pub fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
     let mut clear_button = button(text("⨂").size(18))
         .style(text_input_button_style)
@@ -1251,8 +1243,8 @@ mod tests {
     use super::*;
     use crate::Message::Navigation;
     use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-    use crate::device::DeviceViewMessage::{ClearFilter, SearchInput};
-    use crate::device::SubscriberMessage::Disconnect;
+    use crate::device::DeviceCommand::Disconnect;
+    use crate::device::DeviceMessage::{ClearFilter, SearchInput};
     use crate::meshchat;
 
     fn test_position(lat: f64, lon: f64) -> MCPosition {
@@ -1270,7 +1262,7 @@ mod tests {
         // Subscription won't be ready
         let _task = meshchat
             .device
-            .subscriber_send(Disconnect, Navigation(DeviceListView));
+            .device_send(Disconnect, Navigation(DeviceListView));
         assert_eq!(meshchat.device.connection_state, Disconnected(None, None));
     }
 
@@ -1576,7 +1568,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.meshtastic_sender.is_none());
 
-        let (sender, _receiver) = tokio::sync::mpsc::channel::<SubscriberMessage>(10);
+        let (sender, _receiver) = tokio::sync::mpsc::channel::<DeviceCommand>(10);
         let _ = device_view.update(SubscriptionMessage(Ready(sender, RadioType::Meshtastic)));
         assert!(device_view.meshtastic_sender.is_some());
     }
@@ -2895,8 +2887,8 @@ mod tests {
         let select =
             |conversation_id: ConversationId| DeviceViewEvent(ShowChannel(Some(conversation_id)));
 
-        let _element = device_view.channel_and_node_list(&config, true, select);
-        let _element = device_view.channel_and_node_list(&config, false, select);
+        let _element = device_view.conversation_list(&config, true, select);
+        let _element = device_view.conversation_list(&config, false, select);
     }
 
     #[test]
