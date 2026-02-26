@@ -362,7 +362,6 @@ impl MCMessage {
         let message_id = self.message_id;
         sensor(message_column)
             .on_show(move |_| {
-                println!("Sending MessageSeen {}", message_id);
                 DeviceViewEvent(ChannelMsg(*conversation_id, MessageSeen(message_id)))
             })
             .into()
