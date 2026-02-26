@@ -1,5 +1,5 @@
 use crate::channel_view::{ChannelView, ChannelViewMessage, MESSAGE_INPUT_ID};
-use crate::channel_view_entry::{ChannelViewEntry, MCMessage};
+use crate::channel_view_entry::{ChannelViewEntry, MCContent};
 use crate::config::{Config, HistoryLength};
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device::DeviceViewMessage::{
@@ -23,7 +23,7 @@ use crate::Message::{
 };
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
-use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
+use crate::channel_view_entry::MCContent::{PositionMessage, UserMessage};
 use crate::device::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
@@ -116,7 +116,7 @@ pub enum SubscriptionEvent {
     NewNode(MCNodeInfo),
     RadioNotification(String, TimeStamp), // Message, TimeStamp
     /// ChannelId - channel sent to, MessageId, NodeId - sending node, The Message itself, Timestamp
-    MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp),
+    MCMessageReceived(ChannelId, MessageId, NodeId, MCContent, TimeStamp),
     /// ChannelId, MessageId
     MessageACK(ChannelId, MessageId),
     NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, TimeStamp
@@ -1491,7 +1491,7 @@ mod tests {
         let entry = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(100u64),
-            MCMessage::NewTextMessage("test".into()),
+            MCContent::NewTextMessage("test".into()),
             TimeStamp::from(0),
         );
         let _ = device_view.update(StartForwardingMessage(entry));
@@ -1505,7 +1505,7 @@ mod tests {
         let entry = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(100u64),
-            MCMessage::NewTextMessage("test".into()),
+            MCContent::NewTextMessage("test".into()),
             TimeStamp::from(0),
         );
         let _ = device_view.update(StartForwardingMessage(entry));
@@ -2140,7 +2140,7 @@ mod tests {
             ChannelId::Channel(0.into()),
             MessageId::from(1),
             NodeId::from(100u64),
-            MCMessage::NewTextMessage("test".into()),
+            MCContent::NewTextMessage("test".into()),
             TimeStamp::from(1234567890),
         )));
     }

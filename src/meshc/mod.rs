@@ -4,7 +4,7 @@ pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a
 
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{MessageId, NodeId};
-use crate::channel_view_entry::MCMessage;
+use crate::channel_view_entry::MCContent;
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
 use crate::device::{SubscriptionEvent, TimeStamp};
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
@@ -160,7 +160,7 @@ impl From<ContactMessage> for SubscriptionEvent {
             Node(node_id),
             contact_message.sender_timestamp.into(),
             node_id,
-            MCMessage::NewTextMessage(contact_message.text),
+            MCContent::NewTextMessage(contact_message.text),
             MeshChat::now(),
         )
     }

@@ -3,7 +3,7 @@ use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view::ChannelViewMessage;
 use crate::channel_view::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyWithEmoji};
-use crate::channel_view_entry::MCMessage::{
+use crate::channel_view_entry::MCContent::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::device::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
@@ -34,7 +34,7 @@ use std::fmt::Formatter;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 #[derive(Clone, Debug)]
-pub enum MCMessage {
+pub enum MCContent {
     AlertMessage(String),   // message_text
     NewTextMessage(String), // message_text
     /// MessageId, String
@@ -44,7 +44,7 @@ pub enum MCMessage {
     UserMessage(MCUser),    // user
 }
 
-impl fmt::Display for MCMessage {
+impl fmt::Display for MCContent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AlertMessage(text) => f.write_str(text.as_str()),
@@ -57,15 +57,14 @@ impl fmt::Display for MCMessage {
     }
 }
 
-impl Default for MCMessage {
+impl Default for MCContent {
     fn default() -> Self {
         NewTextMessage(String::default())
     }
 }
 
 /// An entry in the Channel View that represents some type of message sent to either this user on
-/// this device or to a channel this device can read. Can be any of [MCMessage] types.
-#[allow(dead_code)] // Remove when the 'seen' field is used
+/// this device or to a channel this device can read. Can be any of [MCContent] types.
 #[derive(Clone, Debug, Default)]
 pub struct ChannelViewEntry {
     /// NodeId of the node that sent this message
@@ -74,7 +73,7 @@ pub struct ChannelViewEntry {
     /// The daytime the message was sent/received
     timestamp: DateTime<Local>,
     /// The message contents of differing types
-    message: MCMessage,
+    message: MCContent,
     /// Has the user of the app seen this message?
     seen: bool,
     /// Has the entry been acknowledged as received by a receiver?
@@ -90,7 +89,7 @@ impl ChannelViewEntry {
     pub fn new(
         message_id: MessageId,
         from: NodeId,
-        message: MCMessage,
+        message: MCContent,
         timestamp: TimeStamp,
     ) -> Self {
         ChannelViewEntry {
@@ -115,7 +114,7 @@ impl ChannelViewEntry {
     }
 
     /// Get a reference to the payload of this message
-    pub fn message(&self) -> &MCMessage {
+    pub fn message(&self) -> &MCContent {
         &self.message
     }
 
@@ -514,7 +513,7 @@ mod tests {
     use super::*;
     use crate::MeshChat;
     use crate::channel_id::MessageId;
-    use crate::channel_view_entry::MCMessage::{
+    use crate::channel_view_entry::MCContent::{
         AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
     };
     use crate::meshchat::MCNodeInfo;
@@ -802,7 +801,7 @@ mod tests {
 
     #[test]
     fn test_mc_message_default() {
-        let msg = MCMessage::default();
+        let msg = MCContent::default();
         matches!(msg, NewTextMessage(s) if s.is_empty());
     }
 

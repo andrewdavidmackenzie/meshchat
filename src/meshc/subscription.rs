@@ -23,7 +23,7 @@ use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 
-use crate::channel_view_entry::MCMessage;
+use crate::channel_view_entry::MCContent;
 use crate::meshchat::{MCPosition, MCUser, MeshChat};
 use tokio::time::{Duration, timeout};
 
@@ -367,7 +367,7 @@ async fn send_text_message(
                 .await?;
 
             // Reflect the message back into the GUI
-            let msg = MCMessage::NewTextMessage(text);
+            let msg = MCContent::NewTextMessage(text);
             gui_sender
                 .send(MCMessageReceived(
                     channel_id,
@@ -393,7 +393,7 @@ async fn send_text_message(
             radio_cache.pending_ack.insert(message_id, Node(node_id));
 
             // Reflect the message back into the GUI
-            let msg = MCMessage::NewTextMessage(text);
+            let msg = MCContent::NewTextMessage(text);
             gui_sender
                 .send(MCMessageReceived(
                     channel_id,
@@ -579,7 +579,7 @@ async fn handle_new_channel_message(
         Channel(ChannelIndex::from(channel_message.channel_idx)),
         channel_message.sender_timestamp.into(),
         node_id,
-        MCMessage::NewTextMessage(text.to_string()),
+        MCContent::NewTextMessage(text.to_string()),
         MeshChat::now(),
     );
 

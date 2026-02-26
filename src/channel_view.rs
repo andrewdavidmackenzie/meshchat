@@ -4,7 +4,7 @@ use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, MessageUnseen,
     PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
-use crate::channel_view_entry::MCMessage::{
+use crate::channel_view_entry::MCContent::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
 };
 use crate::config::{Config, HistoryLength};
@@ -571,7 +571,7 @@ mod test {
     };
     use crate::channel_view::{ChannelId, ChannelView};
     use crate::channel_view_entry::ChannelViewEntry;
-    use crate::channel_view_entry::MCMessage::{EmojiReply, NewTextMessage};
+    use crate::channel_view_entry::MCContent::{EmojiReply, NewTextMessage};
     use crate::config::HistoryLength;
     use crate::device::TimeStamp;
     use crate::meshchat::{MCPosition, MCUser};
@@ -1124,7 +1124,7 @@ mod test {
         let pos_msg = ChannelViewEntry::new(
             MessageId::from(2),
             NodeId::from(1u64),
-            crate::channel_view_entry::MCMessage::PositionMessage(MCPosition {
+            crate::channel_view_entry::MCContent::PositionMessage(MCPosition {
                 latitude: 0.0,
                 longitude: 0.0,
                 ..Default::default()
@@ -1157,7 +1157,7 @@ mod test {
         let user_msg = ChannelViewEntry::new(
             MessageId::from(2),
             NodeId::from(1u64),
-            crate::channel_view_entry::MCMessage::UserMessage(MCUser {
+            crate::channel_view_entry::MCContent::UserMessage(MCUser {
                 id: "test".into(),
                 long_name: "Test".into(),
                 short_name: "T".into(),
@@ -1290,7 +1290,7 @@ mod test {
         let reply = ChannelViewEntry::new(
             MessageId::from(2),
             NodeId::from(200u64),
-            crate::channel_view_entry::MCMessage::TextMessageReply(
+            crate::channel_view_entry::MCContent::TextMessageReply(
                 MessageId::from(1),
                 "Hi there!".into(),
             ),
@@ -1309,7 +1309,7 @@ mod test {
         let alert = ChannelViewEntry::new(
             MessageId::from(1),
             NodeId::from(100u64),
-            crate::channel_view_entry::MCMessage::AlertMessage("Emergency!".into()),
+            crate::channel_view_entry::MCContent::AlertMessage("Emergency!".into()),
             MeshChat::now(),
         );
         let _ = channel_view.new_message(alert, &HistoryLength::All);

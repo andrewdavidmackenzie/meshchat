@@ -1,5 +1,5 @@
 use crate::channel_id::{ChannelId, MessageId, NodeId};
-use crate::channel_view_entry::MCMessage;
+use crate::channel_view_entry::MCContent;
 use crate::config::HistoryLength;
 use crate::device::Device;
 use crate::device::DeviceViewMessage::SubscriptionMessage;
@@ -25,7 +25,7 @@ pub fn test_app() -> MeshChat {
 }
 
 impl MeshChat {
-    pub fn new_message(&mut self, msg: MCMessage) {
+    pub fn new_message(&mut self, msg: MCContent) {
         let message_id = MESSAGE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
         let channel_view_entry = channel_view_entry::ChannelViewEntry::new(
             MessageId::from(message_id),

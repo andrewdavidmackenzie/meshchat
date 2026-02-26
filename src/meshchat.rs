@@ -617,7 +617,7 @@ impl MeshChat {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel_view_entry::MCMessage::NewTextMessage;
+    use crate::channel_view_entry::MCContent::NewTextMessage;
     use crate::meshchat::View::DeviceListView;
     use crate::test_helper;
     use iced::keyboard::key::NativeCode::MacOS;

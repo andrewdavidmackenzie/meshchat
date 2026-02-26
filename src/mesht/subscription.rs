@@ -1,6 +1,6 @@
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
-use crate::channel_view_entry::MCMessage::{
+use crate::channel_view_entry::MCContent::{
     AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
 };
 use crate::device::SubscriberMessage::{
