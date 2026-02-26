@@ -1,5 +1,5 @@
-use crate::channel_id::ChannelId;
-use crate::channel_id::ChannelId::Node;
+use crate::conversation_id::ConversationId;
+use crate::conversation_id::ConversationId::Node;
 use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo,
     SendText,
@@ -7,7 +7,7 @@ use crate::device::SubscriberMessage::{
 use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
 use crate::message::MCContent::{AlertMessage, EmojiReply, NewTextMessage, TextMessageReply};
 
-use crate::channel_id;
+use crate::conversation_id;
 use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel,
     DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
@@ -62,18 +62,18 @@ impl MyRouter {
 
     /// Figure out which channel we should show a message in a [MeshPacket]
     /// I.e. is a broadcast message in a channel, or a DM to/from my node.
-    fn channel_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ChannelId {
+    fn conversation_id_from_packet(&mut self, mesh_packet: &MeshPacket) -> ConversationId {
         if mesh_packet.to == u32::MAX {
             // Destined for a channel
-            ChannelId::Channel(mesh_packet.channel.into())
+            ConversationId::Channel(mesh_packet.channel.into())
         } else {
             // Destined for a Node
             if Some(mesh_packet.from) == self.my_node_num {
                 // from me to a node - put it in that node's channel
-                Node(channel_id::NodeId::from(mesh_packet.to))
+                Node(conversation_id::NodeId::from(mesh_packet.to))
             } else {
                 // from the other node, put it in that node's channel
-                Node(channel_id::NodeId::from(mesh_packet.from))
+                Node(conversation_id::NodeId::from(mesh_packet.from))
             }
         }
     }
@@ -165,26 +165,26 @@ impl MyRouter {
             match PortNum::try_from(data.portnum) {
                 Ok(PortNum::RoutingApp) => {
                     // An ACK
-                    let channel_id = if mesh_packet.from == mesh_packet.to {
+                    let conversation_id = if mesh_packet.from == mesh_packet.to {
                         // To a channel broadcast message
-                        ChannelId::Channel(mesh_packet.channel.into())
+                        ConversationId::Channel(mesh_packet.channel.into())
                     } else {
                         // To a DM to a Node
-                        Node(channel_id::NodeId::from(mesh_packet.from))
+                        Node(conversation_id::NodeId::from(mesh_packet.from))
                     };
 
                     self.gui_sender
-                        .send(MessageACK(channel_id, data.request_id.into()))
+                        .send(MessageACK(conversation_id, data.request_id.into()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
                 Ok(PortNum::AlertApp) => {
                     if let Ok(message) = String::from_utf8(data.payload.clone()) {
-                        let channel_id = self.channel_id_from_packet(mesh_packet);
+                        let conversation_id = self.conversation_id_from_packet(mesh_packet);
 
                         self.gui_sender
                             .send(MCMessageReceived(
-                                channel_id,
+                                conversation_id,
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 AlertMessage(message),
@@ -195,7 +195,7 @@ impl MyRouter {
                     }
                 }
                 Ok(PortNum::TextMessageApp) => {
-                    let channel_id = self.channel_id_from_packet(mesh_packet);
+                    let conversation_id = self.conversation_id_from_packet(mesh_packet);
                     if let Ok(message) = String::from_utf8(data.payload.clone()) {
                         let mcmessage = if data.reply_id == 0 {
                             NewTextMessage(message)
@@ -210,7 +210,7 @@ impl MyRouter {
                         };
                         self.gui_sender
                             .send(MCMessageReceived(
-                                channel_id,
+                                conversation_id,
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 mcmessage,
@@ -222,12 +222,12 @@ impl MyRouter {
                 }
                 Ok(PortNum::PositionApp) => {
                     if let Ok(position) = Position::decode(&data.payload as &[u8]) {
-                        let channel_id = self.channel_id_from_packet(mesh_packet);
+                        let conversation_id = self.conversation_id_from_packet(mesh_packet);
                         let mcposition: MCPosition = (&position).into();
 
                         self.gui_sender
                             .send(NewNodePosition(
-                                channel_id,
+                                conversation_id,
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 mcposition,
@@ -251,10 +251,10 @@ impl MyRouter {
                 Ok(PortNum::NeighborinfoApp) => println!("Neighbor Info payload"),
                 Ok(PortNum::NodeinfoApp) => {
                     if let Ok(user) = User::decode(&data.payload as &[u8]) {
-                        let channel_id = self.channel_id_from_packet(mesh_packet);
+                        let conversation_id = self.conversation_id_from_packet(mesh_packet);
                         self.gui_sender
                             .send(NewNodeInfo(
-                                channel_id,
+                                conversation_id,
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 (&user).into(),
@@ -362,12 +362,12 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                     Ok(())
                                 }
                                 Disconnect => break,
-                                SendText(text, channel_id, reply_to_id) => {
+                                SendText(text, conversation_id, reply_to_id) => {
                                     if let Some(mut api) = stream_api.take() {
                                         let r = send_text_message(
                                             &mut api,
                                             &mut my_router,
-                                            channel_id,
+                                            conversation_id,
                                             reply_to_id.map(u32::from),
                                             text,
                                         )
@@ -384,12 +384,12 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                         })
                                     }
                                 }
-                                SendPosition(channel_id, mcposition) => {
+                                SendPosition(conversation_id, mcposition) => {
                                     if let Some(mut api) = stream_api.take() {
                                         let r = send_position(
                                             &mut api,
                                             &mut my_router,
-                                            channel_id,
+                                            conversation_id,
                                             mcposition.into(),
                                         )
                                         .await;
@@ -405,12 +405,12 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                         })
                                     }
                                 }
-                                SendSelfInfo(channel_id, mcuser) => {
+                                SendSelfInfo(conversation_id, mcuser) => {
                                     if let Some(mut api) = stream_api.take() {
                                         let r = send_user(
                                             &mut api,
                                             &mut my_router,
-                                            channel_id,
+                                            conversation_id,
                                             mcuser.into(),
                                         )
                                         .await;
@@ -426,12 +426,12 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                         })
                                     }
                                 }
-                                SendEmojiReply(emoji, channel_id, reply_to_id) => {
+                                SendEmojiReply(emoji, conversation_id, reply_to_id) => {
                                     if let Some(mut api) = stream_api.take() {
                                         let r = send_emoji_reply(
                                             &mut api,
                                             &mut my_router,
-                                            channel_id,
+                                            conversation_id,
                                             reply_to_id.into(),
                                             emoji,
                                         )
@@ -487,11 +487,11 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
 async fn send_text_message(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     reply_to_id: Option<u32>,
     text: String,
 ) -> Result<(), Error> {
-    let (packet_destination, mesh_channel) = channel_id.to_destination();
+    let (packet_destination, mesh_channel) = conversation_id.to_destination();
 
     stream_api
         .send_mesh_packet(
@@ -513,11 +513,11 @@ async fn send_text_message(
 async fn send_emoji_reply(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     reply_to_id: u32,
     emoji: String,
 ) -> Result<(), Error> {
-    let (packet_destination, mesh_channel) = channel_id.to_destination();
+    let (packet_destination, mesh_channel) = conversation_id.to_destination();
 
     stream_api
         .send_mesh_packet(
@@ -539,10 +539,10 @@ async fn send_emoji_reply(
 async fn send_position(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     position: Position,
 ) -> Result<(), Error> {
-    let (packet_destination, mesh_channel) = channel_id.to_destination();
+    let (packet_destination, mesh_channel) = conversation_id.to_destination();
     stream_api
         .send_mesh_packet(
             my_router,
@@ -563,10 +563,10 @@ async fn send_position(
 async fn send_user(
     stream_api: &mut ConnectedStreamApi,
     my_router: &mut MyRouter,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     user: User,
 ) -> Result<(), Error> {
-    let (packet_destination, mesh_channel) = channel_id.to_destination();
+    let (packet_destination, mesh_channel) = conversation_id.to_destination();
 
     stream_api
         .send_mesh_packet(
@@ -624,7 +624,7 @@ async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Erro
 #[allow(clippy::panic)]
 mod tests {
     use super::*;
-    use crate::channel_id::MessageId;
+    use crate::conversation_id::MessageId;
     use crate::device::TimeStamp;
     use futures_channel::mpsc;
     use meshtastic::Message;
@@ -812,100 +812,112 @@ mod tests {
         assert_eq!(router.source_node_id(), NodeId::from(12345u32));
     }
 
-    // Test channel_id_from_packet - broadcast message
+    // Test conversation_id_from_packet - broadcast message
     #[test]
-    fn test_channel_id_broadcast_channel_0() {
+    fn test_conversation_id_broadcast_channel_0() {
         let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
         let packet = create_mesh_packet(2000, u32::MAX, 0, 1);
-        let channel_id = router.channel_id_from_packet(&packet);
+        let conversation_id = router.conversation_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(0.into()));
+        assert_eq!(conversation_id, ConversationId::Channel(0.into()));
     }
 
     #[test]
-    fn test_channel_id_broadcast_channel_1() {
+    fn test_conversation_id_broadcast_channel_1() {
         let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
         let packet = create_mesh_packet(2000, u32::MAX, 1, 1);
-        let channel_id = router.channel_id_from_packet(&packet);
+        let conversation_id = router.conversation_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(1.into()));
+        assert_eq!(conversation_id, ConversationId::Channel(1.into()));
     }
 
     #[test]
-    fn test_channel_id_broadcast_channel_5() {
+    fn test_conversation_id_broadcast_channel_5() {
         let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
         let packet = create_mesh_packet(2000, u32::MAX, 5, 1);
-        let channel_id = router.channel_id_from_packet(&packet);
+        let conversation_id = router.conversation_id_from_packet(&packet);
 
-        assert_eq!(channel_id, ChannelId::Channel(5.into()));
+        assert_eq!(conversation_id, ConversationId::Channel(5.into()));
     }
 
-    // Test channel_id_from_packet - DM from me to another node
+    // Test conversation_id_from_packet - DM from me to another node
     #[test]
-    fn test_channel_id_dm_from_me() {
+    fn test_conversation_id_dm_from_me() {
         let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
         // Message from me (1000) to node 2000
         let packet = create_mesh_packet(1000, 2000, 0, 1);
-        let channel_id = router.channel_id_from_packet(&packet);
+        let conversation_id = router.conversation_id_from_packet(&packet);
 
         // Should be in node 2000's channel (the recipient)
-        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u64)));
+        assert_eq!(
+            conversation_id,
+            Node(conversation_id::NodeId::from(2000u64))
+        );
     }
 
-    // Test channel_id_from_packet - DM from another node to me
+    // Test conversation_id_from_packet - DM from another node to me
     #[test]
-    fn test_channel_id_dm_to_me() {
+    fn test_conversation_id_dm_to_me() {
         let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
         // Message from node 2000 to me (1000)
         let packet = create_mesh_packet(2000, 1000, 0, 1);
-        let channel_id = router.channel_id_from_packet(&packet);
+        let conversation_id = router.conversation_id_from_packet(&packet);
 
         // Should be in node 2000's channel (the sender)
-        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u32)));
+        assert_eq!(
+            conversation_id,
+            Node(conversation_id::NodeId::from(2000u32))
+        );
     }
 
-    // Test channel_id_from_packet - DM between two other nodes (edge case)
+    // Test conversation_id_from_packet - DM between two other nodes (edge case)
     #[test]
-    fn test_channel_id_dm_other_nodes() {
+    fn test_conversation_id_dm_other_nodes() {
         let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
         // Message from node 2000 to node 3000 (not involving me)
         let packet = create_mesh_packet(2000, 3000, 0, 1);
-        let channel_id = router.channel_id_from_packet(&packet);
+        let conversation_id = router.conversation_id_from_packet(&packet);
 
         // Should be in node 2000's channel (the sender)
-        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u32)));
+        assert_eq!(
+            conversation_id,
+            Node(conversation_id::NodeId::from(2000u32))
+        );
     }
 
-    // Test channel_id_from_packet with my_node_num not set
+    // Test conversation_id_from_packet with my_node_num not set
     #[test]
-    fn test_channel_id_my_node_unknown() {
+    fn test_conversation_id_my_node_unknown() {
         let (sender, _receiver) = mpsc::channel::<SubscriptionEvent>(10);
         let mut router = MyRouter::new(sender);
         // my_node_num is None
 
         let packet = create_mesh_packet(2000, 3000, 0, 1);
-        let channel_id = router.channel_id_from_packet(&packet);
+        let conversation_id = router.conversation_id_from_packet(&packet);
 
         // Since my_node_num is None, from != my_node_num, so uses Node(from)
-        assert_eq!(channel_id, Node(channel_id::NodeId::from(2000u32)));
+        assert_eq!(
+            conversation_id,
+            Node(conversation_id::NodeId::from(2000u32))
+        );
     }
 
     // Test DeviceState enum
@@ -948,7 +960,7 @@ mod tests {
             .expect("Failed to receive MyNodeNum event");
         match event {
             MyNodeNum(node_id) => {
-                assert_eq!(node_id, channel_id::NodeId::from(12345u64))
+                assert_eq!(node_id, conversation_id::NodeId::from(12345u64))
             }
             _ => panic!("Unexpected MyNodeNum event"),
         }
@@ -1135,8 +1147,8 @@ mod tests {
             .try_recv()
             .expect("Failed to receive MCMessageReceived event for new text message");
         assert!(
-            matches!(&event, MCMessageReceived(channel_id, id, from, msg, _timestamp)
-                if *channel_id == ChannelId::Channel(0.into()) && *id == MessageId::from(123) && *from == channel_id::NodeId::from(2000u64)
+            matches!(&event, MCMessageReceived(conversation_id, id, from, msg, _timestamp)
+                if *conversation_id == ConversationId::Channel(0.into()) && *id == MessageId::from(123) && *from == conversation_id::NodeId::from(2000u64)
                 && matches!(msg, NewTextMessage(text) if text == "Hello world")),
             "Expected MCMessageReceived with channel 0, id 123, from 2000, NewTextMessage('Hello world'), got {:?}",
             event
@@ -1199,8 +1211,8 @@ mod tests {
             .try_recv()
             .expect("Failed to receive MessageACK event for broadcast");
         assert!(
-            matches!(&event, MessageACK(channel_id, request_id)
-                if *channel_id == ChannelId::Channel(0.into()) && *request_id == MessageId::from(789)),
+            matches!(&event, MessageACK(conversation_id, request_id)
+                if *conversation_id == ConversationId::Channel(0.into()) && *request_id == MessageId::from(789)),
             "Expected MessageACK(Channel(0), 789), got {:?}",
             event
         );
@@ -1220,8 +1232,8 @@ mod tests {
             .try_recv()
             .expect("Failed to receive MessageACK event for DM");
         assert!(
-            matches!(&event, MessageACK(channel_id, request_id)
-                if *channel_id == Node(channel_id::NodeId::from(2000u32)) && *request_id == MessageId::from(789)),
+            matches!(&event, MessageACK(conversation_id, request_id)
+                if *conversation_id == Node(conversation_id::NodeId::from(2000u32)) && *request_id == MessageId::from(789)),
             "Expected MessageACK(Node(2000), 789), got {:?}",
             event
         );
@@ -1272,7 +1284,7 @@ mod tests {
         let event = receiver
             .try_recv()
             .expect("Failed to receive MyNodeNum event from PacketRouter");
-        let node_id = channel_id::NodeId::from(99999u64);
+        let node_id = conversation_id::NodeId::from(99999u64);
         match event {
             MyNodeNum(num_received) => assert_eq!(num_received, node_id),
             _ => panic!("Expected MyNodeNum event, got {:?}", event),

@@ -18,7 +18,7 @@ mod message;
 mod styles;
 mod widgets;
 
-mod channel_id;
+mod conversation_id;
 mod notification;
 #[cfg(test)]
 mod test_helper;

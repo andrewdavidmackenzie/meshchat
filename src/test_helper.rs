@@ -1,5 +1,5 @@
-use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::config::HistoryLength;
+use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::Device;
 use crate::device::DeviceViewMessage::SubscriptionMessage;
 use crate::device::SubscriptionEvent::MyNodeNum;
@@ -36,7 +36,7 @@ impl MeshChat {
         let channel_view = self
             .device
             .channel_views
-            .get_mut(&ChannelId::Channel(0.into()))
+            .get_mut(&ConversationId::Channel(0.into()))
             .expect("Could not get channel view");
         let _ = channel_view.new_message(channel_view_entry, &HistoryLength::All);
     }

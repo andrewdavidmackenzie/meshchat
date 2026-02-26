@@ -1,5 +1,5 @@
-use crate::channel_id::ChannelId::{Channel, Node};
-use crate::channel_id::{ChannelId, ChannelIndex};
+use crate::conversation_id::ConversationId::{Channel, Node};
+use crate::conversation_id::{ChannelIndex, ConversationId};
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use meshtastic::packet::PacketDestination;
 use meshtastic::protobufs::{NodeInfo, Position, User};
@@ -151,7 +151,7 @@ impl From<ChannelIndex> for MeshChannel {
     }
 }
 
-impl ChannelId {
+impl ConversationId {
     pub fn to_destination(self) -> (PacketDestination, MeshChannel) {
         match self {
             Channel(channel_number) => (
@@ -170,7 +170,7 @@ impl ChannelId {
 #[allow(clippy::panic)]
 mod test {
     use super::*;
-    use crate::channel_id;
+    use crate::conversation_id;
     use crate::device::TimeStamp;
     use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser};
     use meshtastic::packet::PacketDestination;
@@ -179,8 +179,8 @@ mod test {
 
     #[test]
     fn test_to_channel() {
-        let channel_id = Channel(0.into());
-        let (destination, channel) = channel_id.to_destination();
+        let conversation_id = Channel(0.into());
+        let (destination, channel) = conversation_id.to_destination();
         assert!(
             matches!(destination, PacketDestination::Broadcast),
             "Channel destination should be Broadcast, got {:?}",
@@ -191,8 +191,8 @@ mod test {
 
     #[test]
     fn test_to_node_destination() {
-        let channel_id = Node(channel_id::NodeId::from(12345u32));
-        let (destination, channel) = channel_id.to_destination();
+        let conversation_id = Node(conversation_id::NodeId::from(12345u32));
+        let (destination, channel) = conversation_id.to_destination();
         assert!(
             matches!(destination, PacketDestination::Node(_)),
             "Node destination should be Node variant, got {:?}",
@@ -399,7 +399,10 @@ mod test {
 
         let mc_node_info: MCNodeInfo = (&node_info).into();
 
-        assert_eq!(mc_node_info.node_id, channel_id::NodeId::from(12345_u32));
+        assert_eq!(
+            mc_node_info.node_id,
+            conversation_id::NodeId::from(12345_u32)
+        );
         assert!(mc_node_info.user.is_some());
         assert_eq!(
             mc_node_info
@@ -432,7 +435,10 @@ mod test {
 
         let mc_node_info: MCNodeInfo = (&node_info).into();
 
-        assert_eq!(mc_node_info.node_id, channel_id::NodeId::from(99999_u32));
+        assert_eq!(
+            mc_node_info.node_id,
+            conversation_id::NodeId::from(99999_u32)
+        );
         assert!(mc_node_info.user.is_none());
         assert!(mc_node_info.position.is_some());
         assert!(mc_node_info.is_ignored);

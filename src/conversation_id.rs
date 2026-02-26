@@ -1,4 +1,4 @@
-use crate::channel_id::ChannelId::Channel;
+use crate::conversation_id::ConversationId::Channel;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
@@ -115,18 +115,18 @@ impl Display for MessageId {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Hash, PartialEq, Eq)]
-pub enum ChannelId {
+pub enum ConversationId {
     Channel(ChannelIndex), // Channel::index 0..7
     Node(NodeId),          // NodeInfo::node number
 }
 
-impl Default for ChannelId {
+impl Default for ConversationId {
     fn default() -> Self {
         Channel(0.into())
     }
 }
 
-impl Display for ChannelId {
+impl Display for ConversationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{:?}", self)
     }
@@ -135,12 +135,12 @@ impl Display for ChannelId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channel_id::ChannelId::Node;
+    use crate::conversation_id::ConversationId::Node;
 
     #[test]
     fn test_default_is_channel_zero() {
-        let channel_id = ChannelId::default();
-        assert_eq!(channel_id, Channel(0.into()));
+        let conversation_id = ConversationId::default();
+        assert_eq!(conversation_id, Channel(0.into()));
     }
 
     #[test]
@@ -195,7 +195,7 @@ mod tests {
     fn test_hash_consistency() {
         use std::collections::HashMap;
 
-        let mut map: HashMap<ChannelId, &str> = HashMap::new();
+        let mut map: HashMap<ConversationId, &str> = HashMap::new();
         map.insert(Channel(0.into()), "channel_0");
         map.insert(Node(NodeId(100)), "node_100");
 

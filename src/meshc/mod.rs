@@ -2,8 +2,8 @@ pub mod subscription;
 
 pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
-use crate::channel_id::ChannelId::Node;
-use crate::channel_id::{MessageId, NodeId};
+use crate::conversation_id::ConversationId::Node;
+use crate::conversation_id::{MessageId, NodeId};
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
 use crate::device::{SubscriptionEvent, TimeStamp};
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
@@ -336,13 +336,13 @@ mod test {
         let event: SubscriptionEvent = message.into();
         let after_conversion = MeshChat::now();
 
-        let MCMessageReceived(channel_id, _msg_id, from, msg, event_timestamp) = event else {
+        let MCMessageReceived(conversation_id, _msg_id, from, msg, event_timestamp) = event else {
             unreachable!("Expected MCMessageReceived event")
         };
 
         // Direct message should use Node channel ID
         let expected_node_id = NodeId::from(0xAABB_CCDD_EEFF_0000_u64);
-        assert_eq!(channel_id, Node(expected_node_id));
+        assert_eq!(conversation_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
         // Timestamp should be local time (from MeshChat::now()), not the sender_timestamp
         assert!(

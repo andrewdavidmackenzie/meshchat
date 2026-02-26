@@ -9,8 +9,8 @@ use crate::Message::{
     ToggleAutoUpdate, ToggleNodeFavourite, ToggleSaveWindowPosition, ToggleSaveWindowSize,
     ToggleShowPositionUpdates, ToggleShowUserUpdates,
 };
-use crate::channel_id::{ChannelId, NodeId};
 use crate::config::{Config, HistoryLength, load_config};
+use crate::conversation_id::{ConversationId, NodeId};
 use crate::device::ConnectionState::Connected;
 use crate::device::DeviceViewMessage;
 use crate::device::DeviceViewMessage::DisconnectRequest;
@@ -109,7 +109,7 @@ impl fmt::Display for MCPosition {
 pub enum View {
     #[default]
     DeviceListView,
-    DeviceView(Option<ChannelId>),
+    DeviceView(Option<ConversationId>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -126,7 +126,7 @@ pub enum Message {
     DeviceViewEvent(DeviceViewMessage),
     Exit,
     ConfigLoaded(Config),
-    DeviceAndChannelConfigChange(Option<(String, RadioType)>, Option<ChannelId>),
+    DeviceAndChannelConfigChange(Option<(String, RadioType)>, Option<ConversationId>),
     ShowLocation(MCPosition),
     ShowUserInfo(MCUser),
     CloseShowUser,
@@ -283,7 +283,7 @@ impl MeshChat {
                     tasks.push(self.device.update(DeviceViewMessage::ConnectRequest(
                         ble_device_name.clone(),
                         *radio_type,
-                        self.config.channel_id,
+                        self.config.conversation_id,
                     )))
                 }
 
@@ -305,7 +305,7 @@ impl MeshChat {
             }
             DeviceAndChannelConfigChange(ble_device, channel) => {
                 self.config.ble_device = ble_device;
-                self.config.channel_id = channel;
+                self.config.conversation_id = channel;
                 // and save it asynchronously, so that we don't block the GUI thread
                 self.config.save_config()
             }
@@ -607,9 +607,9 @@ impl MeshChat {
         self.current_view = view;
         match &self.current_view {
             View::DeviceListView => Task::none(),
-            View::DeviceView(channel_id) => self
+            View::DeviceView(conversation_id) => self
                 .device
-                .update(DeviceViewMessage::ShowChannel(*channel_id)),
+                .update(DeviceViewMessage::ShowChannel(*conversation_id)),
         }
     }
 }
@@ -739,8 +739,8 @@ mod tests {
     fn test_view_equality() {
         assert_eq!(View::DeviceView(None), View::DeviceView(None));
         assert_eq!(
-            View::DeviceView(Some(ChannelId::Channel(0.into()))),
-            View::DeviceView(Some(ChannelId::Channel(0.into())))
+            View::DeviceView(Some(ConversationId::Channel(0.into()))),
+            View::DeviceView(Some(ConversationId::Channel(0.into())))
         );
         assert_ne!(DeviceListView, View::DeviceView(None));
     }

@@ -1,5 +1,5 @@
-use crate::channel_id::ChannelId::{Channel, Node};
-use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
+use crate::conversation_id::ConversationId::{Channel, Node};
+use crate::conversation_id::{ChannelIndex, ConversationId, MessageId, NodeId};
 use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
 };
@@ -41,7 +41,7 @@ struct RadioCache {
     /// Contact Name (String), Contact Node ID (NodeId)
     known_contacts: HashMap<String, NodeId>,
     /// Messages that have been sent (by MessageId) that are pending an ACK (ChannelId for the message)
-    pending_ack: HashMap<MessageId, ChannelId>,
+    pending_ack: HashMap<MessageId, ConversationId>,
 }
 
 impl RadioCache {
@@ -128,42 +128,46 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 {
                                     let result = match message {
                                         Disconnect => break,
-                                        SendText(text, channel_id, reply_to_message_id) => {
+                                        SendText(text, conversation_id, reply_to_message_id) => {
                                             send_text_message(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 text,
                                                 reply_to_message_id,
                                                 &mut gui_sender,
                                             )
                                             .await
                                         }
-                                        SendPosition(channel_id, mcposition) => {
+                                        SendPosition(conversation_id, mcposition) => {
                                             send_position(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 mcposition,
                                                 &mut gui_sender,
                                             )
                                             .await
                                         }
-                                        SendSelfInfo(channel_id, mcuser) => {
+                                        SendSelfInfo(conversation_id, mcuser) => {
                                             send_self_info(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 mcuser,
                                                 &mut gui_sender,
                                             )
                                             .await
                                         }
-                                        SendEmojiReply(emoji, channel_id, reply_to_message_id) => {
+                                        SendEmojiReply(
+                                            emoji,
+                                            conversation_id,
+                                            reply_to_message_id,
+                                        ) => {
                                             send_emoji_reply(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 emoji,
                                                 reply_to_message_id,
                                                 &mut gui_sender,
@@ -351,12 +355,12 @@ async fn get_pending_messages(
 async fn send_text_message(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     text: String,
     _reply_to_message_id: Option<MessageId>,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
-    match channel_id {
+    match conversation_id {
         Channel(channel_index) => {
             // No message sent info returned for a channel message
             meshcore
@@ -370,7 +374,7 @@ async fn send_text_message(
             let msg = MCContent::NewTextMessage(text);
             gui_sender
                 .send(MCMessageReceived(
-                    channel_id,
+                    conversation_id,
                     MeshChat::now().into(),
                     radio_cache.self_id,
                     msg,
@@ -396,7 +400,7 @@ async fn send_text_message(
             let msg = MCContent::NewTextMessage(text);
             gui_sender
                 .send(MCMessageReceived(
-                    channel_id,
+                    conversation_id,
                     message_id,
                     radio_cache.self_id,
                     msg,
@@ -415,7 +419,7 @@ async fn send_text_message(
 async fn send_emoji_reply(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     text: String,
     reply_to_message_id: MessageId,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
@@ -423,7 +427,7 @@ async fn send_emoji_reply(
     send_text_message(
         meshcore,
         radio_cache,
-        channel_id,
+        conversation_id,
         text,
         Some(reply_to_message_id),
         gui_sender,
@@ -435,7 +439,7 @@ async fn send_emoji_reply(
 async fn send_position(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     position: MCPosition,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
@@ -444,19 +448,35 @@ async fn send_position(
         position.latitude, position.longitude
     );
 
-    send_text_message(meshcore, radio_cache, channel_id, text, None, gui_sender).await
+    send_text_message(
+        meshcore,
+        radio_cache,
+        conversation_id,
+        text,
+        None,
+        gui_sender,
+    )
+    .await
 }
 
 /// Send SelfInfo to a channel or a node
 async fn send_self_info(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     user: MCUser,
     gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
 ) -> meshcore_rs::Result<()> {
     let text = format!("My user info: {user}");
-    send_text_message(meshcore, radio_cache, channel_id, text, None, gui_sender).await
+    send_text_message(
+        meshcore,
+        radio_cache,
+        conversation_id,
+        text,
+        None,
+        gui_sender,
+    )
+    .await
 }
 
 /// Advertise my presence on the network to other nodes
@@ -686,9 +706,9 @@ async fn handle_radio_event(
         EventType::Ack => {
             if let EventPayload::Ack { tag } = meshcore_event.payload {
                 let message_id: MessageId = tag.into();
-                if let Some(channel_id) = radio_cache.pending_ack.remove(&message_id) {
+                if let Some(conversation_id) = radio_cache.pending_ack.remove(&message_id) {
                     gui_sender
-                        .send(MessageACK(channel_id, message_id))
+                        .send(MessageACK(conversation_id, message_id))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
