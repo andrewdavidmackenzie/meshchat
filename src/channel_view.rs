@@ -557,7 +557,7 @@ impl ChannelView {
             )
             .style(text_input_container_style),
         )
-        .padding(Padding::from([8, 8]))
+        .padding(Padding::from([4, 0]))
         .into()
     }
 }
