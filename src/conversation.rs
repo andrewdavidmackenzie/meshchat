@@ -89,7 +89,7 @@ impl Conversation {
     fn now_local() -> DateTime<Local> {
         let timestamp = TimeStamp::now();
         let datetime_utc =
-            DateTime::<Utc>::from_timestamp_secs(timestamp.into()).unwrap_or_default();
+            DateTime::<Utc>::from_timestamp_millis(timestamp.into()).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
     }
 

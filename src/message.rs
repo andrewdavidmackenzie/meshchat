@@ -72,7 +72,7 @@ pub struct MCMessage {
     from: NodeId,
     message_id: MessageId,
     /// The daytime the message was sent/received
-    timestamp: DateTime<Local>,
+    datetime: DateTime<Local>,
     /// The message contents of differing types
     message: MCContent,
     /// Has the user of the app seen this message?
@@ -96,7 +96,7 @@ impl MCMessage {
         MCMessage {
             from,
             message_id,
-            timestamp: Self::local_time(timestamp),
+            datetime: Self::local_time(timestamp),
             message,
             ..Default::default()
         }
@@ -105,7 +105,7 @@ impl MCMessage {
     /// Get the time now as a [DateTime<Local>]
     pub fn local_time(timestamp: TimeStamp) -> DateTime<Local> {
         let datetime_utc =
-            DateTime::<Utc>::from_timestamp_secs(timestamp.into()).unwrap_or_default();
+            DateTime::<Utc>::from_timestamp_millis(timestamp.into()).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
     }
 
@@ -159,12 +159,12 @@ impl MCMessage {
 
     /// Return the time this message was received/sent as u64 seconds in EPOCH time
     pub fn time(&self) -> DateTime<Local> {
-        self.timestamp
+        self.datetime
     }
 
     /// Order two messages - using the rx_daytime field.
     pub fn sort_by_timestamp(_: &MessageId, left: &Self, _: &MessageId, right: &Self) -> Ordering {
-        left.timestamp.cmp(&right.timestamp)
+        left.datetime.cmp(&right.datetime)
     }
 
     /// Return the text to use when replying to this message
@@ -505,7 +505,7 @@ fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer>
 #[cfg(test)]
 impl PartialEq<Self> for MCMessage {
     fn eq(&self, other: &Self) -> bool {
-        self.timestamp == other.timestamp
+        self.datetime == other.datetime
     }
 }
 
