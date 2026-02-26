@@ -358,9 +358,9 @@ impl DeviceList {
     /// SHow a message when there are no devices found
     fn empty_view(&self) -> Element<'static, Message> {
         let empty_text = if self.scanning {
-            "Searching for compatible Meshtastic radios"
+            "Searching for compatible radios"
         } else {
-            "No compatible Meshtastic radios found."
+            "No compatible radios found"
         };
 
         Container::new(iced::widget::text(empty_text).size(20))
