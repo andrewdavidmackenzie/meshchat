@@ -9,18 +9,19 @@ use crate::Message::{
     ToggleAutoUpdate, ToggleNodeFavourite, ToggleSaveWindowPosition, ToggleSaveWindowSize,
     ToggleShowPositionUpdates, ToggleShowUserUpdates,
 };
-use crate::channel_id::{ChannelId, NodeId};
 use crate::config::{Config, HistoryLength, load_config};
+use crate::conversation_id::{ConversationId, NodeId};
 use crate::device::ConnectionState::Connected;
-use crate::device::DeviceViewMessage;
-use crate::device::DeviceViewMessage::DisconnectRequest;
+use crate::device::Device;
+use crate::device::DeviceMessage;
+use crate::device::DeviceMessage::DisconnectRequest;
 #[cfg(any(feature = "meshtastic", feature = "meshcore"))]
-use crate::device::DeviceViewMessage::SubscriptionMessage;
-use crate::device::{Device, TimeStamp};
+use crate::device::DeviceMessage::SubscriptionMessage;
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
+use crate::timestamp::TimeStamp;
 use crate::{meshc, mesht};
 use iced::font::Weight;
 use iced::keyboard::key;
@@ -32,7 +33,6 @@ use self_update::Status;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::Formatter;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -109,7 +109,7 @@ impl fmt::Display for MCPosition {
 pub enum View {
     #[default]
     DeviceListView,
-    DeviceView(Option<ChannelId>),
+    DeviceView(Option<ConversationId>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -123,10 +123,10 @@ pub struct MCChannel {
 pub enum Message {
     Navigation(View),
     DeviceListViewEvent(DeviceListEvent),
-    DeviceViewEvent(DeviceViewMessage),
+    DeviceViewEvent(DeviceMessage),
     Exit,
     ConfigLoaded(Config),
-    DeviceAndChannelConfigChange(Option<(String, RadioType)>, Option<ChannelId>),
+    DeviceAndChannelConfigChange(Option<(String, RadioType)>, Option<ConversationId>),
     ShowLocation(MCPosition),
     ShowUserInfo(MCUser),
     CloseShowUser,
@@ -192,16 +192,6 @@ impl MeshChat {
     /// Create a new instance of the app and load the config asynchronously
     pub fn new() -> (Self, Task<Message>) {
         (Self::default(), load_config())
-    }
-
-    /// Get the current time in epoch as u32
-    pub fn now() -> TimeStamp {
-        TimeStamp::from(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs() as u32,
-        )
     }
 
     /// Return the title of the app, which is used in the window title bar.
@@ -280,10 +270,10 @@ impl MeshChat {
                 if let Some((ble_device_name, radio_type)) = &self.config.ble_device
                     && self.config.auto_reconnect
                 {
-                    tasks.push(self.device.update(DeviceViewMessage::ConnectRequest(
+                    tasks.push(self.device.update(DeviceMessage::ConnectRequest(
                         ble_device_name.clone(),
                         *radio_type,
-                        self.config.channel_id,
+                        self.config.conversation_id,
                     )))
                 }
 
@@ -305,7 +295,7 @@ impl MeshChat {
             }
             DeviceAndChannelConfigChange(ble_device, channel) => {
                 self.config.ble_device = ble_device;
-                self.config.channel_id = channel;
+                self.config.conversation_id = channel;
                 // and save it asynchronously, so that we don't block the GUI thread
                 self.config.save_config()
             }
@@ -607,21 +597,56 @@ impl MeshChat {
         self.current_view = view;
         match &self.current_view {
             View::DeviceListView => Task::none(),
-            View::DeviceView(channel_id) => self
+            View::DeviceView(conversation_id) => self
                 .device
-                .update(DeviceViewMessage::ShowChannel(*channel_id)),
+                .update(DeviceMessage::ShowChannel(*conversation_id)),
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use crate::channel_view_entry::MCMessage::NewTextMessage;
+    use crate::conversation_id::MessageId;
+    use crate::device::DeviceEvent::MyNodeNum;
     use crate::meshchat::View::DeviceListView;
-    use crate::test_helper;
+    use crate::message;
+    use crate::message::MCContent;
+    use crate::message::MCContent::NewTextMessage;
     use iced::keyboard::key::NativeCode::MacOS;
     use iced::keyboard::{Key, Location};
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    static MESSAGE_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
+
+    impl MeshChat {
+        pub fn new_message(&mut self, msg: MCContent) {
+            let message_id = MESSAGE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+            let mcmessage = message::MCMessage::new(
+                MessageId::from(message_id),
+                NodeId::from(1u64),
+                msg,
+                TimeStamp::now(),
+            );
+            let _ = self
+                .device
+                .new_message(&ConversationId::Channel(0.into()), mcmessage);
+        }
+    }
+
+    pub fn test_app() -> MeshChat {
+        let mut meshchat = MeshChat::default();
+        let mut device = Device::default();
+        let _ = device.update(SubscriptionMessage(MyNodeNum(NodeId::from(999u64))));
+        device.add_channel(MCChannel {
+            index: 0,
+            name: "Test".to_string(),
+        });
+
+        meshchat.device = device;
+
+        meshchat
+    }
 
     #[test]
     fn test_location_url() {
@@ -632,7 +657,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -659,27 +684,27 @@ mod tests {
 
     #[test]
     fn test_default_view() {
-        let meshchat = test_helper::test_app();
+        let meshchat = test_app();
         assert_eq!(meshchat.current_view, DeviceListView);
     }
 
     #[test]
     fn navigate_to_device_view() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let _ = meshchat.update(Navigation(View::DeviceView(None)));
         assert_eq!(meshchat.current_view, View::DeviceView(None));
     }
 
     #[test]
     fn show_settings() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let _ = meshchat.update(OpenSettingsDialog);
         assert!(meshchat.showing_settings);
     }
 
     #[test]
     fn hide_settings() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let _ = meshchat.update(OpenSettingsDialog);
         assert!(meshchat.showing_settings);
         let _ = meshchat.update(CloseSettingsDialog);
@@ -688,7 +713,7 @@ mod tests {
 
     #[test]
     fn escape_hide_settings() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let _ = meshchat.update(OpenSettingsDialog);
         assert!(meshchat.showing_settings);
 
@@ -707,7 +732,7 @@ mod tests {
 
     #[test]
     fn test_title_no_unreads() {
-        let meshchat = test_helper::test_app();
+        let meshchat = test_app();
         assert_eq!(
             meshchat.title(),
             format!("MeshChat {}", env!("CARGO_PKG_VERSION"))
@@ -716,14 +741,14 @@ mod tests {
 
     #[test]
     fn test_title_unreads() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         meshchat.new_message(NewTextMessage("Hello World".into()));
         assert_eq!(meshchat.title(), format!("MeshChat {} (1 unread)", VERSION));
     }
 
     #[test]
     fn test_title_multiple_unreads() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         meshchat.new_message(NewTextMessage("Message 1".into()));
         meshchat.new_message(NewTextMessage("Message 2".into()));
         meshchat.new_message(NewTextMessage("Message 3".into()));
@@ -739,8 +764,8 @@ mod tests {
     fn test_view_equality() {
         assert_eq!(View::DeviceView(None), View::DeviceView(None));
         assert_eq!(
-            View::DeviceView(Some(ChannelId::Channel(0.into()))),
-            View::DeviceView(Some(ChannelId::Channel(0.into())))
+            View::DeviceView(Some(ConversationId::Channel(0.into()))),
+            View::DeviceView(Some(ConversationId::Channel(0.into())))
         );
         assert_ne!(DeviceListView, View::DeviceView(None));
     }
@@ -776,7 +801,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -810,7 +835,7 @@ mod tests {
             time: 0,
             location_source: 0,
             altitude_source: 0,
-            timestamp: TimeStamp::from(0),
+            timestamp: TimeStamp::from(0u64),
             timestamp_millis_adjust: 0,
             altitude_hae: None,
             altitude_geoidal_separation: None,
@@ -837,14 +862,14 @@ mod tests {
 
     #[test]
     fn test_now_returns_valid_timestamp() {
-        let now = MeshChat::now();
+        let now = TimeStamp::now();
         // Should be a reasonable recent timestamp (after 2020)
-        assert!(now > TimeStamp::from(1577836800)); // Jan 1, 2020
+        assert!(now > TimeStamp::from(1577836800u64)); // Jan 1, 2020
     }
 
     #[test]
     fn test_toggle_node_favourite() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         assert!(!meshchat.config.fav_nodes.contains(&NodeId::from(12345u64)));
 
         // Toggle on
@@ -858,7 +883,7 @@ mod tests {
 
     #[test]
     fn test_add_node_alias() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         assert!(meshchat.config.aliases.is_empty());
 
         let _ = meshchat.update(AddNodeAlias(NodeId::from(123u64), "My Friend".to_string()));
@@ -870,7 +895,7 @@ mod tests {
 
     #[test]
     fn test_add_empty_node_alias() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let _ = meshchat.update(AddNodeAlias(NodeId::from(123u64), "".to_string()));
         // Empty alias should not be added
         assert!(!meshchat.config.aliases.contains_key(&NodeId::from(123u64)));
@@ -878,7 +903,7 @@ mod tests {
 
     #[test]
     fn test_remove_node_alias() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         meshchat
             .config
             .aliases
@@ -890,7 +915,7 @@ mod tests {
 
     #[test]
     fn test_add_device_alias() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         assert!(meshchat.config.device_aliases.is_empty());
 
         let _ = meshchat.update(AddDeviceAlias(
@@ -905,7 +930,7 @@ mod tests {
 
     #[test]
     fn test_remove_device_alias() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         meshchat
             .config
             .device_aliases
@@ -922,7 +947,7 @@ mod tests {
 
     #[test]
     fn test_toggle_show_position_updates() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let initial = meshchat.config.show_position_updates;
 
         let _ = meshchat.update(ToggleShowPositionUpdates);
@@ -934,7 +959,7 @@ mod tests {
 
     #[test]
     fn test_toggle_show_user_updates() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let initial = meshchat.config.show_user_updates;
 
         let _ = meshchat.update(ToggleShowUserUpdates);
@@ -943,7 +968,7 @@ mod tests {
 
     #[test]
     fn test_toggle_auto_reconnect() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let initial = meshchat.config.auto_reconnect;
 
         let _ = meshchat.update(ToggleAutoReconnect);
@@ -952,7 +977,7 @@ mod tests {
 
     #[test]
     fn test_toggle_auto_update() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let initial = meshchat.config.auto_update_startup;
 
         let _ = meshchat.update(ToggleAutoUpdate);
@@ -963,7 +988,7 @@ mod tests {
     fn test_history_length_selected() {
         use crate::config::HistoryLength;
 
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let _ = meshchat.update(HistoryLengthSelected(HistoryLength::NumberOfMessages(50)));
         assert_eq!(
             meshchat.config.history_length,
@@ -973,7 +998,7 @@ mod tests {
 
     #[test]
     fn test_show_user_info() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         assert!(meshchat.show_user.is_none());
 
         let user = MCUser {
@@ -995,7 +1020,7 @@ mod tests {
 
     #[test]
     fn test_close_show_user() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         meshchat.show_user = Some(MCUser {
             id: "test".to_string(),
             long_name: "Test".to_string(),
@@ -1015,7 +1040,7 @@ mod tests {
 
     #[test]
     fn test_none_message_does_nothing() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = test_app();
         let initial_view = meshchat.current_view.clone();
         let _ = meshchat.update(Message::None);
         assert_eq!(meshchat.current_view, initial_view);

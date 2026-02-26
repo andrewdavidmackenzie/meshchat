@@ -1,11 +1,12 @@
+use crate::Message;
 use crate::Message::{
     HistoryLengthSelected, ToggleAutoReconnect, ToggleAutoUpdate, ToggleSaveWindowPosition,
     ToggleSaveWindowSize, ToggleShowPositionUpdates, ToggleShowUserUpdates,
 };
-use crate::channel_id::{ChannelId, NodeId};
+use crate::conversation_id::{ConversationId, NodeId};
 use crate::device_list::RadioType;
 use crate::styles::{picker_header_style, tooltip_style};
-use crate::{MeshChat, Message};
+use crate::timestamp::TimeStamp;
 use directories::ProjectDirs;
 use iced::font::Weight;
 use iced::widget::{Column, container, pick_list, text, toggler};
@@ -27,7 +28,7 @@ pub struct Config {
     #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
     pub ble_device: Option<(String, RadioType)>,
     #[serde(default, rename = "channel", skip_serializing_if = "Option::is_none")]
-    pub channel_id: Option<ChannelId>,
+    pub conversation_id: Option<ConversationId>,
     #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]
     pub fav_nodes: HashSet<NodeId>,
     #[serde(default = "HashMap::new", skip_serializing_if = "HashMap::is_empty")]
@@ -157,7 +158,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             ble_device: None,
-            channel_id: None,
+            conversation_id: None,
             fav_nodes: HashSet::new(),
             aliases: HashMap::new(),
             device_aliases: HashMap::new(),
@@ -189,7 +190,7 @@ impl Config {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     ),
                 }
             })
@@ -373,7 +374,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     ),
                 }
             })
@@ -388,7 +389,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     ),
                 }
             })
@@ -410,7 +411,7 @@ mod tests {
 
     fn assert_default(config: Config) {
         assert!(config.ble_device.is_none());
-        assert!(config.channel_id.is_none());
+        assert!(config.conversation_id.is_none());
         assert!(config.fav_nodes.is_empty());
         assert!(config.aliases.is_empty());
         assert!(config.device_aliases.is_empty());
@@ -840,8 +841,8 @@ mod tests {
     }
 
     // Tests for WindowPosition and WindowSize
-    use crate::channel_id::NodeId;
     use crate::config::{WindowPosition, WindowSize};
+    use crate::conversation_id::NodeId;
     use crate::device_list::RadioType;
     use iced::{Point, Size};
 

@@ -2,12 +2,13 @@ pub mod subscription;
 
 pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e);
 
-use crate::channel_id::ChannelId::Node;
-use crate::channel_id::{MessageId, NodeId};
-use crate::channel_view_entry::MCMessage;
-use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
-use crate::device::{SubscriptionEvent, TimeStamp};
-use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
+use crate::conversation_id::ConversationId::Node;
+use crate::conversation_id::{MessageId, NodeId};
+use crate::device::DeviceEvent;
+use crate::device::DeviceEvent::{MCMessageReceived, NewChannel};
+use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser};
+use crate::message::MCContent;
+use crate::timestamp::TimeStamp;
 use meshcore_rs::ContactMessage;
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;
@@ -153,20 +154,20 @@ impl From<DiscoverEntry> for MCNodeInfo {
 }
 
 /// Convert from a ContactMessage to a SubscriptionEvent::MCMessageReceived
-impl From<ContactMessage> for SubscriptionEvent {
+impl From<ContactMessage> for DeviceEvent {
     fn from(contact_message: ContactMessage) -> Self {
         let node_id = (&contact_message.sender_prefix).into();
         MCMessageReceived(
             Node(node_id),
             contact_message.sender_timestamp.into(),
             node_id,
-            MCMessage::NewTextMessage(contact_message.text),
-            MeshChat::now(),
+            MCContent::NewTextMessage(contact_message.text),
+            TimeStamp::now(),
         )
     }
 }
 
-impl From<ChannelInfoData> for SubscriptionEvent {
+impl From<ChannelInfoData> for DeviceEvent {
     fn from(channel: ChannelInfoData) -> Self {
         NewChannel(MCChannel {
             index: channel.channel_idx as i32,
@@ -177,7 +178,7 @@ impl From<ChannelInfoData> for SubscriptionEvent {
 
 impl From<TimeStamp> for MessageId {
     fn from(value: TimeStamp) -> Self {
-        MessageId::from(<TimeStamp as Into<u32>>::into(value))
+        MessageId::from(<TimeStamp as Into<u64>>::into(value))
     }
 }
 
@@ -221,7 +222,7 @@ impl From<[u8; 4]> for MessageId {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
+    use crate::device::DeviceEvent::{MCMessageReceived, NewChannel};
     use meshcore_rs::events::{
         AdvertisementData, ChannelInfoData, Contact, DiscoverEntry, Neighbour, SelfInfo,
     };
@@ -301,14 +302,14 @@ mod test {
     fn message_id_from_expected_ack_basic() {
         let expected_ack = [0x01, 0x02, 0x03, 0x04];
         let message_id: MessageId = expected_ack.into();
-        assert_eq!(message_id, MessageId::from(0x01020304));
+        assert_eq!(message_id, MessageId::from(0x01020304u64));
     }
 
     #[test]
     fn message_id_from_expected_ack_all_zeros() {
         let expected_ack = [0x00, 0x00, 0x00, 0x00];
         let message_id: MessageId = expected_ack.into();
-        assert_eq!(message_id, MessageId::from(0));
+        assert_eq!(message_id, MessageId::from(0u64));
     }
 
     #[test]
@@ -322,7 +323,7 @@ mod test {
 
     #[test]
     fn contact_message_to_subscription_event() {
-        let before_conversion = MeshChat::now();
+        let before_conversion = TimeStamp::now();
         let message = ContactMessage {
             sender_prefix: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
             path_len: 0,
@@ -333,18 +334,18 @@ mod test {
             signature: None,
         };
 
-        let event: SubscriptionEvent = message.into();
-        let after_conversion = MeshChat::now();
+        let event: DeviceEvent = message.into();
+        let after_conversion = TimeStamp::now();
 
-        let MCMessageReceived(channel_id, _msg_id, from, msg, event_timestamp) = event else {
+        let MCMessageReceived(conversation_id, _msg_id, from, msg, event_timestamp) = event else {
             unreachable!("Expected MCMessageReceived event")
         };
 
         // Direct message should use Node channel ID
         let expected_node_id = NodeId::from(0xAABB_CCDD_EEFF_0000_u64);
-        assert_eq!(channel_id, Node(expected_node_id));
+        assert_eq!(conversation_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
-        // Timestamp should be local time (from MeshChat::now()), not the sender_timestamp
+        // Timestamp should be local time (from TimeStamp::now()()()), not the sender_timestamp
         assert!(
             event_timestamp >= before_conversion && event_timestamp <= after_conversion,
             "Event timestamp should be a local timestamp",
@@ -362,7 +363,7 @@ mod test {
             secret: [0u8; 16],
         };
 
-        let event: SubscriptionEvent = channel_info.into();
+        let event: DeviceEvent = channel_info.into();
 
         let NewChannel(channel) = event else {
             unreachable!("Expected NewChannel event")
@@ -380,7 +381,7 @@ mod test {
             secret: [0xFF; 16],
         };
 
-        let event: SubscriptionEvent = channel_info.into();
+        let event: DeviceEvent = channel_info.into();
 
         let NewChannel(channel) = event else {
             unreachable!("Expected NewChannel event")
@@ -398,7 +399,7 @@ mod test {
             secret: [0u8; 16],
         };
 
-        let event: SubscriptionEvent = channel_info.into();
+        let event: DeviceEvent = channel_info.into();
 
         let NewChannel(channel) = event else {
             unreachable!("Expected NewChannel event")

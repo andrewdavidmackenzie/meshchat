@@ -9,19 +9,17 @@ use iced::window;
 
 mod meshchat;
 
-mod channel_view;
-mod channel_view_entry;
 mod config;
+mod conversation;
 mod device;
 mod device_list;
 mod discovery;
+mod message;
 mod styles;
 mod widgets;
 
-mod channel_id;
+mod conversation_id;
 mod notification;
-#[cfg(test)]
-mod test_helper;
 
 #[cfg(feature = "meshcore")]
 mod meshc;
@@ -31,6 +29,7 @@ mod mesht;
 #[rustfmt::skip]
 /// Icons generated as a font using iced_fontello
 mod icons;
+mod timestamp;
 
 pub use crate::meshchat::Message;
 

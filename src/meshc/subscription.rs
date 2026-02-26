@@ -1,14 +1,14 @@
-use crate::channel_id::ChannelId::{Channel, Node};
-use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
-use crate::device::SubscriberMessage::{
+use crate::conversation_id::ConversationId::{Channel, Node};
+use crate::conversation_id::{ChannelIndex, ConversationId, MessageId, NodeId};
+use crate::device::DeviceCommand::{
     Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
 };
-use crate::device::SubscriptionEvent::{
+use crate::device::DeviceEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
     MCMessageReceived, MessageACK, MyNodeNum, MyPosition, MyUserInfo, NewChannel, NewNode,
     SendError,
 };
-use crate::device::{SubscriberMessage, SubscriptionEvent};
+use crate::device::{DeviceCommand, DeviceEvent};
 use crate::device_list::RadioType;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
 use futures::{SinkExt, Stream};
@@ -23,8 +23,9 @@ use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 
-use crate::channel_view_entry::MCMessage;
-use crate::meshchat::{MCPosition, MCUser, MeshChat};
+use crate::meshchat::{MCPosition, MCUser};
+use crate::message::MCContent;
+use crate::timestamp::TimeStamp;
 use tokio::time::{Duration, timeout};
 
 enum DeviceState {
@@ -41,7 +42,7 @@ struct RadioCache {
     /// Contact Name (String), Contact Node ID (NodeId)
     known_contacts: HashMap<String, NodeId>,
     /// Messages that have been sent (by MessageId) that are pending an ACK (ChannelId for the message)
-    pending_ack: HashMap<MessageId, ChannelId>,
+    pending_ack: HashMap<MessageId, ConversationId>,
 }
 
 impl RadioCache {
@@ -56,21 +57,18 @@ impl RadioCache {
         }
     }
 }
-/// A stream of [SubscriptionEvent] for comms between the app and the radio
-pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
+/// A stream of [DeviceEvent] for comms between the app and the radio
+pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
     stream::channel(
         100,
-        move |mut gui_sender: futures_channel::mpsc::Sender<SubscriptionEvent>| async move {
+        move |mut gui_sender: futures_channel::mpsc::Sender<DeviceEvent>| async move {
             let mut device_state = Disconnected;
             let mut radio_cache = RadioCache::default();
-            let (subscriber_sender, mut subscriber_receiver) = channel::<SubscriberMessage>(100);
+            let (subscriber_sender, mut subscriber_receiver) = channel::<DeviceCommand>(100);
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
             let _ = gui_sender
-                .send(SubscriptionEvent::Ready(
-                    subscriber_sender,
-                    RadioType::MeshCore,
-                ))
+                .send(DeviceEvent::Ready(subscriber_sender, RadioType::MeshCore))
                 .await;
 
             // Convert the channels to a `Stream`.
@@ -79,7 +77,7 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                       yield item;
                   }
             })
-                as Pin<Box<dyn Stream<Item = SubscriberMessage> + Send>>;
+                as Pin<Box<dyn Stream<Item = DeviceCommand> + Send>>;
 
             loop {
                 match device_state {
@@ -128,42 +126,46 @@ pub fn subscribe() -> impl Stream<Item = SubscriptionEvent> {
                                 {
                                     let result = match message {
                                         Disconnect => break,
-                                        SendText(text, channel_id, reply_to_message_id) => {
+                                        SendText(text, conversation_id, reply_to_message_id) => {
                                             send_text_message(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 text,
                                                 reply_to_message_id,
                                                 &mut gui_sender,
                                             )
                                             .await
                                         }
-                                        SendPosition(channel_id, mcposition) => {
+                                        SendPosition(conversation_id, mcposition) => {
                                             send_position(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 mcposition,
                                                 &mut gui_sender,
                                             )
                                             .await
                                         }
-                                        SendSelfInfo(channel_id, mcuser) => {
+                                        SendSelfInfo(conversation_id, mcuser) => {
                                             send_self_info(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 mcuser,
                                                 &mut gui_sender,
                                             )
                                             .await
                                         }
-                                        SendEmojiReply(emoji, channel_id, reply_to_message_id) => {
+                                        SendEmojiReply(
+                                            emoji,
+                                            conversation_id,
+                                            reply_to_message_id,
+                                        ) => {
                                             send_emoji_reply(
                                                 &meshcore,
                                                 &mut radio_cache,
-                                                channel_id,
+                                                conversation_id,
                                                 emoji,
                                                 reply_to_message_id,
                                                 &mut gui_sender,
@@ -245,7 +247,7 @@ async fn do_disconnect(meshcore: MeshCore) -> meshcore_rs::Result<()> {
 async fn initiate(
     radio_cache: &mut RadioCache,
     meshcore: &MeshCore,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
     // Send APPSTART to initialise connection and get device info
     let self_info = meshcore.commands().lock().await.send_appstart().await?;
@@ -274,7 +276,7 @@ async fn initiate(
 /// Fetch all known channels from the radio and send them to the GUI
 async fn get_channels(
     meshcore: &MeshCore,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
     let mut index = 0;
     while let Ok(channel) = meshcore.commands().lock().await.get_channel(index).await {
@@ -294,7 +296,7 @@ async fn get_channels(
 async fn get_contacts(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
     let contacts = meshcore
         .commands()
@@ -328,7 +330,7 @@ async fn get_neighbours(
 async fn get_pending_messages(
     radio_cache: &mut RadioCache,
     meshcore: &MeshCore,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     while let Ok(Some(event)) = meshcore.commands().lock().await.get_msg().await {
         match event.event_type {
@@ -351,12 +353,12 @@ async fn get_pending_messages(
 async fn send_text_message(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     text: String,
     _reply_to_message_id: Option<MessageId>,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
-    match channel_id {
+    match conversation_id {
         Channel(channel_index) => {
             // No message sent info returned for a channel message
             meshcore
@@ -367,14 +369,14 @@ async fn send_text_message(
                 .await?;
 
             // Reflect the message back into the GUI
-            let msg = MCMessage::NewTextMessage(text);
+            let msg = MCContent::NewTextMessage(text);
             gui_sender
                 .send(MCMessageReceived(
-                    channel_id,
-                    MeshChat::now().into(),
+                    conversation_id,
+                    TimeStamp::now().into(),
                     radio_cache.self_id,
                     msg,
-                    MeshChat::now(),
+                    TimeStamp::now(),
                 ))
                 .await
                 .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -393,14 +395,14 @@ async fn send_text_message(
             radio_cache.pending_ack.insert(message_id, Node(node_id));
 
             // Reflect the message back into the GUI
-            let msg = MCMessage::NewTextMessage(text);
+            let msg = MCContent::NewTextMessage(text);
             gui_sender
                 .send(MCMessageReceived(
-                    channel_id,
+                    conversation_id,
                     message_id,
                     radio_cache.self_id,
                     msg,
-                    MeshChat::now(),
+                    TimeStamp::now(),
                 ))
                 .await
                 .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -415,15 +417,15 @@ async fn send_text_message(
 async fn send_emoji_reply(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     text: String,
     reply_to_message_id: MessageId,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
     send_text_message(
         meshcore,
         radio_cache,
-        channel_id,
+        conversation_id,
         text,
         Some(reply_to_message_id),
         gui_sender,
@@ -435,28 +437,44 @@ async fn send_emoji_reply(
 async fn send_position(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     position: MCPosition,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
     let text = format!(
         "My position https://maps.google.com/?q={:.7},{:.7}",
         position.latitude, position.longitude
     );
 
-    send_text_message(meshcore, radio_cache, channel_id, text, None, gui_sender).await
+    send_text_message(
+        meshcore,
+        radio_cache,
+        conversation_id,
+        text,
+        None,
+        gui_sender,
+    )
+    .await
 }
 
 /// Send SelfInfo to a channel or a node
 async fn send_self_info(
     meshcore: &MeshCore,
     radio_cache: &mut RadioCache,
-    channel_id: ChannelId,
+    conversation_id: ConversationId,
     user: MCUser,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
     let text = format!("My user info: {user}");
-    send_text_message(meshcore, radio_cache, channel_id, text, None, gui_sender).await
+    send_text_message(
+        meshcore,
+        radio_cache,
+        conversation_id,
+        text,
+        None,
+        gui_sender,
+    )
+    .await
 }
 
 /// Advertise my presence on the network to other nodes
@@ -468,7 +486,7 @@ async fn send_advert(meshcore: &MeshCore) -> meshcore_rs::Result<MeshCoreEvent> 
 async fn handle_self_info(
     radio_cache: &mut RadioCache,
     self_info: SelfInfo,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     radio_cache.self_id = (&self_info.public_key).into();
 
@@ -495,7 +513,7 @@ async fn handle_self_info(
 async fn handle_device_info(
     radio_cache: &mut RadioCache,
     device_info: DeviceInfoData,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     // update the info stored in radio_cache
     radio_cache.device_info = device_info.clone();
@@ -510,7 +528,7 @@ async fn handle_device_info(
 async fn handle_new_contact(
     radio_cache: &mut RadioCache,
     contact: Contact,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     let node_id = (&contact.prefix()).into();
     radio_cache
@@ -525,7 +543,7 @@ async fn handle_new_contact(
 /// Handle reception of Battery Info and send it to the GUI
 async fn handle_battery_info(
     battery_info: &BatteryInfo,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     gui_sender
         .send(DeviceBatteryLevel(Some(battery_info.level as u32)))
@@ -535,7 +553,7 @@ async fn handle_battery_info(
 
 async fn handle_new_channel(
     radio_cache: &mut RadioCache,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
     channel_info: ChannelInfoData,
 ) {
     radio_cache.known_channels.insert(channel_info.channel_idx);
@@ -547,7 +565,7 @@ async fn handle_new_channel(
 
 async fn handle_neighbours(
     neighbours: NeighboursData,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     for neighbour in neighbours.neighbours {
         gui_sender
@@ -560,7 +578,7 @@ async fn handle_neighbours(
 async fn handle_new_channel_message(
     radio_cache: &RadioCache,
     channel_message: ChannelMessage,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     // extract the node name, look it up and get the node ID or else default to a node id of 0
     let (node_id, text) = if let Some((node_name, text)) = channel_message.text.split_once(": ") {
@@ -579,8 +597,8 @@ async fn handle_new_channel_message(
         Channel(ChannelIndex::from(channel_message.channel_idx)),
         channel_message.sender_timestamp.into(),
         node_id,
-        MCMessage::NewTextMessage(text.to_string()),
-        MeshChat::now(),
+        MCContent::NewTextMessage(text.to_string()),
+        TimeStamp::now(),
     );
 
     gui_sender
@@ -591,7 +609,7 @@ async fn handle_new_channel_message(
 
 async fn handle_new_contact_message(
     contact_message: ContactMessage,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
     gui_sender
         .send(contact_message.into())
@@ -603,7 +621,7 @@ async fn handle_radio_event(
     radio_cache: &mut RadioCache,
     meshcore: &MeshCore,
     meshcore_event: Box<MeshCoreEvent>,
-    gui_sender: &mut futures_channel::mpsc::Sender<SubscriptionEvent>,
+    gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
     match meshcore_event.event_type {
         EventType::NeighboursResponse => {
@@ -686,9 +704,9 @@ async fn handle_radio_event(
         EventType::Ack => {
             if let EventPayload::Ack { tag } = meshcore_event.payload {
                 let message_id: MessageId = tag.into();
-                if let Some(channel_id) = radio_cache.pending_ack.remove(&message_id) {
+                if let Some(conversation_id) = radio_cache.pending_ack.remove(&message_id) {
                     gui_sender
-                        .send(MessageACK(channel_id, message_id))
+                        .send(MessageACK(conversation_id, message_id))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                 }
@@ -711,7 +729,7 @@ async fn handle_radio_event(
         EventType::LogData => { /* LogData payload */ }
         EventType::MsgSent => { /* Doesn't have the message body to reflect back to GUI */ }
         _ => {
-            println!(
+            eprintln!(
                 "Unhandled Event Type ({}) = {meshcore_event:?}",
                 meshcore_event.event_type as u32
             );
@@ -723,16 +741,14 @@ async fn handle_radio_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::device::SubscriptionEvent;
+    use crate::device::DeviceEvent;
+    use crate::timestamp::TimeStamp;
     use futures::StreamExt;
     use futures::channel::mpsc;
     use meshcore_rs::events::{BatteryInfo, SelfInfo};
 
     // Helper to create a test sender/receiver pair
-    fn create_test_channel() -> (
-        mpsc::Sender<SubscriptionEvent>,
-        mpsc::Receiver<SubscriptionEvent>,
-    ) {
+    fn create_test_channel() -> (mpsc::Sender<DeviceEvent>, mpsc::Receiver<DeviceEvent>) {
         mpsc::channel(100)
     }
 
@@ -1138,9 +1154,9 @@ mod tests {
             snr: None,
         };
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         handle_new_channel_message(&radio_cache, channel_message, &mut sender).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver
             .next()
@@ -1173,9 +1189,9 @@ mod tests {
             signature: None,
         };
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         handle_new_contact_message(contact_message, &mut sender).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver
             .next()

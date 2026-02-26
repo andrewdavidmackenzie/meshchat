@@ -1,41 +1,42 @@
-use crate::channel_view::{ChannelView, ChannelViewMessage, MESSAGE_INPUT_ID};
-use crate::channel_view_entry::{ChannelViewEntry, MCMessage};
 use crate::config::{Config, HistoryLength};
+use crate::conversation::{ChannelViewMessage, Conversation, MESSAGE_INPUT_ID};
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-use crate::device::DeviceViewMessage::{
+use crate::device::DeviceCommand::{
+    Connect, Disconnect, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
+};
+use crate::device::DeviceEvent::{
+    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
+    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
+};
+use crate::device::DeviceMessage::{
     AliasInput, ChannelMsg, ClearFilter, ConnectRequest, DisconnectRequest, ForwardMessage,
     SearchInput, SendEmojiReplyMessage, SendPositionMessage, SendSelfInfoMessage, SendTextMessage,
     ShowChannel, StartEditingAlias, StartForwardingMessage, StopForwardingMessage,
     SubscriptionMessage,
 };
-use crate::device::SubscriberMessage::{
-    Connect, Disconnect, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
-};
-use crate::device::SubscriptionEvent::{
-    ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
-    DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
-};
+use crate::message::{MCContent, MCMessage};
 use crate::{MeshChat, Message, icons};
 
 use crate::Message::{
     AddNodeAlias, AppError, DeviceViewEvent, Navigation, OpenSettingsDialog, OpenUrl,
     RemoveNodeAlias, ShowLocation, ShowUserInfo, ToggleNodeFavourite,
 };
-use crate::channel_id::ChannelId::Node;
-use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
-use crate::channel_view_entry::MCMessage::{PositionMessage, UserMessage};
-use crate::device::SubscriptionEvent::{
+use crate::conversation_id::ConversationId::Node;
+use crate::conversation_id::{ChannelIndex, ConversationId, MessageId, NodeId};
+use crate::device::DeviceEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
 };
 use crate::device_list::{DeviceList, RadioType};
 use crate::meshchat::View::DeviceListView;
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, View};
+use crate::message::MCContent::{PositionMessage, UserMessage};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
     fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
     text_input_style, tooltip_style,
 };
+use crate::timestamp::TimeStamp;
 use crate::widgets::battery::{Battery, BatteryState};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -48,7 +49,6 @@ use meshcore_rs::MeshCoreEvent;
 #[cfg(feature = "meshtastic")]
 use meshtastic::protobufs::FromRadio;
 use std::collections::HashMap;
-use std::ops::Sub;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -65,43 +65,13 @@ impl Default for ConnectionState {
     }
 }
 
-/// Time in EPOC in seconds timestamp
-#[derive(PartialEq, PartialOrd, Debug, Default, Clone, Copy)]
-pub struct TimeStamp(u32);
-
-impl From<u32> for TimeStamp {
-    fn from(value: u32) -> Self {
-        TimeStamp(value)
-    }
-}
-
-impl From<TimeStamp> for u32 {
-    fn from(value: TimeStamp) -> Self {
-        value.0
-    }
-}
-
-impl From<TimeStamp> for i64 {
-    fn from(value: TimeStamp) -> Self {
-        value.0 as i64
-    }
-}
-
-impl Sub for TimeStamp {
-    type Output = TimeStamp;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        TimeStamp::from(self.0.saturating_sub(rhs.0))
-    }
-}
-
 const CHANNEL_SEARCH_ID: Id = Id::new("message_input");
 
 /// Events are Messages sent from the subscription to the GUI
 #[derive(Debug, Clone)]
-pub enum SubscriptionEvent {
-    /// The subscription is ready to receive [SubscriberMessage] from the GUI
-    Ready(Sender<SubscriberMessage>, RadioType),
+pub enum DeviceEvent {
+    /// The subscription is ready to receive [DeviceCommand] from the GUI
+    Ready(Sender<DeviceCommand>, RadioType),
     ConnectedEvent(String, RadioType),
     ConnectingEvent(String),
     DisconnectingEvent(String),
@@ -116,23 +86,23 @@ pub enum SubscriptionEvent {
     NewNode(MCNodeInfo),
     RadioNotification(String, TimeStamp), // Message, TimeStamp
     /// ChannelId - channel sent to, MessageId, NodeId - sending node, The Message itself, Timestamp
-    MCMessageReceived(ChannelId, MessageId, NodeId, MCMessage, TimeStamp),
+    MCMessageReceived(ConversationId, MessageId, NodeId, MCContent, TimeStamp),
     /// ChannelId, MessageId
-    MessageACK(ChannelId, MessageId),
-    NewNodeInfo(ChannelId, MessageId, NodeId, MCUser, TimeStamp), // channel_id, id, from, MCUser, TimeStamp
-    NewNodePosition(ChannelId, MessageId, NodeId, MCPosition, TimeStamp), // channel_id, id, from, MCPosition, TimeStamp
+    MessageACK(ConversationId, MessageId),
+    NewNodeInfo(ConversationId, MessageId, NodeId, MCUser, TimeStamp), // conversation_id, id, from, MCUser, TimeStamp
+    NewNodePosition(ConversationId, MessageId, NodeId, MCPosition, TimeStamp), // conversation_id, id, from, MCPosition, TimeStamp
     DeviceBatteryLevel(Option<u32>),
     ChannelName(i32, String), // channel number, name
 }
 
 /// Messages sent from the GUI to the subscription
-pub enum SubscriberMessage {
+pub enum DeviceCommand {
     Connect(String, RadioType),
     Disconnect,
-    SendText(String, ChannelId, Option<MessageId>), // Optional reply to message id
-    SendEmojiReply(String, ChannelId, MessageId),
-    SendPosition(ChannelId, MCPosition),
-    SendSelfInfo(ChannelId, MCUser),
+    SendText(String, ConversationId, Option<MessageId>), // Optional reply to message id
+    SendEmojiReply(String, ConversationId, MessageId),
+    SendPosition(ConversationId, MCPosition),
+    SendSelfInfo(ConversationId, MCUser),
     #[cfg(feature = "meshtastic")]
     MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
     #[cfg(feature = "meshcore")]
@@ -140,21 +110,21 @@ pub enum SubscriberMessage {
 }
 
 #[derive(Debug, Clone)]
-pub enum DeviceViewMessage {
-    ConnectRequest(String, RadioType, Option<ChannelId>),
+pub enum DeviceMessage {
+    ConnectRequest(String, RadioType, Option<ConversationId>),
     DisconnectRequest(bool), // bool is to exit or not
-    SubscriptionMessage(SubscriptionEvent),
-    ShowChannel(Option<ChannelId>),
-    ChannelMsg(ChannelId, ChannelViewMessage),
-    SendTextMessage(String, ChannelId, Option<MessageId>), // optional reply to message id
-    SendEmojiReplyMessage(MessageId, String, ChannelId),   // optional reply to message id
-    SendPositionMessage(ChannelId),
-    SendSelfInfoMessage(ChannelId),
+    SubscriptionMessage(DeviceEvent),
+    ShowChannel(Option<ConversationId>),
+    ChannelMsg(ConversationId, ChannelViewMessage),
+    SendTextMessage(String, ConversationId, Option<MessageId>), // optional reply to message id
+    SendEmojiReplyMessage(MessageId, String, ConversationId),   // optional reply to message id
+    SendPositionMessage(ConversationId),
+    SendSelfInfoMessage(ConversationId),
     SearchInput(String),
     StartEditingAlias(NodeId),
     AliasInput(String),
-    StartForwardingMessage(ChannelViewEntry),
-    ForwardMessage(ChannelId),
+    StartForwardingMessage(MCMessage),
+    ForwardMessage(ConversationId),
     StopForwardingMessage,
     ClearFilter,
 }
@@ -163,15 +133,15 @@ pub enum DeviceViewMessage {
 pub struct Device {
     connection_state: ConnectionState,
     #[cfg(feature = "meshtastic")]
-    meshtastic_sender: Option<Sender<SubscriberMessage>>,
+    meshtastic_sender: Option<Sender<DeviceCommand>>,
     #[cfg(feature = "meshcore")]
-    meshcore_sender: Option<Sender<SubscriberMessage>>,
+    meshcore_sender: Option<Sender<DeviceCommand>>,
     my_node_id: Option<NodeId>,
     my_position: Option<MCPosition>,
     my_user: Option<MCUser>,
-    viewing_channel: Option<ChannelId>,
+    viewing_conversation: Option<ConversationId>,
     /// Map of ChannelViews, indexed by ChannelId
-    pub channel_views: HashMap<ChannelId, ChannelView>,
+    conversations: HashMap<ConversationId, Conversation>,
     channels: Vec<MCChannel>,
     nodes: HashMap<NodeId, MCNodeInfo>, // all nodes known to the connected radio
     filter: String,
@@ -179,7 +149,7 @@ pub struct Device {
     battery_level: Option<u32>,
     editing_alias: Option<NodeId>,
     alias: String,
-    pub forwarding_message: Option<ChannelViewEntry>,
+    pub forwarding_message: Option<MCMessage>,
     history_length: HistoryLength,
     show_position_updates: bool,
     show_user_updates: bool,
@@ -197,8 +167,8 @@ impl Device {
     pub fn cancel_interactive(&mut self) {
         self.stop_editing_alias();
         self.forwarding_message = None;
-        if let Some(viewing_channel) = &self.viewing_channel
-            && let Some(channel_view) = self.channel_views.get_mut(viewing_channel)
+        if let Some(viewing_channel) = &self.viewing_conversation
+            && let Some(channel_view) = self.conversations.get_mut(viewing_channel)
         {
             channel_view.cancel_interactive();
         }
@@ -220,19 +190,19 @@ impl Device {
     }
 
     /// Return a true value to show we can show the device view, false for main to decide
-    pub fn update(&mut self, device_view_message: DeviceViewMessage) -> Task<Message> {
+    pub fn update(&mut self, device_view_message: DeviceMessage) -> Task<Message> {
         match device_view_message {
-            ConnectRequest(ble_device, radio_type, channel_id) => {
-                return self.subscriber_send(
+            ConnectRequest(ble_device, radio_type, conversation_id) => {
+                return self.device_send(
                     Connect(ble_device, radio_type),
-                    Navigation(View::DeviceView(channel_id)),
+                    Navigation(View::DeviceView(conversation_id)),
                 );
             }
             DisconnectRequest(exit) => {
                 self.exit_pending = exit;
-                return self.subscriber_send(Disconnect, Navigation(DeviceListView));
+                return self.device_send(Disconnect, Navigation(DeviceListView));
             }
-            ForwardMessage(channel_id) => {
+            ForwardMessage(conversation_id) => {
                 if let Some(entry) = self.forwarding_message.take() {
                     let message_text = format!(
                         "FWD from '{}': {}\n",
@@ -240,44 +210,46 @@ impl Device {
                         entry.message()
                     );
 
-                    return self.subscriber_send(
-                        SendText(message_text, channel_id, None),
-                        DeviceViewEvent(ShowChannel(Some(channel_id))),
+                    return self.device_send(
+                        SendText(message_text, conversation_id, None),
+                        DeviceViewEvent(ShowChannel(Some(conversation_id))),
                     );
                 }
             }
-            SendEmojiReplyMessage(reply_to_id, emoji, channel_id) => {
-                return self.subscriber_send(
-                    SendEmojiReply(emoji, channel_id, reply_to_id),
+            SendEmojiReplyMessage(reply_to_id, emoji, conversation_id) => {
+                return self.device_send(
+                    SendEmojiReply(emoji, conversation_id, reply_to_id),
                     Message::None,
                 );
             }
-            SendTextMessage(message, channel_id, reply_to_id) => {
-                return self
-                    .subscriber_send(SendText(message, channel_id, reply_to_id), Message::None);
+            SendTextMessage(message, conversation_id, reply_to_id) => {
+                return self.device_send(
+                    SendText(message, conversation_id, reply_to_id),
+                    Message::None,
+                );
             }
-            SendPositionMessage(channel_id) => {
+            SendPositionMessage(conversation_id) => {
                 if let Some(position) = &self.my_position {
-                    return self.subscriber_send(
-                        SendPosition(channel_id, position.clone()),
+                    return self.device_send(
+                        SendPosition(conversation_id, position.clone()),
                         Message::None,
                     );
                 }
             }
-            SendSelfInfoMessage(channel_id) => {
+            SendSelfInfoMessage(conversation_id) => {
                 if let Some(user) = &self.my_user {
                     return self
-                        .subscriber_send(SendSelfInfo(channel_id, user.clone()), Message::None);
+                        .device_send(SendSelfInfo(conversation_id, user.clone()), Message::None);
                 }
             }
-            ShowChannel(channel_id) => {
-                return self.channel_change(channel_id);
+            ShowChannel(conversation_id) => {
+                return self.channel_change(conversation_id);
             }
             SubscriptionMessage(subscription_event) => {
-                return self.process_subscription_event(subscription_event);
+                return self.process_device_event(subscription_event);
             }
-            ChannelMsg(channel_id, msg) => {
-                if let Some(channel_view) = self.channel_views.get_mut(&channel_id) {
+            ChannelMsg(conversation_id, msg) => {
+                if let Some(channel_view) = self.conversations.get_mut(&conversation_id) {
                     return channel_view.update(msg);
                 } else {
                     eprintln!("Error: No channel for ChannelMsg");
@@ -298,22 +270,18 @@ impl Device {
 
     /// Send a SubscriberMessage to the device_subscription, if successful, then send `success_message`
     /// and report any errors
-    fn subscriber_send(
-        &mut self,
-        subscriber_message: SubscriberMessage,
-        success_message: Message,
-    ) -> Task<Message> {
+    fn device_send(&mut self, command: DeviceCommand, success_message: Message) -> Task<Message> {
         // Either we are connected and know the radio type of we are disconnected and being asked
         // to connect to a specific type of radio
         let radio_type = if let Connected(_, radio_type) = self.connection_state {
             radio_type
-        } else if let Connect(_, radio_type) = &subscriber_message {
+        } else if let Connect(_, radio_type) = &command {
             *radio_type
         } else {
             return Task::perform(empty(), |_| DeviceViewEvent(SubscriptionMessage(NotReady)));
         };
 
-        let subscription_sender: Option<Sender<SubscriberMessage>> = match radio_type {
+        let subscription_sender: Option<Sender<DeviceCommand>> = match radio_type {
             #[cfg(feature = "meshtastic")]
             RadioType::Meshtastic => self.meshtastic_sender.clone(),
             #[cfg(feature = "meshcore")]
@@ -321,13 +289,13 @@ impl Device {
         };
 
         if let Some(sender) = subscription_sender {
-            let future = async move { sender.send(subscriber_message).await };
+            let future = async move { sender.send(command).await };
             Task::perform(future, |result| match result {
                 Ok(()) => success_message,
                 Err(e) => AppError(
                     "Connection Error".to_string(),
                     format!("{:?}", e),
-                    MeshChat::now(),
+                    TimeStamp::now(),
                 ),
             })
         } else {
@@ -336,22 +304,22 @@ impl Device {
     }
 
     /// Save the new channel (which could be None)
-    fn channel_change(&mut self, channel_id: Option<ChannelId>) -> Task<Message> {
-        if self.viewing_channel != channel_id {
-            self.viewing_channel = channel_id;
+    fn channel_change(&mut self, conversation_id: Option<ConversationId>) -> Task<Message> {
+        if self.viewing_conversation != conversation_id {
+            self.viewing_conversation = conversation_id;
 
             if let Connected(ble_device, radio_type) = &self.connection_state {
                 let device = ble_device.clone();
                 let radio = *radio_type;
 
-                let input_to_focus = match self.viewing_channel {
+                let input_to_focus = match self.viewing_conversation {
                     None => CHANNEL_SEARCH_ID,
                     Some(_channel) => MESSAGE_INPUT_ID,
                 };
 
                 // Focus on the correct input text and then save the config change
                 return operation::focus(input_to_focus).chain(Task::perform(empty(), move |_| {
-                    Message::DeviceAndChannelConfigChange(Some((device, radio)), channel_id)
+                    Message::DeviceAndChannelConfigChange(Some((device, radio)), conversation_id)
                 }));
             }
         }
@@ -370,11 +338,25 @@ impl Device {
         self.alias = String::new();
     }
 
-    /// Process an event sent by the subscription connected to the radio
-    fn process_subscription_event(
+    /// Process a new message arrival on this device
+    pub fn new_message(
         &mut self,
-        subscription_event: SubscriptionEvent,
+        conversation_id: &ConversationId,
+        new_message: MCMessage,
     ) -> Task<Message> {
+        if let Some(conversation) = self.conversations.get_mut(conversation_id) {
+            conversation.new_message(new_message, &self.history_length)
+        } else {
+            eprintln!(
+                "No channel for MCMessage: conversation_id = {:?}",
+                conversation_id
+            );
+            Task::none()
+        }
+    }
+
+    /// Process an event sent by the subscription connected to the radio
+    fn process_device_event(&mut self, subscription_event: DeviceEvent) -> Task<Message> {
         match subscription_event {
             ConnectingEvent(mac_address) => {
                 self.connection_state = Connecting(mac_address);
@@ -382,20 +364,20 @@ impl Device {
             },
             ConnectedEvent(ble_device, radio_type) => {
                 self.connection_state = Connected(ble_device.clone(), radio_type);
-                match self.viewing_channel {
+                match self.viewing_conversation {
                     None => {
-                        let channel_id = self.viewing_channel;
+                        let conversation_id = self.viewing_conversation;
                         let device = ble_device.clone();
                         Task::perform(empty(), move |_| {
                             Message::DeviceAndChannelConfigChange(
                                 Some((device, radio_type)),
-                                channel_id,
+                                conversation_id,
                             )
                         })
                     }
-                    Some(channel_id) => {
+                    Some(conversation_id) => {
                         Task::perform(empty(), move |_| {
-                            DeviceViewEvent(ShowChannel(Some(channel_id)))
+                            DeviceViewEvent(ShowChannel(Some(conversation_id)))
                         })
                     }
                 }
@@ -409,11 +391,11 @@ impl Device {
                     std::process::exit(0);
                 }
                 self.connection_state = Disconnected(Some(id), None);
-                self.channel_views.clear();
+                self.conversations.clear();
                 self.nodes.clear();
                 self.channels.clear();
                 self.my_node_id = None;
-                self.viewing_channel = None;
+                self.viewing_conversation = None;
                 Task::perform(empty(), |_| Navigation(DeviceListView))
             }
             #[allow(unused_variables)]
@@ -430,13 +412,13 @@ impl Device {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
-                        AppError(summary.clone(), detail.clone(), MeshChat::now())
+                        AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             SendError(summary, detail) => {
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
-                        AppError(summary.clone(), detail.clone(), MeshChat::now())
+                        AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             NotReady => {
@@ -444,7 +426,7 @@ impl Device {
                     .chain(Task::perform(empty(), move |_| {
                         AppError("Subscription not ready".to_string(),
                                  "An attempt was made to communicate to radio prior to the subscription being Ready".to_string(),
-                        MeshChat::now())
+                        TimeStamp::now())
                     }))
             }
             MyNodeNum(my_node_num) => {
@@ -476,25 +458,20 @@ impl Device {
                     )
                 })
             }
-            MCMessageReceived(channel_id, id, from, mc_message, timestamp) => {
-                if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                    let new_message = ChannelViewEntry::new(id, from, mc_message, timestamp);
-                    channel_view.new_message(new_message, &self.history_length)
-                } else {
-                    eprintln!("No channel for MCMessage: channel_id = {:?}", channel_id);
-                    Task::none()
+            MCMessageReceived(conversation_id, id, from, mc_content, timestamp) => {
+                let new_message = MCMessage::new(id, from, mc_content, timestamp);
+                self.new_message(&conversation_id, new_message)
                 }
-            }
             DeviceBatteryLevel(level) => {
                 self.battery_level = level;
                 Task::none()
             }
-            NewNodeInfo(channel_id, id, from, mc_user, timestamp) => {
+            NewNodeInfo(conversation_id, id, from, mc_user, timestamp) => {
                 self.update_node_user(from, &mc_user);
 
                 if self.show_user_updates {
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(id, from, UserMessage(mc_user), timestamp);
+                    if let Some(channel_view) = &mut self.conversations.get_mut(&conversation_id) {
+                        let new_message = MCMessage::new(id, from, UserMessage(mc_user), timestamp);
                         return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("NewNodeInfo: Node '{}' unknown", mc_user.long_name);
@@ -502,11 +479,11 @@ impl Device {
                 }
                 Task::none()
             }
-            NewNodePosition(channel_id, id, from, position, timestamp) => {
+            NewNodePosition(conversation_id, id, from, position, timestamp) => {
                 self.update_node_position(from, &position);
                 if self.show_position_updates {
-                    if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                            let new_message = ChannelViewEntry::new(
+                    if let Some(channel_view) = &mut self.conversations.get_mut(&conversation_id) {
+                            let new_message = MCMessage::new(
                                 id,
                                 from,
                                 PositionMessage(position),
@@ -514,7 +491,7 @@ impl Device {
                             );
                             return channel_view.new_message(new_message, &self.history_length);
                     } else {
-                        eprintln!("No channel for: {}", channel_id);
+                        eprintln!("No channel for: {}", conversation_id);
                     }
                 }
                 Task::none()
@@ -523,8 +500,8 @@ impl Device {
                 self.set_channel_name(channel_number, name);
                 Task::none()
             }
-            MessageACK(channel_id, message_id) => {
-                if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
+            MessageACK(conversation_id, message_id) => {
+                if let Some(channel_view) = &mut self.conversations.get_mut(&conversation_id) {
                     channel_view.ack(message_id)
                 } else {
                     eprintln!("No channel for MessageACK");
@@ -549,18 +526,20 @@ impl Device {
 
     ///  Add a new node to the list if it has the User info we want and is not marked to be ignored
     fn add_node(&mut self, node_info: MCNodeInfo) {
-        if node_info.is_ignored {
-            println!("Node is ignored!: {:?}", node_info);
-        } else if let Some(my_node_num) = self.my_node_id {
+        if !node_info.is_ignored
+            && let Some(my_node_num) = self.my_node_id
+        {
             if node_info.node_id == my_node_num {
                 self.my_position = node_info.position.clone();
                 self.my_user = node_info.user.clone();
             }
 
-            let channel_id = Node(node_info.node_id);
+            let conversation_id = Node(node_info.node_id);
             self.nodes.insert(node_info.node_id, node_info);
-            self.channel_views
-                .insert(channel_id, ChannelView::new(channel_id, my_node_num));
+            self.conversations.insert(
+                conversation_id,
+                Conversation::new(conversation_id, my_node_num),
+            );
         }
     }
 
@@ -579,9 +558,12 @@ impl Device {
         {
             if let Some(my_node_num) = self.my_node_id {
                 self.channels.push(channel);
-                let channel_id = ChannelId::Channel(ChannelIndex::from(self.channels.len() - 1));
-                self.channel_views
-                    .insert(channel_id, ChannelView::new(channel_id, my_node_num));
+                let conversation_id =
+                    ConversationId::Channel(ChannelIndex::from(self.channels.len() - 1));
+                self.conversations.insert(
+                    conversation_id,
+                    Conversation::new(conversation_id, my_node_num),
+                );
             }
         }
     }
@@ -654,7 +636,7 @@ impl Device {
                     )));
                 let mut button = button(name_row).style(button_chip_style);
                 // If viewing a channel of the device, allow navigating back to the device view
-                if self.viewing_channel.is_some() {
+                if self.viewing_conversation.is_some() {
                     button = button.on_press(DeviceViewEvent(ShowChannel(None)));
                 }
 
@@ -676,8 +658,8 @@ impl Device {
         };
 
         // possibly add a node/channel name button next
-        match &self.viewing_channel {
-            Some(ChannelId::Channel(channel_index)) => {
+        match &self.viewing_conversation {
+            Some(ConversationId::Channel(channel_index)) => {
                 let index: usize = (*channel_index).into();
                 if let Some(channel) = self.channels.get(index) {
                     let channel_name = format!("🛜  {}", channel.name);
@@ -726,15 +708,15 @@ impl Device {
 
     /// Count all the unread messages available to this device across channels and nodes
     pub fn unread_count(&self, show_position_updates: bool, show_user_updates: bool) -> usize {
-        self.channel_views.values().fold(0, |acc, channel| {
+        self.conversations.values().fold(0, |acc, channel| {
             acc + channel.unread_count(show_position_updates, show_user_updates)
         })
     }
 
     /// Create the Element that shows the channels, nodes, etc.
     pub fn view<'a>(&'a self, config: &'a Config) -> Element<'a, Message> {
-        if let Some(channel_number) = &self.viewing_channel
-            && let Some(channel_view) = self.channel_views.get(channel_number)
+        if let Some(channel_number) = &self.viewing_conversation
+            && let Some(channel_view) = self.conversations.get(channel_number)
         {
             return channel_view.view(
                 &self.nodes,
@@ -747,10 +729,11 @@ impl Device {
             );
         }
 
-        let select = |channel_number: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_number)));
+        let select =
+            |channel_number: ConversationId| DeviceViewEvent(ShowChannel(Some(channel_number)));
 
         // If not viewing a channel/user, show the list of channels and users
-        let channel_and_node_scroll = self.channel_and_node_list(config, true, select);
+        let channel_and_node_scroll = self.conversation_list(config, true, select);
 
         // Add a search box at the top, outside the scrollable area
         Column::new()
@@ -785,23 +768,23 @@ impl Device {
     }
 
     /// Create a list of channels and nodes in this device with a button to select one of them
-    pub fn channel_and_node_list<'a>(
+    pub fn conversation_list<'a>(
         &'a self,
         config: &'a Config,
         add_buttons: bool,
-        select: fn(ChannelId) -> Message,
+        select: fn(ConversationId) -> Message,
     ) -> Element<'a, Message> {
         // If not viewing a channel/user, show the list of channels and users
-        let mut channels_list = self.channel_list(select);
+        let mut conversation_list = self.channel_list(select);
 
         // Add the favourite nodes to the list if there are any
-        channels_list = self.favourite_nodes(channels_list, config, add_buttons, select);
+        conversation_list = self.favourite_nodes(conversation_list, config, add_buttons, select);
 
         // Add the list of non-favourite nodes
-        channels_list = self.nodes_list(channels_list, config, add_buttons, select);
+        conversation_list = self.nodes_list(conversation_list, config, add_buttons, select);
 
         // Wrap the whole thing in a scrollable area
-        scrollable(channels_list)
+        scrollable(conversation_list)
             .direction({
                 let scrollbar = Scrollbar::new().width(10);
                 scrollable::Direction::Vertical(scrollbar)
@@ -813,7 +796,7 @@ impl Device {
     }
 
     /// Create a column with a set of rows, one for each channel
-    fn channel_list(&self, select: fn(ChannelId) -> Message) -> Column<'_, Message> {
+    fn channel_list(&self, select: fn(ConversationId) -> Message) -> Column<'_, Message> {
         let mut channels_list = Column::new();
 
         let mut filtered_channels: Vec<(usize, String)> = vec![];
@@ -831,13 +814,13 @@ impl Device {
                 .push(self.section_header(format!("Channels ({})", self.channels.len())));
 
             for (index, channel_name) in filtered_channels {
-                let channel_id = ChannelId::Channel(index.into());
-                if let Some(channel_view) = self.channel_views.get(&channel_id) {
+                let conversation_id = ConversationId::Channel(index.into());
+                if let Some(channel_view) = self.conversations.get(&conversation_id) {
                     let channel_row = Self::channel_row(
                         channel_name,
                         channel_view
                             .unread_count(self.show_position_updates, self.show_user_updates),
-                        channel_id,
+                        conversation_id,
                         select,
                     );
                     channels_list = channels_list.push(channel_row);
@@ -855,7 +838,7 @@ impl Device {
         mut channels_list: Column<'a, Message>,
         config: &'a Config,
         add_buttons: bool,
-        select: fn(ChannelId) -> Message,
+        select: fn(ConversationId) -> Message,
     ) -> Column<'a, Message> {
         let mut fav_nodes: Vec<NodeId> = vec![];
 
@@ -877,8 +860,8 @@ impl Device {
             channels_list = channels_list
                 .push(self.section_header(format!("Favourite Nodes ({})", fav_nodes.len())));
             for fav_node_id in fav_nodes {
-                let channel_id = Node(fav_node_id);
-                if let Some(channel_view) = self.channel_views.get(&channel_id) {
+                let conversation_id = Node(fav_node_id);
+                if let Some(channel_view) = self.conversations.get(&conversation_id) {
                     channels_list = channels_list.push(
                         self.node_row(
                             channel_view
@@ -904,7 +887,7 @@ impl Device {
         mut channels_list: Column<'a, Message>,
         config: &'a Config,
         add_buttons: bool,
-        select: fn(ChannelId) -> Message,
+        select: fn(ConversationId) -> Message,
     ) -> Column<'a, Message> {
         // Initial list of nodes that are NOT already in the list of favourite nodes and does
         // not include my own node (if the node number is known)
@@ -928,8 +911,8 @@ impl Device {
                 .push(self.section_header(format!("Nodes ({})", other_nodes_list.len())));
 
             for node_id in other_nodes_list {
-                let channel_id = Node(*node_id);
-                if let Some(channel_view) = self.channel_views.get(&channel_id) {
+                let conversation_id = Node(*node_id);
+                if let Some(channel_view) = self.conversations.get(&conversation_id) {
                     channels_list = channels_list.push(
                         self.node_row(
                             channel_view
@@ -992,13 +975,13 @@ impl Device {
     }
 
     /// Create a Button that represents either a Channel or a Node
-    /// DeviceViewEvent(ShowChannel(Some(channel_id)))
-    /// DeviceViewEvent(ShowChannel(Some(channel_id)))
+    /// DeviceViewEvent(ShowChannel(Some(conversation_id)))
+    /// DeviceViewEvent(ShowChannel(Some(conversation_id)))
     fn channel_row(
         name: String,
         unread_count: usize,
-        channel_id: ChannelId,
-        select: fn(ChannelId) -> Message,
+        conversation_id: ConversationId,
+        select: fn(ConversationId) -> Message,
     ) -> Element<'static, Message> {
         let name_row = Row::new()
             .push(text(name))
@@ -1008,7 +991,7 @@ impl Device {
         Row::new()
             .push(
                 button(name_row)
-                    .on_press(select(channel_id))
+                    .on_press(select(conversation_id))
                     .width(Fill)
                     .style(channel_row_style),
             )
@@ -1025,7 +1008,7 @@ impl Device {
         favourite: bool,
         config: &'a Config,
         add_buttons: bool,
-        select: fn(ChannelId) -> Message,
+        select: fn(ConversationId) -> Message,
     ) -> Element<'a, Message> {
         let long_name: &str = self
             .nodes
@@ -1062,11 +1045,11 @@ impl Device {
 
         let mut node_row = Row::new().align_y(Bottom);
 
-        let channel_id = Node(node_id);
+        let conversation_id = Node(node_id);
         node_row = if self.editing_alias.is_none() {
             node_row.push(
                 button(name_row)
-                    .on_press(select(channel_id))
+                    .on_press(select(conversation_id))
                     .width(Fill)
                     .style(channel_row_style),
             )
@@ -1193,6 +1176,7 @@ impl Device {
         .into()
     }
 }
+
 pub fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
     let mut clear_button = button(text("⨂").size(18))
         .style(text_input_button_style)
@@ -1229,10 +1213,9 @@ mod tests {
     use super::*;
     use crate::Message::Navigation;
     use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
-    use crate::device::DeviceViewMessage::{ClearFilter, SearchInput};
-    use crate::device::SubscriberMessage::{Connect, Disconnect};
-    use crate::test_helper;
-    use btleplug::api::BDAddr;
+    use crate::device::DeviceCommand::Disconnect;
+    use crate::device::DeviceMessage::{ClearFilter, SearchInput};
+    use crate::meshchat;
 
     fn test_position(lat: f64, lon: f64) -> MCPosition {
         MCPosition {
@@ -1244,28 +1227,12 @@ mod tests {
 
     #[cfg(feature = "meshtastic")]
     #[tokio::test]
-    async fn test_connect_request_fail() {
-        let mut meshchat = test_helper::test_app();
-        // Subscription won't be ready
-        let _task = meshchat.device.subscriber_send(
-            Connect(
-                BDAddr::from([0, 0, 0, 0, 0, 0]).to_string(),
-                RadioType::Meshtastic,
-            ),
-            Navigation(DeviceListView),
-        );
-
-        assert_eq!(meshchat.device.connection_state, Disconnected(None, None));
-    }
-
-    #[cfg(feature = "meshtastic")]
-    #[tokio::test]
     async fn test_disconnect_request_fail() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = meshchat::tests::test_app();
         // Subscription won't be ready
         let _task = meshchat
             .device
-            .subscriber_send(Disconnect, Navigation(DeviceListView));
+            .device_send(Disconnect, Navigation(DeviceListView));
         assert_eq!(meshchat.device.connection_state, Disconnected(None, None));
     }
 
@@ -1381,7 +1348,7 @@ mod tests {
         let device_view = Device::default();
         assert_eq!(device_view.connection_state(), &Disconnected(None, None));
         assert_eq!(device_view.unread_count(true, true), 0);
-        assert!(device_view.channel_views.is_empty());
+        assert!(device_view.conversations.is_empty());
     }
 
     #[test]
@@ -1488,11 +1455,11 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.forwarding_message.is_none());
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
-            MCMessage::NewTextMessage("test".into()),
-            TimeStamp::from(0),
+            MCContent::NewTextMessage("test".into()),
+            TimeStamp::from(0u64),
         );
         let _ = device_view.update(StartForwardingMessage(entry));
 
@@ -1502,11 +1469,11 @@ mod tests {
     #[test]
     fn test_stop_forwarding_message() {
         let mut device_view = Device::default();
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
-            MCMessage::NewTextMessage("test".into()),
-            TimeStamp::from(0),
+            MCContent::NewTextMessage("test".into()),
+            TimeStamp::from(0u64),
         );
         let _ = device_view.update(StartForwardingMessage(entry));
         assert!(device_view.forwarding_message.is_some());
@@ -1571,7 +1538,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.meshtastic_sender.is_none());
 
-        let (sender, _receiver) = tokio::sync::mpsc::channel::<SubscriberMessage>(10);
+        let (sender, _receiver) = tokio::sync::mpsc::channel::<DeviceCommand>(10);
         let _ = device_view.update(SubscriptionMessage(Ready(sender, RadioType::Meshtastic)));
         assert!(device_view.meshtastic_sender.is_some());
     }
@@ -1608,8 +1575,8 @@ mod tests {
         assert_eq!(device_view.channels[0].name, "TestChannel");
         assert!(
             device_view
-                .channel_views
-                .contains_key(&ChannelId::Channel(0.into()))
+                .conversations
+                .contains_key(&ConversationId::Channel(0.into()))
         );
     }
 
@@ -1637,7 +1604,7 @@ mod tests {
         assert!(device_view.nodes.contains_key(&NodeId::from(12345u64)));
         assert!(
             device_view
-                .channel_views
+                .conversations
                 .contains_key(&Node(NodeId::from(12345u64)))
         );
     }
@@ -1897,22 +1864,22 @@ mod tests {
     #[test]
     fn test_show_channel() {
         let mut device_view = Device::default();
-        assert!(device_view.viewing_channel.is_none());
+        assert!(device_view.viewing_conversation.is_none());
 
-        let _ = device_view.update(ShowChannel(Some(ChannelId::Channel(0.into()))));
+        let _ = device_view.update(ShowChannel(Some(ConversationId::Channel(0.into()))));
         assert_eq!(
-            device_view.viewing_channel,
-            Some(ChannelId::Channel(0.into()))
+            device_view.viewing_conversation,
+            Some(ConversationId::Channel(0.into()))
         );
     }
 
     #[test]
     fn test_show_channel_none() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         let _ = device_view.update(ShowChannel(None));
-        assert!(device_view.viewing_channel.is_none());
+        assert!(device_view.viewing_conversation.is_none());
     }
 
     #[test]
@@ -1949,13 +1916,13 @@ mod tests {
         assert_eq!(device_view.channels.len(), 2);
         assert!(
             device_view
-                .channel_views
-                .contains_key(&ChannelId::Channel(0.into()))
+                .conversations
+                .contains_key(&ConversationId::Channel(0.into()))
         );
         assert!(
             device_view
-                .channel_views
-                .contains_key(&ChannelId::Channel(1.into()))
+                .conversations
+                .contains_key(&ConversationId::Channel(1.into()))
         );
     }
 
@@ -1964,7 +1931,7 @@ mod tests {
         let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(SubscriptionMessage(MessageACK(
-            ChannelId::Channel(0.into()),
+            ConversationId::Channel(0.into()),
             MessageId::from(123),
         )));
     }
@@ -1974,7 +1941,7 @@ mod tests {
         let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(ChannelMsg(
-            ChannelId::Channel(0.into()),
+            ConversationId::Channel(0.into()),
             ChannelViewMessage::MessageInput("test".into()),
         ));
     }
@@ -2040,57 +2007,57 @@ mod tests {
     #[test]
     fn test_channel_change_no_change() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         // The same channel should return Task::none equivalent behavior
-        let _task = device_view.channel_change(Some(ChannelId::Channel(0.into())));
+        let _task = device_view.channel_change(Some(ConversationId::Channel(0.into())));
         assert_eq!(
-            device_view.viewing_channel,
-            Some(ChannelId::Channel(0.into()))
+            device_view.viewing_conversation,
+            Some(ConversationId::Channel(0.into()))
         );
     }
 
     #[test]
     fn test_channel_change_to_different_channel() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
-        let _task = device_view.channel_change(Some(ChannelId::Channel(1.into())));
+        let _task = device_view.channel_change(Some(ConversationId::Channel(1.into())));
         assert_eq!(
-            device_view.viewing_channel,
-            Some(ChannelId::Channel(1.into()))
+            device_view.viewing_conversation,
+            Some(ConversationId::Channel(1.into()))
         );
     }
 
     #[test]
     fn test_channel_change_to_none() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         let _task = device_view.channel_change(None);
-        assert_eq!(device_view.viewing_channel, None);
+        assert_eq!(device_view.viewing_conversation, None);
     }
 
     #[test]
     fn test_channel_change_from_none() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = None;
+        device_view.viewing_conversation = None;
 
-        let _task = device_view.channel_change(Some(ChannelId::Channel(0.into())));
+        let _task = device_view.channel_change(Some(ConversationId::Channel(0.into())));
         assert_eq!(
-            device_view.viewing_channel,
-            Some(ChannelId::Channel(0.into()))
+            device_view.viewing_conversation,
+            Some(ConversationId::Channel(0.into()))
         );
     }
 
     #[test]
     fn test_channel_change_to_node() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         let _task = device_view.channel_change(Some(Node(NodeId::from(12345u64))));
         assert_eq!(
-            device_view.viewing_channel,
+            device_view.viewing_conversation,
             Some(Node(NodeId::from(12345u64)))
         );
     }
@@ -2120,7 +2087,7 @@ mod tests {
         let mut device_view = Device::default();
         let _ = device_view.update(SubscriptionMessage(RadioNotification(
             "Test notification".into(),
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         )));
         // Should not panic, returns a task
     }
@@ -2137,11 +2104,11 @@ mod tests {
         let mut device_view = Device::default();
         // No channel exists, should not panic
         let _ = device_view.update(SubscriptionMessage(MCMessageReceived(
-            ChannelId::Channel(0.into()),
+            ConversationId::Channel(0.into()),
             MessageId::from(1),
             NodeId::from(100u64),
-            MCMessage::NewTextMessage("test".into()),
-            TimeStamp::from(1234567890),
+            MCContent::NewTextMessage("test".into()),
+            TimeStamp::from(1234567890u64),
         )));
     }
 
@@ -2178,7 +2145,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(12345u64),
             user,
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         )));
 
         // User should be updated
@@ -2216,7 +2183,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(12345u64),
             position,
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         )));
 
         // Position should be updated
@@ -2256,7 +2223,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.forwarding_message.is_none());
 
-        let _ = device_view.update(ForwardMessage(ChannelId::Channel(0.into())));
+        let _ = device_view.update(ForwardMessage(ConversationId::Channel(0.into())));
         // Should not panic, forwarding_message is None
     }
 
@@ -2265,7 +2232,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.my_position.is_none());
 
-        let _ = device_view.update(SendPositionMessage(ChannelId::Channel(0.into())));
+        let _ = device_view.update(SendPositionMessage(ConversationId::Channel(0.into())));
         // Should not panic, no position available
     }
 
@@ -2274,7 +2241,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.my_user.is_none());
 
-        let _ = device_view.update(SendSelfInfoMessage(ChannelId::Channel(0.into())));
+        let _ = device_view.update(SendSelfInfoMessage(ConversationId::Channel(0.into())));
         // Should not panic, no user info available
     }
 
@@ -2310,7 +2277,7 @@ mod tests {
 
         // Send a message to the channel
         let _ = device_view.update(ChannelMsg(
-            ChannelId::Channel(0.into()),
+            ConversationId::Channel(0.into()),
             ChannelViewMessage::MessageInput("test".into()),
         ));
         // Should not panic
@@ -2330,7 +2297,7 @@ mod tests {
 
         // ACK a message (message doesn't need to exist for ack)
         let _ = device_view.update(SubscriptionMessage(MessageACK(
-            ChannelId::Channel(0.into()),
+            ConversationId::Channel(0.into()),
             MessageId::from(123),
         )));
         // Should not panic
@@ -2394,7 +2361,7 @@ mod tests {
         };
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         // Don't set exit_pending so we don't exit
         device_view.exit_pending = false;
@@ -2403,17 +2370,17 @@ mod tests {
         // so we can't test that path, but we can test the state clearing
         // We need to manually do what the disconnected event does without exiting
         device_view.connection_state = Disconnected(Some("device1".into()), None);
-        device_view.channel_views.clear();
+        device_view.conversations.clear();
         device_view.nodes.clear();
         device_view.channels.clear();
         device_view.my_node_id = None;
-        device_view.viewing_channel = None;
+        device_view.viewing_conversation = None;
 
-        assert!(device_view.channel_views.is_empty());
+        assert!(device_view.conversations.is_empty());
         assert!(device_view.nodes.is_empty());
         assert!(device_view.channels.is_empty());
         assert!(device_view.my_node_id.is_none());
-        assert!(device_view.viewing_channel.is_none());
+        assert!(device_view.viewing_conversation.is_none());
     }
 
     #[test]
@@ -2447,7 +2414,7 @@ mod tests {
             name: "TestChannel".into(),
         };
         let _ = device_view.update(SubscriptionMessage(NewChannel(channel)));
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         device_view.cancel_interactive();
 
@@ -2471,10 +2438,10 @@ mod tests {
         let _ = device_view.update(SubscriptionMessage(NewChannel(channel)));
 
         // Change to that channel
-        let _task = device_view.channel_change(Some(ChannelId::Channel(0.into())));
+        let _task = device_view.channel_change(Some(ConversationId::Channel(0.into())));
         assert_eq!(
-            device_view.viewing_channel,
-            Some(ChannelId::Channel(0.into()))
+            device_view.viewing_conversation,
+            Some(ConversationId::Channel(0.into()))
         );
     }
 
@@ -2482,7 +2449,7 @@ mod tests {
     #[test]
     fn test_connected_event_with_viewing_channel() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         let _ = device_view.update(SubscriptionMessage(ConnectedEvent(
             "device1".into(),
@@ -2498,7 +2465,7 @@ mod tests {
     #[test]
     fn test_connected_event_without_viewing_channel() {
         let mut device_view = Device::default();
-        device_view.viewing_channel = None;
+        device_view.viewing_conversation = None;
 
         let _ = device_view.update(SubscriptionMessage(ConnectedEvent(
             "device1".into(),
@@ -2571,7 +2538,7 @@ mod tests {
         })));
 
         // Set viewing channel
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         let config = Config::default();
         let _element = device_view.view(&config);
@@ -2742,7 +2709,7 @@ mod tests {
             name: "TestChannel".into(),
         })));
 
-        device_view.viewing_channel = Some(ChannelId::Channel(0.into()));
+        device_view.viewing_conversation = Some(ConversationId::Channel(0.into()));
 
         let device_list_view = DeviceList::default();
         let config = Config::default();
@@ -2772,7 +2739,7 @@ mod tests {
             is_ignored: false,
         })));
 
-        device_view.viewing_channel = Some(Node(NodeId::from(12345u64)));
+        device_view.viewing_conversation = Some(Node(NodeId::from(12345u64)));
 
         let device_list_view = DeviceList::default();
         let config = Config::default();
@@ -2834,19 +2801,20 @@ mod tests {
 
     #[test]
     fn test_channel_row() {
-        let select = |channel_id: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_id)));
+        let select =
+            |conversation_id: ConversationId| DeviceViewEvent(ShowChannel(Some(conversation_id)));
 
         let _element = Device::channel_row(
             "Test Channel".into(),
             0,
-            ChannelId::Channel(0.into()),
+            ConversationId::Channel(0.into()),
             select,
         );
 
         let _element = Device::channel_row(
             "Channel with unread".into(),
             5,
-            ChannelId::Channel(1.into()),
+            ConversationId::Channel(1.into()),
             select,
         );
     }
@@ -2886,10 +2854,11 @@ mod tests {
         })));
 
         let config = Config::default();
-        let select = |channel_id: ChannelId| DeviceViewEvent(ShowChannel(Some(channel_id)));
+        let select =
+            |conversation_id: ConversationId| DeviceViewEvent(ShowChannel(Some(conversation_id)));
 
-        let _element = device_view.channel_and_node_list(&config, true, select);
-        let _element = device_view.channel_and_node_list(&config, false, select);
+        let _element = device_view.conversation_list(&config, true, select);
+        let _element = device_view.conversation_list(&config, false, select);
     }
 
     #[test]

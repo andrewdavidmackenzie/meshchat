@@ -1,10 +1,10 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
-use crate::device::TimeStamp;
 use crate::styles::{
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, error_notification_style,
     info_notification_style, permanent_notification_style,
 };
+use crate::timestamp::TimeStamp;
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::widget::container::Style;
@@ -134,9 +134,8 @@ impl Notifications {
 
 #[cfg(test)]
 mod tests {
-    use crate::MeshChat;
-    use crate::device::TimeStamp;
     use crate::notification::{Notification, Notifications};
+    use crate::timestamp::TimeStamp;
 
     #[test]
     fn test_empty_initially() {
@@ -150,7 +149,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "test".into(),
             "test".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         assert_eq!(notifications.inner.len(), 1);
     }
@@ -168,12 +167,12 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "test1".into(),
             "test1".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         let _ = notifications.add(Notification::Info(
             "test2".into(),
             "test2".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         let _ = notifications.remove(0);
         assert_eq!(notifications.inner.len(), 1);
@@ -185,7 +184,7 @@ mod tests {
         let _ = notifications.add(Notification::Error(
             "Error summary".into(),
             "Error detail".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         assert_eq!(notifications.inner.len(), 1);
 
@@ -200,17 +199,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "2".into(),
             "2".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "3".into(),
             "3".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         assert_eq!(notifications.inner[0].0, 0);
@@ -226,17 +225,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "2".into(),
             "2".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "3".into(),
             "3".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         // Remove the middle one (id 1)
@@ -255,7 +254,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         // Remove an id that doesn't exist
@@ -272,12 +271,12 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "2".into(),
             "2".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         let _ = notifications.remove(0);
@@ -293,17 +292,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "info".into(),
             "detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Error(
             "error".into(),
             "detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "info2".into(),
             "detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         assert_eq!(notifications.inner.len(), 3);
@@ -318,7 +317,11 @@ mod tests {
     #[test]
     fn test_notification_with_empty_strings() {
         let mut notifications = Notifications::default();
-        let _ = notifications.add(Notification::Info("".into(), "".into(), TimeStamp::from(0)));
+        let _ = notifications.add(Notification::Info(
+            "".into(),
+            "".into(),
+            TimeStamp::from(0u64),
+        ));
         assert_eq!(notifications.inner.len(), 1);
     }
 
@@ -330,7 +333,7 @@ mod tests {
         let _ = notifications.add(Notification::Error(
             long_summary,
             long_detail,
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         assert_eq!(notifications.inner.len(), 1);
     }
@@ -341,7 +344,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "⚠️ Warning".into(),
             "日本語のテキスト".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         assert_eq!(notifications.inner.len(), 1);
     }
@@ -349,7 +352,7 @@ mod tests {
     #[test]
     fn test_add_many_notifications() {
         let mut notifications = Notifications::default();
-        for i in 0..100 {
+        for i in 0u64..100u64 {
             let _ = notifications.add(Notification::Info(
                 format!("Notification {}", i),
                 format!("Detail {}", i),
@@ -366,17 +369,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "2".into(),
             "2".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "3".into(),
             "3".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         let _ = notifications.remove(0);
@@ -391,17 +394,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "2".into(),
             "2".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "3".into(),
             "3".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         let _ = notifications.remove(2);
@@ -414,7 +417,7 @@ mod tests {
     #[test]
     fn test_notification_timestamp_preserved() {
         let mut notifications = Notifications::default();
-        let timestamp = TimeStamp::from(1234567890);
+        let timestamp = TimeStamp::from(1234567890u64);
         let _ = notifications.add(Notification::Info(
             "test".into(),
             "detail".into(),
@@ -431,7 +434,7 @@ mod tests {
     #[test]
     fn test_error_notification_timestamp_preserved() {
         let mut notifications = Notifications::default();
-        let timestamp = TimeStamp::from(1234567890);
+        let timestamp = TimeStamp::from(1234567890u64);
         let _ = notifications.add(Notification::Error(
             "error".into(),
             "detail".into(),
@@ -452,12 +455,12 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Info(
             "2".into(),
             "2".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         let _ = notifications.remove(0);
@@ -467,7 +470,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "3".into(),
             "3".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         assert_eq!(notifications.inner[0].0, 2);
         assert_eq!(notifications.next_id, 3);
@@ -479,7 +482,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Summary".into(),
             "Detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         let notification = &notifications.inner[0].1;
@@ -496,7 +499,7 @@ mod tests {
         let _ = notifications.add(Notification::Error(
             "Error Summary".into(),
             "Error Detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         let notification = &notifications.inner[0].1;
@@ -522,7 +525,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Info Summary".into(),
             "Info Detail".into(),
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         ));
         let _element = notifications.view();
         // Should not panic
@@ -534,7 +537,7 @@ mod tests {
         let _ = notifications.add(Notification::Error(
             "Error Summary".into(),
             "Error Detail".into(),
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         ));
         let _element = notifications.view();
         // Should not panic
@@ -546,17 +549,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Info 1".into(),
             "Detail 1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Error(
             "Error 1".into(),
             "Detail 2".into(),
-            TimeStamp::from(100),
+            TimeStamp::from(100u64),
         ));
         let _ = notifications.add(Notification::Info(
             "Info 2".into(),
             "Detail 3".into(),
-            TimeStamp::from(200),
+            TimeStamp::from(200u64),
         ));
         let _element = notifications.view();
         // Should not panic
@@ -565,7 +568,11 @@ mod tests {
     #[test]
     fn test_view_with_empty_strings() {
         let mut notifications = Notifications::default();
-        let _ = notifications.add(Notification::Info("".into(), "".into(), TimeStamp::from(0)));
+        let _ = notifications.add(Notification::Info(
+            "".into(),
+            "".into(),
+            TimeStamp::from(0u64),
+        ));
         let _element = notifications.view();
         // Should not panic with empty strings
     }
@@ -578,7 +585,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             long_summary,
             long_detail,
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _element = notifications.view();
         // Should not panic with long strings
@@ -590,7 +597,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "⚠️ 警告 Warning".into(),
             "日本語 中文 한국어".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _element = notifications.view();
         // Should not panic with Unicode
@@ -602,7 +609,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Line1\nLine2\tTabbed".into(),
             "Detail with\r\nnewlines".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _element = notifications.view();
         // Should not panic with special characters
@@ -614,7 +621,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Test".into(),
             "Detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _element = notifications.view();
         // Should not panic with zero time (Unix epoch)
@@ -626,7 +633,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Test".into(),
             "Detail".into(),
-            TimeStamp::from(u32::MAX),
+            TimeStamp::from(u64::MAX),
         ));
         let _element = notifications.view();
         // Should not panic with max time value
@@ -638,7 +645,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Test".into(),
             "Detail".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         let _element = notifications.view();
         // Should not panic with current time
@@ -646,26 +653,26 @@ mod tests {
 
     #[test]
     fn test_time_to_text_zero() {
-        let _text = Notifications::time_to_text(TimeStamp::from(0));
+        let _text = Notifications::time_to_text(TimeStamp::from(0u64));
         // Should not panic and return a Text element
     }
 
     #[test]
     fn test_time_to_text_current() {
-        let _text = Notifications::time_to_text(MeshChat::now());
+        let _text = Notifications::time_to_text(TimeStamp::now());
         // Should not panic
     }
 
     #[test]
     fn test_time_to_text_max() {
-        let _text = Notifications::time_to_text(TimeStamp::from(u32::MAX));
+        let _text = Notifications::time_to_text(TimeStamp::from(u64::MAX));
         // Should not panic with max value
     }
 
     #[test]
     fn test_time_to_text_various_times() {
         // Test various timestamps
-        let timestamps = [0, 1, 100, 1000, 1000000, 1609459200, 1700000000];
+        let timestamps: [u64; 7] = [0, 1, 100, 1000, 1000000, 1609459200, 1700000000];
         for ts in timestamps {
             let _text = Notifications::time_to_text(TimeStamp::from(ts));
             // Should not panic
@@ -679,7 +686,7 @@ mod tests {
             0,
             "Summary",
             "Detail",
-            MeshChat::now(),
+            TimeStamp::now(),
             info_notification_style,
             true,
         );
@@ -693,7 +700,7 @@ mod tests {
             0,
             "Summary",
             "Detail",
-            MeshChat::now(),
+            TimeStamp::now(),
             error_notification_style,
             true,
         );
@@ -707,7 +714,7 @@ mod tests {
             0,
             "",
             "",
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
             info_notification_style,
             true,
         );
@@ -723,7 +730,7 @@ mod tests {
             0,
             &long_summary,
             &long_detail,
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
             info_notification_style,
             true,
         );
@@ -739,7 +746,7 @@ mod tests {
                 id,
                 "Summary",
                 "Detail",
-                TimeStamp::from(0),
+                TimeStamp::from(0u64),
                 info_notification_style,
                 true,
             );
@@ -755,12 +762,12 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "1".into(),
             "1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Error(
             "2".into(),
             "2".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         {
             let _element = notifications.view();
@@ -784,7 +791,7 @@ mod tests {
     #[test]
     fn test_view_many_notifications() {
         let mut notifications = Notifications::default();
-        for i in 0..50 {
+        for i in 0u64..50u64 {
             let _ = notifications.add(Notification::Info(
                 format!("Notification {}", i),
                 format!("Detail {}", i),
@@ -803,7 +810,7 @@ mod tests {
         let _ = notifications.add(Notification::Critical(
             "Critical summary".into(),
             "Critical detail".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         assert_eq!(notifications.inner.len(), 1);
         assert_eq!(notifications.inner[0].0, 0);
@@ -812,7 +819,7 @@ mod tests {
     #[test]
     fn test_critical_notification_timestamp_preserved() {
         let mut notifications = Notifications::default();
-        let timestamp = 1234567890;
+        let timestamp = 1234567890u64;
         let _ = notifications.add(Notification::Critical(
             "critical".into(),
             "detail".into(),
@@ -834,7 +841,7 @@ mod tests {
         let _ = notifications.add(Notification::Critical(
             "Critical Summary".into(),
             "Critical Detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         let notification = &notifications.inner[0].1;
@@ -851,7 +858,7 @@ mod tests {
         let _ = notifications.add(Notification::Critical(
             "Critical Summary".into(),
             "Critical Detail".into(),
-            TimeStamp::from(1234567890),
+            TimeStamp::from(1234567890u64),
         ));
         let _element = notifications.view();
         // Should not panic
@@ -863,17 +870,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Info".into(),
             "Detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Critical(
             "Critical".into(),
             "Detail".into(),
-            TimeStamp::from(100),
+            TimeStamp::from(100u64),
         ));
         let _ = notifications.add(Notification::Error(
             "Error".into(),
             "Detail".into(),
-            TimeStamp::from(200),
+            TimeStamp::from(200u64),
         ));
         let _element = notifications.view();
         // Should not panic with mixed notification types including Critical
@@ -888,7 +895,7 @@ mod tests {
             0,
             "Summary",
             "Detail",
-            MeshChat::now(),
+            TimeStamp::now(),
             permanent_notification_style,
             false,
         );
@@ -902,7 +909,7 @@ mod tests {
             42,
             "Permanent notification",
             "This cannot be dismissed",
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
             permanent_notification_style,
             false,
         );
@@ -916,7 +923,7 @@ mod tests {
             0,
             "",
             "",
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
             info_notification_style,
             false,
         );
@@ -932,7 +939,7 @@ mod tests {
             0,
             &long_summary,
             &long_detail,
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
             permanent_notification_style,
             false,
         );
@@ -946,17 +953,17 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "info".into(),
             "detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Error(
             "error".into(),
             "detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Critical(
             "critical".into(),
             "detail".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
 
         assert_eq!(notifications.inner.len(), 3);
@@ -968,17 +975,17 @@ mod tests {
         let _ = notifications.add(Notification::Critical(
             "C1".into(),
             "D1".into(),
-            TimeStamp::from(0),
+            TimeStamp::from(0u64),
         ));
         let _ = notifications.add(Notification::Critical(
             "C2".into(),
             "D2".into(),
-            TimeStamp::from(100),
+            TimeStamp::from(100u64),
         ));
         let _ = notifications.add(Notification::Critical(
             "C3".into(),
             "D3".into(),
-            TimeStamp::from(200),
+            TimeStamp::from(200u64),
         ));
         let _element = notifications.view();
         // Should not panic with multiple critical notifications
