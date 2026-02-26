@@ -23,8 +23,9 @@ use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 
-use crate::meshchat::{MCPosition, MCUser, MeshChat};
+use crate::meshchat::{MCPosition, MCUser};
 use crate::message::MCContent;
+use crate::timestamp::TimeStamp;
 use tokio::time::{Duration, timeout};
 
 enum DeviceState {
@@ -372,10 +373,10 @@ async fn send_text_message(
             gui_sender
                 .send(MCMessageReceived(
                     conversation_id,
-                    MeshChat::now().into(),
+                    TimeStamp::now().into(),
                     radio_cache.self_id,
                     msg,
-                    MeshChat::now(),
+                    TimeStamp::now(),
                 ))
                 .await
                 .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -401,7 +402,7 @@ async fn send_text_message(
                     message_id,
                     radio_cache.self_id,
                     msg,
-                    MeshChat::now(),
+                    TimeStamp::now(),
                 ))
                 .await
                 .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -597,7 +598,7 @@ async fn handle_new_channel_message(
         channel_message.sender_timestamp.into(),
         node_id,
         MCContent::NewTextMessage(text.to_string()),
-        MeshChat::now(),
+        TimeStamp::now(),
     );
 
     gui_sender
@@ -741,6 +742,7 @@ async fn handle_radio_event(
 mod tests {
     use super::*;
     use crate::device::DeviceEvent;
+    use crate::timestamp::TimeStamp;
     use futures::StreamExt;
     use futures::channel::mpsc;
     use meshcore_rs::events::{BatteryInfo, SelfInfo};
@@ -1152,9 +1154,9 @@ mod tests {
             snr: None,
         };
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         handle_new_channel_message(&radio_cache, channel_message, &mut sender).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver
             .next()
@@ -1187,9 +1189,9 @@ mod tests {
             signature: None,
         };
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         handle_new_contact_message(contact_message, &mut sender).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver
             .next()

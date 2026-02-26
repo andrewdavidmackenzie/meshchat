@@ -1,3 +1,4 @@
+use crate::Message;
 use crate::Message::{
     HistoryLengthSelected, ToggleAutoReconnect, ToggleAutoUpdate, ToggleSaveWindowPosition,
     ToggleSaveWindowSize, ToggleShowPositionUpdates, ToggleShowUserUpdates,
@@ -5,7 +6,7 @@ use crate::Message::{
 use crate::conversation_id::{ConversationId, NodeId};
 use crate::device_list::RadioType;
 use crate::styles::{picker_header_style, tooltip_style};
-use crate::{MeshChat, Message};
+use crate::timestamp::TimeStamp;
 use directories::ProjectDirs;
 use iced::font::Weight;
 use iced::widget::{Column, container, pick_list, text, toggler};
@@ -189,7 +190,7 @@ impl Config {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     ),
                 }
             })
@@ -373,7 +374,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     ),
                 }
             })
@@ -388,7 +389,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     ),
                 }
             })

@@ -4,10 +4,11 @@ pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a
 
 use crate::conversation_id::ConversationId::Node;
 use crate::conversation_id::{MessageId, NodeId};
+use crate::device::DeviceEvent;
 use crate::device::DeviceEvent::{MCMessageReceived, NewChannel};
-use crate::device::{DeviceEvent, TimeStamp};
-use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
+use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser};
 use crate::message::MCContent;
+use crate::timestamp::TimeStamp;
 use meshcore_rs::ContactMessage;
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;
@@ -161,7 +162,7 @@ impl From<ContactMessage> for DeviceEvent {
             contact_message.sender_timestamp.into(),
             node_id,
             MCContent::NewTextMessage(contact_message.text),
-            MeshChat::now(),
+            TimeStamp::now(),
         )
     }
 }
@@ -322,7 +323,7 @@ mod test {
 
     #[test]
     fn contact_message_to_subscription_event() {
-        let before_conversion = MeshChat::now();
+        let before_conversion = TimeStamp::now();
         let message = ContactMessage {
             sender_prefix: [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF],
             path_len: 0,
@@ -334,7 +335,7 @@ mod test {
         };
 
         let event: DeviceEvent = message.into();
-        let after_conversion = MeshChat::now();
+        let after_conversion = TimeStamp::now();
 
         let MCMessageReceived(conversation_id, _msg_id, from, msg, event_timestamp) = event else {
             unreachable!("Expected MCMessageReceived event")
@@ -344,7 +345,7 @@ mod test {
         let expected_node_id = NodeId::from(0xAABB_CCDD_EEFF_0000_u64);
         assert_eq!(conversation_id, Node(expected_node_id));
         assert_eq!(from, expected_node_id);
-        // Timestamp should be local time (from MeshChat::now()), not the sender_timestamp
+        // Timestamp should be local time (from TimeStamp::now()()()), not the sender_timestamp
         assert!(
             event_timestamp >= before_conversion && event_timestamp <= after_conversion,
             "Event timestamp should be a local timestamp",

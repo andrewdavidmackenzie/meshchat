@@ -4,7 +4,7 @@ use crate::conversation::ChannelViewMessage;
 use crate::conversation::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::DeviceMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
-use crate::device::{TimeStamp, long_name, short_name};
+use crate::device::{long_name, short_name};
 use crate::meshchat::{MCNodeInfo, MCPosition, MCUser};
 use crate::message::MCContent::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -14,6 +14,7 @@ use crate::styles::{
     alert_message_style, bubble_style, button_chip_style, menu_button_style, message_text_style,
     tooltip_style,
 };
+use crate::timestamp::TimeStamp;
 use crate::widgets::emoji_picker::EmojiPicker;
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
@@ -511,10 +512,10 @@ impl PartialEq<Self> for MCMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MeshChat;
     use crate::conversation_id::MessageId;
     use crate::meshchat::MCNodeInfo;
     use crate::message::MCContent::{AlertMessage, EmojiReply, NewTextMessage, TextMessageReply};
+    use crate::timestamp::TimeStamp;
     use chrono::Datelike;
     use ringmap::RingMap;
 
@@ -609,7 +610,7 @@ mod tests {
             MessageId::from(123),
             NodeId::from(456u64),
             NewTextMessage("Hello".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
 
         assert_eq!(entry.message_id(), MessageId::from(123));
@@ -624,7 +625,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         assert!(!message.seen());
 
@@ -638,7 +639,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         assert!(!entry.acked());
 
@@ -652,7 +653,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         assert!(entry.emojis().is_empty());
 
@@ -671,7 +672,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
 
         entry.add_emoji("👍".to_string(), NodeId::from(100u64));
@@ -690,7 +691,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
 
         entry.add_emoji("👍".to_string(), NodeId::from(100u64));
@@ -706,7 +707,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Original message".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         entries.insert(MessageId::from(1), entry);
 
@@ -729,7 +730,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage(long_message.into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         entries.insert(MessageId::from(1), entry);
 
@@ -795,7 +796,7 @@ mod tests {
 
     #[test]
     fn test_channel_view_entry_time() {
-        let timestamp = MeshChat::now();
+        let timestamp = TimeStamp::now();
         let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
@@ -1338,7 +1339,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Channel(0.into());
@@ -1365,7 +1366,7 @@ mod tests {
             MessageId::from(2),
             NodeId::from(200u64),
             NewTextMessage("DM message".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Node(NodeId::from(200u64));
@@ -1392,7 +1393,7 @@ mod tests {
             MessageId::from(3),
             NodeId::from(300u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Channel(1.into());
@@ -1419,7 +1420,7 @@ mod tests {
             MessageId::from(4),
             NodeId::from(400u64),
             NewTextMessage("こんにちは".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Channel(0.into());
@@ -1445,7 +1446,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let column: Column<Message> = Column::new();
@@ -1462,7 +1463,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         entry.add_emoji("👍".to_string(), NodeId::from(200u64));
 
@@ -1501,7 +1502,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         entry.add_emoji("👍".to_string(), NodeId::from(200u64));
         entry.add_emoji("❤️".to_string(), NodeId::from(300u64));
@@ -1522,7 +1523,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         entry.add_emoji("👍".to_string(), NodeId::from(200u64));
         entry.add_emoji("👍".to_string(), NodeId::from(300u64));
@@ -1545,7 +1546,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Channel(0.into());
@@ -1568,7 +1569,7 @@ mod tests {
             MessageId::from(2),
             NodeId::from(200u64),
             NewTextMessage("dm test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Node(NodeId::from(200u64));
@@ -1591,7 +1592,7 @@ mod tests {
             MessageId::from(3),
             NodeId::from(300u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Channel(1.into());
@@ -1610,7 +1611,7 @@ mod tests {
             MessageId::from(4),
             NodeId::from(400u64),
             NewTextMessage(long_msg.into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Channel(0.into());
@@ -1628,7 +1629,7 @@ mod tests {
             MessageId::from(5),
             NodeId::from(500u64),
             NewTextMessage("Привет мир! 🌍".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let emoji_picker = EmojiPicker::new();
         let conversation_id = ConversationId::Channel(2.into());
@@ -1652,7 +1653,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello world".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
@@ -1672,7 +1673,7 @@ mod tests {
             MessageId::from(2),
             NodeId::from(200u64),
             NewTextMessage("Message from other".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
@@ -1712,7 +1713,7 @@ mod tests {
             MessageId::from(3),
             NodeId::from(100u64),
             AlertMessage("System alert!".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
@@ -1733,7 +1734,7 @@ mod tests {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Original message".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let mut entries: RingMap<MessageId, MCMessage> = RingMap::new();
         entries.insert(MessageId::from(1), original);
@@ -1743,7 +1744,7 @@ mod tests {
             MessageId::from(2),
             NodeId::from(200u64),
             TextMessageReply(MessageId::from(1), "This is my reply".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
@@ -1787,7 +1788,7 @@ mod tests {
             MessageId::from(4),
             NodeId::from(100u64),
             PositionMessage(position),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
@@ -1807,7 +1808,7 @@ mod tests {
             MessageId::from(5),
             NodeId::from(100u64),
             EmojiReply(MessageId::from(1), "👍".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
@@ -1839,7 +1840,7 @@ mod tests {
             MessageId::from(6),
             NodeId::from(100u64),
             UserMessage(user),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
@@ -1859,7 +1860,7 @@ mod tests {
             MessageId::from(7),
             NodeId::from(100u64),
             NewTextMessage("Popular message".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         entry.add_emoji("👍".to_string(), NodeId::from(200u64));
         entry.add_emoji("❤️".to_string(), NodeId::from(300u64));
@@ -1882,7 +1883,7 @@ mod tests {
             MessageId::from(8),
             NodeId::from(100u64),
             NewTextMessage("Acked message".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         entry.ack();
 
@@ -1904,7 +1905,7 @@ mod tests {
             MessageId::from(9),
             NodeId::from(100u64),
             NewTextMessage("DM message".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
@@ -1924,7 +1925,7 @@ mod tests {
             MessageId::from(10),
             NodeId::from(100u64),
             NewTextMessage("Check out https://example.com for more info".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();

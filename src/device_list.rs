@@ -1,3 +1,4 @@
+use crate::Message;
 use crate::Message::{
     AddDeviceAlias, DeviceListViewEvent, DeviceViewEvent, Navigation, RemoveDeviceAlias,
 };
@@ -10,9 +11,9 @@ use crate::device_list::DeviceListEvent::{
 };
 use crate::meshchat::View;
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
+use crate::timestamp::TimeStamp;
 use crate::widgets::easing;
 use crate::widgets::linear::Linear;
-use crate::{MeshChat, Message};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Column, Container, Id, Row, Space, button, container, image, operation, scrollable, text,
@@ -96,7 +97,7 @@ impl DeviceList {
                     Message::AppError(
                         "Application Error".to_string(),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     )
                 });
             }
@@ -105,7 +106,7 @@ impl DeviceList {
                     Message::CriticalAppError(
                         "Critical Application Error".to_string(),
                         e.to_string(),
-                        MeshChat::now(),
+                        TimeStamp::now(),
                     )
                 });
             }

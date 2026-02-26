@@ -18,6 +18,7 @@ use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
     text_input_button_style, text_input_container_style, text_input_style, tooltip_style,
 };
+use crate::timestamp::TimeStamp;
 use crate::widgets::emoji_picker::{EmojiPicker, PickerMessage};
 use crate::{MeshChat, Message, icons, message::MCMessage};
 use chrono::prelude::DateTime;
@@ -86,7 +87,7 @@ impl Conversation {
 
     /// Get the time now as a [DateTime<Local>]
     fn now_local() -> DateTime<Local> {
-        let timestamp = MeshChat::now();
+        let timestamp = TimeStamp::now();
         let datetime_utc =
             DateTime::<Utc>::from_timestamp_secs(timestamp.into()).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
@@ -301,31 +302,31 @@ impl Conversation {
             let mut previous_day = u32::MIN;
 
             // Add a view to the column for each of the entries in this Channel
-            for entry in self.messages.values() {
+            for message in self.messages.values() {
                 // Hide any previously received position updates in the view if config is set to do so
-                if matches!(entry.message(), PositionMessage(..)) && !show_position_updates {
+                if matches!(message.message(), PositionMessage(..)) && !show_position_updates {
                     continue;
                 }
 
                 // Hide any previously received user updates in the view if config is set to do so
-                if matches!(entry.message(), UserMessage(..)) && !show_user_updates {
+                if matches!(message.message(), UserMessage(..)) && !show_user_updates {
                     continue;
                 }
 
-                let message_day = entry.time().day();
+                let message_day = message.time().day();
 
                 // Add a day separator when the day of an entry changes
                 if message_day != previous_day {
                     channel_view_content =
-                        channel_view_content.push(Self::day_separator(&entry.time()));
+                        channel_view_content.push(Self::day_separator(&message.time()));
                     previous_day = message_day;
                 }
 
-                channel_view_content = channel_view_content.push(entry.view(
+                channel_view_content = channel_view_content.push(message.view(
                     &self.messages,
                     nodes,
                     &self.conversation_id,
-                    entry.from() == self.my_node_num,
+                    message.from() == self.my_node_num,
                     &self.emoji_picker,
                 ));
             }
@@ -572,17 +573,16 @@ impl Conversation {
 
 #[cfg(test)]
 mod test {
-    use crate::MeshChat;
     use crate::config::HistoryLength;
     use crate::conversation::ChannelViewMessage::{
         CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PrepareReply, SendMessage,
     };
     use crate::conversation::{Conversation, ConversationId};
     use crate::conversation_id::{MessageId, NodeId};
-    use crate::device::TimeStamp;
     use crate::meshchat::{MCPosition, MCUser};
     use crate::message::MCContent::{EmojiReply, NewTextMessage};
     use crate::message::MCMessage;
+    use crate::timestamp::TimeStamp;
     use std::time::Duration;
 
     #[tokio::test]
@@ -600,7 +600,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
@@ -608,7 +608,7 @@ mod test {
             MessageId::from(2),
             NodeId::from(1000u64),
             NewTextMessage("Hello 2".to_string()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
@@ -616,7 +616,7 @@ mod test {
             MessageId::from(3),
             NodeId::from(500u64),
             NewTextMessage("Hello 3".to_string()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
 
         // Add them out of order - they should be ordered by the time of creation, not entry
@@ -667,7 +667,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message.clone(), &HistoryLength::All);
         assert_eq!(channel_view.unread_count(true, true), 1);
@@ -681,7 +681,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
@@ -699,7 +699,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
@@ -717,7 +717,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
         let _ = channel_view.update(PrepareReply(MessageId::from(1))); // Use actual message ID
@@ -735,7 +735,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
         let _ = channel_view.update(PrepareReply(MessageId::from(1))); // Use actual message ID
@@ -811,7 +811,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
         let _ = channel_view.update(PrepareReply(MessageId::from(1))); // Use actual message ID
@@ -829,7 +829,7 @@ mod test {
             MessageId::from(42),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
@@ -867,7 +867,7 @@ mod test {
             MessageId::from(42),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
@@ -931,7 +931,7 @@ mod test {
     fn test_trim_history_by_duration() {
         let mut channel_view =
             Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
-        let now = MeshChat::now();
+        let now = TimeStamp::now();
 
         // Add an old message (2 hours ago)
         let old_time = now - TimeStamp::from(7200u64);
@@ -971,7 +971,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(original, &HistoryLength::All);
         assert_eq!(channel_view.messages.len(), 1);
@@ -981,7 +981,7 @@ mod test {
             MessageId::from(2),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(1), "👍".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(emoji_reply, &HistoryLength::All);
 
@@ -1014,7 +1014,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("my msg".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let task = channel_view.new_message(my_message, &HistoryLength::All);
 
@@ -1035,7 +1035,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(200u64),
             NewTextMessage("other msg".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _task = channel_view.new_message(other_message, &HistoryLength::All);
 
@@ -1115,7 +1115,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(text_msg, &HistoryLength::All);
 
@@ -1128,7 +1128,7 @@ mod test {
                 longitude: 0.0,
                 ..Default::default()
             }),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(pos_msg, &HistoryLength::All);
 
@@ -1149,7 +1149,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(text_msg, &HistoryLength::All);
 
@@ -1169,7 +1169,7 @@ mod test {
                 public_key: vec![],
                 is_unmessagable: false,
             }),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(user_msg, &HistoryLength::All);
 
@@ -1190,7 +1190,7 @@ mod test {
             MessageId::from(2),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(999), "👍".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(emoji_reply, &HistoryLength::All);
 
@@ -1236,7 +1236,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(original, &HistoryLength::All);
 
@@ -1245,7 +1245,7 @@ mod test {
             MessageId::from(2),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(1), "👍".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(emoji1, &HistoryLength::All);
 
@@ -1253,7 +1253,7 @@ mod test {
             MessageId::from(3),
             NodeId::from(300u64),
             EmojiReply(MessageId::from(1), "❤️".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(emoji2, &HistoryLength::All);
 
@@ -1261,7 +1261,7 @@ mod test {
             MessageId::from(4),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(1), "👍".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(emoji3, &HistoryLength::All);
 
@@ -1287,7 +1287,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(original, &HistoryLength::All);
 
@@ -1296,7 +1296,7 @@ mod test {
             MessageId::from(2),
             NodeId::from(200u64),
             crate::message::MCContent::TextMessageReply(MessageId::from(1), "Hi there!".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(reply, &HistoryLength::All);
 
@@ -1313,7 +1313,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(100u64),
             crate::message::MCContent::AlertMessage("Emergency!".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(alert, &HistoryLength::All);
 
@@ -1428,7 +1428,7 @@ mod test {
             MessageId::from(1),
             NodeId::from(200u64),
             NewTextMessage("Original".into()),
-            MeshChat::now(),
+            TimeStamp::now(),
         );
         let _ = channel_view.new_message(message, &HistoryLength::All);
         let _ = channel_view.update(PrepareReply(MessageId::from(1)));

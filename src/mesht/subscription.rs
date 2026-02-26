@@ -15,7 +15,8 @@ use crate::device::DeviceEvent::{
 };
 use crate::device::{DeviceCommand, DeviceEvent};
 use crate::device_list::RadioType;
-use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MeshChat};
+use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition};
+use crate::timestamp::TimeStamp;
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
@@ -188,7 +189,7 @@ impl MyRouter {
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 AlertMessage(message),
-                                MeshChat::now(),
+                                TimeStamp::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -214,7 +215,7 @@ impl MyRouter {
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 mcmessage,
-                                MeshChat::now(),
+                                TimeStamp::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -231,7 +232,7 @@ impl MyRouter {
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 mcposition,
-                                MeshChat::now(),
+                                TimeStamp::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -258,7 +259,7 @@ impl MyRouter {
                                 mesh_packet.id.into(),
                                 mesh_packet.from.into(),
                                 (&user).into(),
-                                MeshChat::now(),
+                                TimeStamp::now(),
                             ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -622,7 +623,7 @@ async fn do_disconnect(stream_api: ConnectedStreamApi) -> Result<StreamApi, Erro
 mod tests {
     use super::*;
     use crate::conversation_id::MessageId;
-    use crate::device::TimeStamp;
+    use crate::timestamp::TimeStamp;
     use futures_channel::mpsc;
     use meshtastic::Message;
     use meshtastic::protobufs::{
@@ -1304,7 +1305,7 @@ mod tests {
         assert!(matches!(event, MCMessageReceived(_, _, _, _, _)));
     }
 
-    // Tests for local timestamp usage (MeshChat::now() instead of radio rx_time)
+    // Tests for local timestamp usage (TimeStamp::now()()() instead of radio rx_time)
 
     #[tokio::test]
     async fn test_text_message_uses_local_timestamp() {
@@ -1312,10 +1313,10 @@ mod tests {
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Hello", 0, 0);
         router.handle_a_mesh_packet(&packet).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver
             .try_recv()
@@ -1336,10 +1337,10 @@ mod tests {
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "Reply", 456, 0);
         router.handle_a_mesh_packet(&packet).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver
             .try_recv()
@@ -1360,10 +1361,10 @@ mod tests {
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         let packet = create_text_mesh_packet(2000, u32::MAX, 0, 123, "👍", 456, 1);
         router.handle_a_mesh_packet(&packet).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver
             .try_recv()
@@ -1384,10 +1385,10 @@ mod tests {
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         let packet = create_position_mesh_packet(2000, u32::MAX, 0, 123, 37_774_900, -122_419_400);
         router.handle_a_mesh_packet(&packet).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver.try_recv().expect("Expected NewNodePosition event");
         if let NewNodePosition(_, _, _, _, timestamp) = event {
@@ -1406,10 +1407,10 @@ mod tests {
         let mut router = MyRouter::new(sender);
         router.my_node_num = Some(1000);
 
-        let before = MeshChat::now();
+        let before = TimeStamp::now();
         let packet = create_nodeinfo_mesh_packet(2000, u32::MAX, 0, 123, "TestNode", "!abcd1234");
         router.handle_a_mesh_packet(&packet).await;
-        let after = MeshChat::now();
+        let after = TimeStamp::now();
 
         let event = receiver.try_recv().expect("Expected NewNodeInfo event");
         if let NewNodeInfo(_, _, _, _, timestamp) = event {

@@ -36,6 +36,7 @@ use crate::styles::{
     fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
     text_input_style, tooltip_style,
 };
+use crate::timestamp::TimeStamp;
 use crate::widgets::battery::{Battery, BatteryState};
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -48,7 +49,6 @@ use meshcore_rs::MeshCoreEvent;
 #[cfg(feature = "meshtastic")]
 use meshtastic::protobufs::FromRadio;
 use std::collections::HashMap;
-use std::ops::Sub;
 use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -62,48 +62,6 @@ pub enum ConnectionState {
 impl Default for ConnectionState {
     fn default() -> Self {
         Disconnected(None, None)
-    }
-}
-
-/// Time in EPOC in seconds timestamp
-#[derive(PartialEq, PartialOrd, Debug, Default, Clone, Copy)]
-pub struct TimeStamp(u64);
-
-impl From<u64> for TimeStamp {
-    fn from(value: u64) -> Self {
-        TimeStamp(value)
-    }
-}
-
-impl From<u32> for TimeStamp {
-    fn from(value: u32) -> Self {
-        TimeStamp(value as u64)
-    }
-}
-
-impl From<TimeStamp> for u64 {
-    fn from(value: TimeStamp) -> Self {
-        value.0
-    }
-}
-
-impl From<TimeStamp> for u32 {
-    fn from(value: TimeStamp) -> Self {
-        value.0 as u32
-    }
-}
-
-impl From<TimeStamp> for i64 {
-    fn from(value: TimeStamp) -> Self {
-        value.0 as i64
-    }
-}
-
-impl Sub for TimeStamp {
-    type Output = TimeStamp;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        TimeStamp::from(self.0.saturating_sub(rhs.0))
     }
 }
 
@@ -337,7 +295,7 @@ impl Device {
                 Err(e) => AppError(
                     "Connection Error".to_string(),
                     format!("{:?}", e),
-                    MeshChat::now(),
+                    TimeStamp::now(),
                 ),
             })
         } else {
@@ -454,13 +412,13 @@ impl Device {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
-                        AppError(summary.clone(), detail.clone(), MeshChat::now())
+                        AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             SendError(summary, detail) => {
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
-                        AppError(summary.clone(), detail.clone(), MeshChat::now())
+                        AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             NotReady => {
@@ -468,7 +426,7 @@ impl Device {
                     .chain(Task::perform(empty(), move |_| {
                         AppError("Subscription not ready".to_string(),
                                  "An attempt was made to communicate to radio prior to the subscription being Ready".to_string(),
-                        MeshChat::now())
+                        TimeStamp::now())
                     }))
             }
             MyNodeNum(my_node_num) => {

@@ -12,15 +12,16 @@ use crate::Message::{
 use crate::config::{Config, HistoryLength, load_config};
 use crate::conversation_id::{ConversationId, NodeId};
 use crate::device::ConnectionState::Connected;
+use crate::device::Device;
 use crate::device::DeviceMessage;
 use crate::device::DeviceMessage::DisconnectRequest;
 #[cfg(any(feature = "meshtastic", feature = "meshcore"))]
 use crate::device::DeviceMessage::SubscriptionMessage;
-use crate::device::{Device, TimeStamp};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
+use crate::timestamp::TimeStamp;
 use crate::{meshc, mesht};
 use iced::font::Weight;
 use iced::keyboard::key;
@@ -32,7 +33,6 @@ use self_update::Status;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::Formatter;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -192,16 +192,6 @@ impl MeshChat {
     /// Create a new instance of the app and load the config asynchronously
     pub fn new() -> (Self, Task<Message>) {
         (Self::default(), load_config())
-    }
-
-    /// Get the current time in epoch as u32
-    pub fn now() -> TimeStamp {
-        TimeStamp::from(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-        )
     }
 
     /// Return the title of the app, which is used in the window title bar.
@@ -636,7 +626,7 @@ pub(crate) mod tests {
                 MessageId::from(message_id),
                 NodeId::from(1u64),
                 msg,
-                MeshChat::now(),
+                TimeStamp::now(),
             );
             let _ = self
                 .device
@@ -872,7 +862,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_now_returns_valid_timestamp() {
-        let now = MeshChat::now();
+        let now = TimeStamp::now();
         // Should be a reasonable recent timestamp (after 2020)
         assert!(now > TimeStamp::from(1577836800u64)); // Jan 1, 2020
     }

@@ -29,6 +29,7 @@ mod mesht;
 #[rustfmt::skip]
 /// Icons generated as a font using iced_fontello
 mod icons;
+mod timestamp;
 
 pub use crate::meshchat::Message;
 

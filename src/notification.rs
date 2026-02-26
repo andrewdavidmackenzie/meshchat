@@ -1,10 +1,10 @@
 use crate::Message;
 use crate::Message::RemoveNotification;
-use crate::device::TimeStamp;
 use crate::styles::{
     TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH, button_chip_style, error_notification_style,
     info_notification_style, permanent_notification_style,
 };
+use crate::timestamp::TimeStamp;
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::widget::container::Style;
@@ -134,9 +134,8 @@ impl Notifications {
 
 #[cfg(test)]
 mod tests {
-    use crate::MeshChat;
-    use crate::device::TimeStamp;
     use crate::notification::{Notification, Notifications};
+    use crate::timestamp::TimeStamp;
 
     #[test]
     fn test_empty_initially() {
@@ -150,7 +149,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "test".into(),
             "test".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         assert_eq!(notifications.inner.len(), 1);
     }
@@ -168,12 +167,12 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "test1".into(),
             "test1".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         let _ = notifications.add(Notification::Info(
             "test2".into(),
             "test2".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         let _ = notifications.remove(0);
         assert_eq!(notifications.inner.len(), 1);
@@ -185,7 +184,7 @@ mod tests {
         let _ = notifications.add(Notification::Error(
             "Error summary".into(),
             "Error detail".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         assert_eq!(notifications.inner.len(), 1);
 
@@ -646,7 +645,7 @@ mod tests {
         let _ = notifications.add(Notification::Info(
             "Test".into(),
             "Detail".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         let _element = notifications.view();
         // Should not panic with current time
@@ -660,7 +659,7 @@ mod tests {
 
     #[test]
     fn test_time_to_text_current() {
-        let _text = Notifications::time_to_text(MeshChat::now());
+        let _text = Notifications::time_to_text(TimeStamp::now());
         // Should not panic
     }
 
@@ -687,7 +686,7 @@ mod tests {
             0,
             "Summary",
             "Detail",
-            MeshChat::now(),
+            TimeStamp::now(),
             info_notification_style,
             true,
         );
@@ -701,7 +700,7 @@ mod tests {
             0,
             "Summary",
             "Detail",
-            MeshChat::now(),
+            TimeStamp::now(),
             error_notification_style,
             true,
         );
@@ -811,7 +810,7 @@ mod tests {
         let _ = notifications.add(Notification::Critical(
             "Critical summary".into(),
             "Critical detail".into(),
-            MeshChat::now(),
+            TimeStamp::now(),
         ));
         assert_eq!(notifications.inner.len(), 1);
         assert_eq!(notifications.inner[0].0, 0);
@@ -896,7 +895,7 @@ mod tests {
             0,
             "Summary",
             "Detail",
-            MeshChat::now(),
+            TimeStamp::now(),
             permanent_notification_style,
             false,
         );

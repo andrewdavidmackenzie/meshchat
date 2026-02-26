@@ -171,8 +171,8 @@ impl ConversationId {
 mod test {
     use super::*;
     use crate::conversation_id;
-    use crate::device::TimeStamp;
     use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser};
+    use crate::timestamp::TimeStamp;
     use meshtastic::packet::PacketDestination;
     use meshtastic::protobufs::{ChannelSettings, Position, User};
     use meshtastic::types::MeshChannel;
