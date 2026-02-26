@@ -4,9 +4,6 @@ use crate::channel_view::ChannelViewMessage::{
     CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, MessageUnseen,
     PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
-use crate::channel_view_entry::MCContent::{
-    AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
-};
 use crate::config::{Config, HistoryLength};
 use crate::device::DeviceViewMessage::{
     ChannelMsg, ForwardMessage, SendPositionMessage, SendSelfInfoMessage, ShowChannel,
@@ -14,12 +11,15 @@ use crate::device::DeviceViewMessage::{
 };
 use crate::device::{Device, DeviceViewMessage};
 use crate::meshchat::MCNodeInfo;
+use crate::message::MCContent::{
+    AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
+};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, button_chip_style, picker_header_style, reply_to_style, scrollbar_style,
     text_input_button_style, text_input_container_style, text_input_style, tooltip_style,
 };
 use crate::widgets::emoji_picker::{EmojiPicker, PickerMessage};
-use crate::{MeshChat, Message, channel_view_entry::ChannelViewEntry, icons};
+use crate::{MeshChat, Message, icons, message::MCMessage};
 use chrono::prelude::DateTime;
 use chrono::{Datelike, Local, Utc};
 use iced::font::Style::Italic;
@@ -58,8 +58,8 @@ pub enum ChannelViewMessage {
 #[derive(Debug, Default)]
 pub struct ChannelView {
     channel_id: ChannelId,
-    message: String,                                // text message typed in so far
-    messages: RingMap<MessageId, ChannelViewEntry>, // entries received so far, keyed by message_id, ordered by timestamp
+    message: String,                         // text message typed in so far
+    messages: RingMap<MessageId, MCMessage>, // entries received so far, keyed by message_id, ordered by timestamp
     my_node_num: NodeId,
     preparing_reply_to: Option<MessageId>,
     emoji_picker: EmojiPicker,
@@ -115,12 +115,12 @@ impl ChannelView {
         }
     }
 
-    /// Add a new [ChannelViewEntry] message to the [ChannelView], unless it's an emoji reply,
+    /// Add a new [MCMessage] message to the [ChannelView], unless it's an emoji reply,
     /// in which case the emoji will be added to the Vec of emoji replies of the original
-    /// message [ChannelViewEntry], and no new entry created
+    /// message [MCMessage], and no new entry created
     pub fn new_message(
         &mut self,
-        new_message: ChannelViewEntry,
+        new_message: MCMessage,
         history_length: &HistoryLength,
     ) -> Task<Message> {
         let mine = new_message.from() == self.my_node_num;
@@ -135,7 +135,7 @@ impl ChannelView {
                 self.messages.insert_sorted_by(
                     new_message.message_id(),
                     new_message,
-                    ChannelViewEntry::sort_by_timestamp,
+                    MCMessage::sort_by_timestamp,
                 );
 
                 self.trim_history(history_length);
@@ -433,7 +433,7 @@ impl ChannelView {
         column: Column<'a, Message>,
         message_id: &MessageId,
     ) -> Column<'a, Message> {
-        if let Some(original_text) = ChannelViewEntry::reply_quote(&self.messages, message_id) {
+        if let Some(original_text) = MCMessage::reply_quote(&self.messages, message_id) {
             let cancel_reply_button: Button<Message> = button(text("⨂").size(16))
                 .on_press(DeviceViewEvent(ChannelMsg(
                     self.channel_id,
@@ -570,11 +570,11 @@ mod test {
         CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PrepareReply, SendMessage,
     };
     use crate::channel_view::{ChannelId, ChannelView};
-    use crate::channel_view_entry::ChannelViewEntry;
-    use crate::channel_view_entry::MCContent::{EmojiReply, NewTextMessage};
     use crate::config::HistoryLength;
     use crate::device::TimeStamp;
     use crate::meshchat::{MCPosition, MCUser};
+    use crate::message::MCContent::{EmojiReply, NewTextMessage};
+    use crate::message::MCMessage;
     use std::time::Duration;
 
     #[tokio::test]
@@ -587,7 +587,7 @@ mod test {
 
         // create a set of messages with more than a second between them
         // message ids are not in order
-        let oldest_message = ChannelViewEntry::new(
+        let oldest_message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
@@ -595,7 +595,7 @@ mod test {
         );
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let middle_message = ChannelViewEntry::new(
+        let middle_message = MCMessage::new(
             MessageId::from(2),
             NodeId::from(1000u64),
             NewTextMessage("Hello 2".to_string()),
@@ -603,7 +603,7 @@ mod test {
         );
         tokio::time::sleep(Duration::from_millis(1500)).await;
 
-        let newest_message = ChannelViewEntry::new(
+        let newest_message = MCMessage::new(
             MessageId::from(3),
             NodeId::from(500u64),
             NewTextMessage("Hello 3".to_string()),
@@ -653,7 +653,7 @@ mod test {
     #[test]
     fn test_unread_count() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
@@ -666,7 +666,7 @@ mod test {
     #[test]
     fn test_replying_valid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
@@ -683,7 +683,7 @@ mod test {
     #[test]
     fn test_replying_invalid_entry() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("Hello 1".to_string()),
@@ -700,7 +700,7 @@ mod test {
     #[test]
     fn test_cancel_prepare_reply() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -717,7 +717,7 @@ mod test {
     #[test]
     fn test_cancel_interactive() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -787,7 +787,7 @@ mod test {
     #[test]
     fn test_send_message_clears_preparing_reply() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -804,7 +804,7 @@ mod test {
     #[test]
     fn test_ack_message() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(42),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -840,7 +840,7 @@ mod test {
     #[test]
     fn test_message_seen() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(42),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -874,7 +874,7 @@ mod test {
 
         // Add 5 messages
         for i in 0..5 {
-            let message = ChannelViewEntry::new(
+            let message = MCMessage::new(
                 MessageId::from(i),
                 NodeId::from(1u64),
                 NewTextMessage(format!("msg {}", i)),
@@ -885,7 +885,7 @@ mod test {
         assert_eq!(channel_view.messages.len(), 5);
 
         // Adding the 6th message with a limit of 3 should trim to 3
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(5),
             NodeId::from(1u64),
             NewTextMessage("msg 5".into()),
@@ -910,7 +910,7 @@ mod test {
 
         // Add an old message (2 hours ago)
         let old_time = now - TimeStamp::from(7200);
-        let old_message = ChannelViewEntry::new(
+        let old_message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("old".into()),
@@ -919,7 +919,7 @@ mod test {
         let _ = channel_view.new_message(old_message, &HistoryLength::All);
 
         // Add a recent message (now)
-        let new_message = ChannelViewEntry::new(
+        let new_message = MCMessage::new(
             MessageId::from(2),
             NodeId::from(1u64),
             NewTextMessage("new".into()),
@@ -941,7 +941,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add the original message
-        let original = ChannelViewEntry::new(
+        let original = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
@@ -951,7 +951,7 @@ mod test {
         assert_eq!(channel_view.messages.len(), 1);
 
         // Add emoji reply to message 1
-        let emoji_reply = ChannelViewEntry::new(
+        let emoji_reply = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(1), "👍".into()),
@@ -983,7 +983,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
 
         // Message from me (node 100)
-        let my_message = ChannelViewEntry::new(
+        let my_message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("my msg".into()),
@@ -1003,7 +1003,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
 
         // Message from someone else (node 200)
-        let other_message = ChannelViewEntry::new(
+        let other_message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(200u64),
             NewTextMessage("other msg".into()),
@@ -1038,7 +1038,7 @@ mod test {
     #[test]
     fn test_message_unseen() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(42),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -1112,7 +1112,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add a text message
-        let text_msg = ChannelViewEntry::new(
+        let text_msg = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -1121,10 +1121,10 @@ mod test {
         let _ = channel_view.new_message(text_msg, &HistoryLength::All);
 
         // Add a position message
-        let pos_msg = ChannelViewEntry::new(
+        let pos_msg = MCMessage::new(
             MessageId::from(2),
             NodeId::from(1u64),
-            crate::channel_view_entry::MCContent::PositionMessage(MCPosition {
+            crate::message::MCContent::PositionMessage(MCPosition {
                 latitude: 0.0,
                 longitude: 0.0,
                 ..Default::default()
@@ -1145,7 +1145,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add a text message
-        let text_msg = ChannelViewEntry::new(
+        let text_msg = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -1154,10 +1154,10 @@ mod test {
         let _ = channel_view.new_message(text_msg, &HistoryLength::All);
 
         // Add a user message
-        let user_msg = ChannelViewEntry::new(
+        let user_msg = MCMessage::new(
             MessageId::from(2),
             NodeId::from(1u64),
-            crate::channel_view_entry::MCContent::UserMessage(MCUser {
+            crate::message::MCContent::UserMessage(MCUser {
                 id: "test".into(),
                 long_name: "Test".into(),
                 short_name: "T".into(),
@@ -1185,7 +1185,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Try to add emoji reply to the message that doesn't exist
-        let emoji_reply = ChannelViewEntry::new(
+        let emoji_reply = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(999), "👍".into()),
@@ -1210,7 +1210,7 @@ mod test {
 
         // Add many messages
         for i in 0..10 {
-            let message = ChannelViewEntry::new(
+            let message = MCMessage::new(
                 MessageId::from(i),
                 NodeId::from(1u64),
                 NewTextMessage(format!("msg {}", i)),
@@ -1228,7 +1228,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add the original message
-        let original = ChannelViewEntry::new(
+        let original = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
@@ -1237,7 +1237,7 @@ mod test {
         let _ = channel_view.new_message(original, &HistoryLength::All);
 
         // Add multiple emoji replies
-        let emoji1 = ChannelViewEntry::new(
+        let emoji1 = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(1), "👍".into()),
@@ -1245,7 +1245,7 @@ mod test {
         );
         let _ = channel_view.new_message(emoji1, &HistoryLength::All);
 
-        let emoji2 = ChannelViewEntry::new(
+        let emoji2 = MCMessage::new(
             MessageId::from(3),
             NodeId::from(300u64),
             EmojiReply(MessageId::from(1), "❤️".into()),
@@ -1253,7 +1253,7 @@ mod test {
         );
         let _ = channel_view.new_message(emoji2, &HistoryLength::All);
 
-        let emoji3 = ChannelViewEntry::new(
+        let emoji3 = MCMessage::new(
             MessageId::from(4),
             NodeId::from(200u64),
             EmojiReply(MessageId::from(1), "👍".into()),
@@ -1278,7 +1278,7 @@ mod test {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
         // Add the original message
-        let original = ChannelViewEntry::new(
+        let original = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
@@ -1287,13 +1287,10 @@ mod test {
         let _ = channel_view.new_message(original, &HistoryLength::All);
 
         // Add a text reply
-        let reply = ChannelViewEntry::new(
+        let reply = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
-            crate::channel_view_entry::MCContent::TextMessageReply(
-                MessageId::from(1),
-                "Hi there!".into(),
-            ),
+            crate::message::MCContent::TextMessageReply(MessageId::from(1), "Hi there!".into()),
             MeshChat::now(),
         );
         let _ = channel_view.new_message(reply, &HistoryLength::All);
@@ -1306,10 +1303,10 @@ mod test {
     fn test_alert_message() {
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(0u64));
 
-        let alert = ChannelViewEntry::new(
+        let alert = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
-            crate::channel_view_entry::MCContent::AlertMessage("Emergency!".into()),
+            crate::message::MCContent::AlertMessage("Emergency!".into()),
             MeshChat::now(),
         );
         let _ = channel_view.new_message(alert, &HistoryLength::All);
@@ -1414,7 +1411,7 @@ mod test {
         use iced::widget::Column;
 
         let mut channel_view = ChannelView::new(ChannelId::Channel(0.into()), NodeId::from(100u64));
-        let message = ChannelViewEntry::new(
+        let message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(200u64),
             NewTextMessage("Original".into()),

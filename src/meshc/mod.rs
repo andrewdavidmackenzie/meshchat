@@ -4,10 +4,10 @@ pub const MESHCORE_SERVICE_UUID: Uuid = Uuid::from_u128(0x6e400001_b5a3_f393_e0a
 
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{MessageId, NodeId};
-use crate::channel_view_entry::MCContent;
 use crate::device::SubscriptionEvent::{MCMessageReceived, NewChannel};
 use crate::device::{SubscriptionEvent, TimeStamp};
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, MeshChat};
+use crate::message::MCContent;
 use meshcore_rs::ContactMessage;
 use meshcore_rs::commands::Destination;
 use meshcore_rs::commands::Destination::Bytes;

@@ -3,12 +3,12 @@ use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::channel_id::{ChannelId, MessageId, NodeId};
 use crate::channel_view::ChannelViewMessage;
 use crate::channel_view::ChannelViewMessage::{MessageSeen, MessageUnseen, ReplyWithEmoji};
-use crate::channel_view_entry::MCContent::{
-    AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
-};
 use crate::device::DeviceViewMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
 use crate::device::{TimeStamp, long_name, short_name};
 use crate::meshchat::{MCNodeInfo, MCPosition, MCUser};
+use crate::message::MCContent::{
+    AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
+};
 use crate::styles::{
     COLOR_DICTIONARY, COLOR_GREEN, TIME_TEXT_COLOR, TIME_TEXT_SIZE, TIME_TEXT_WIDTH,
     alert_message_style, bubble_style, button_chip_style, menu_button_style, message_text_style,
@@ -66,7 +66,7 @@ impl Default for MCContent {
 /// An entry in the Channel View that represents some type of message sent to either this user on
 /// this device or to a channel this device can read. Can be any of [MCContent] types.
 #[derive(Clone, Debug, Default)]
-pub struct ChannelViewEntry {
+pub struct MCMessage {
     /// NodeId of the node that sent this message
     from: NodeId,
     message_id: MessageId,
@@ -83,8 +83,8 @@ pub struct ChannelViewEntry {
     emoji_reply: HashMap<String, Vec<NodeId>>,
 }
 
-impl ChannelViewEntry {
-    /// Create a new [ChannelViewEntry] from the parameters provided. The received time will be set to
+impl MCMessage {
+    /// Create a new [MCMessage] from the parameters provided. The received time will be set to
     /// the current time in EPOC as an u64
     pub fn new(
         message_id: MessageId,
@@ -92,7 +92,7 @@ impl ChannelViewEntry {
         message: MCContent,
         timestamp: TimeStamp,
     ) -> Self {
-        ChannelViewEntry {
+        MCMessage {
             from,
             message_id,
             timestamp: Self::local_time(timestamp),
@@ -168,7 +168,7 @@ impl ChannelViewEntry {
 
     /// Return the text to use when replying to this message
     pub fn reply_quote(
-        entries: &RingMap<MessageId, ChannelViewEntry>,
+        entries: &RingMap<MessageId, MCMessage>,
         message_id: &MessageId,
     ) -> Option<String> {
         entries
@@ -259,7 +259,7 @@ impl ChannelViewEntry {
     /// Create an Element that contains a message received or sent
     pub fn view<'a>(
         &'a self,
-        entries: &'a RingMap<MessageId, ChannelViewEntry>,
+        entries: &'a RingMap<MessageId, MCMessage>,
         nodes: &'a HashMap<NodeId, MCNodeInfo>,
         channel_id: &'a ChannelId,
         mine: bool,
@@ -502,7 +502,7 @@ fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer>
 }
 
 #[cfg(test)]
-impl PartialEq<Self> for ChannelViewEntry {
+impl PartialEq<Self> for MCMessage {
     fn eq(&self, other: &Self) -> bool {
         self.timestamp == other.timestamp
     }
@@ -513,21 +513,19 @@ mod tests {
     use super::*;
     use crate::MeshChat;
     use crate::channel_id::MessageId;
-    use crate::channel_view_entry::MCContent::{
-        AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
-    };
     use crate::meshchat::MCNodeInfo;
+    use crate::message::MCContent::{AlertMessage, EmojiReply, NewTextMessage, TextMessageReply};
     use chrono::Datelike;
     use ringmap::RingMap;
 
     #[test]
     fn test_empty_spans() {
-        assert!(ChannelViewEntry::tokenize("".into()).is_empty())
+        assert!(MCMessage::tokenize("".into()).is_empty())
     }
 
     #[test]
     fn test_text_link_spans() {
-        let spans = ChannelViewEntry::tokenize("open this link https://example.com".into());
+        let spans = MCMessage::tokenize("open this link https://example.com".into());
         assert_eq!(spans.len(), 2);
         assert!(spans[0].link.is_none());
         assert!(spans[1].link.is_some());
@@ -535,8 +533,7 @@ mod tests {
 
     #[test]
     fn test_text_link_text_spans() {
-        let spans =
-            ChannelViewEntry::tokenize("open this link https://example.com if you dare".into());
+        let spans = MCMessage::tokenize("open this link https://example.com if you dare".into());
         assert_eq!(spans.len(), 3);
         assert!(spans[0].link.is_none());
         assert!(spans[1].link.is_some());
@@ -545,16 +542,15 @@ mod tests {
 
     #[test]
     fn test_tokenize_http_link() {
-        let spans = ChannelViewEntry::tokenize("check https://example.com out".into());
+        let spans = MCMessage::tokenize("check https://example.com out".into());
         assert_eq!(spans.len(), 3);
         assert!(spans[1].link.is_some());
     }
 
     #[test]
     fn test_tokenize_multiple_links() {
-        let spans = ChannelViewEntry::tokenize(
-            "visit https://first.com and https://second.com today".into(),
-        );
+        let spans =
+            MCMessage::tokenize("visit https://first.com and https://second.com today".into());
         // "visit " -> span 0
         // "https://first.com " -> span 1 (link)
         // "and " -> span 2
@@ -570,46 +566,46 @@ mod tests {
 
     #[test]
     fn test_tokenize_only_link() {
-        let spans = ChannelViewEntry::tokenize("https://example.com".into());
+        let spans = MCMessage::tokenize("https://example.com".into());
         assert_eq!(spans.len(), 1);
         assert!(spans[0].link.is_some());
     }
 
     #[test]
     fn test_truncate_shorter_than_max() {
-        let result = ChannelViewEntry::truncate("hello", 10);
+        let result = MCMessage::truncate("hello", 10);
         assert_eq!(result, "hello");
     }
 
     #[test]
     fn test_truncate_exact_length() {
-        let result = ChannelViewEntry::truncate("hello", 5);
+        let result = MCMessage::truncate("hello", 5);
         assert_eq!(result, "hello");
     }
 
     #[test]
     fn test_truncate_longer_than_max() {
-        let result = ChannelViewEntry::truncate("hello world", 5);
+        let result = MCMessage::truncate("hello world", 5);
         assert_eq!(result, "hello");
     }
 
     #[test]
     fn test_truncate_unicode() {
         // Test with multibyte Unicode characters
-        let result = ChannelViewEntry::truncate("héllo wörld", 5);
+        let result = MCMessage::truncate("héllo wörld", 5);
         assert_eq!(result, "héllo");
     }
 
     #[test]
     fn test_truncate_emoji() {
         // Emoji are multi-byte
-        let result = ChannelViewEntry::truncate("👋🌍hello", 2);
+        let result = MCMessage::truncate("👋🌍hello", 2);
         assert_eq!(result, "👋🌍");
     }
 
     #[test]
     fn test_channel_view_entry_new() {
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(123),
             NodeId::from(456u64),
             NewTextMessage("Hello".into()),
@@ -624,7 +620,7 @@ mod tests {
 
     #[test]
     fn test_mark_seen() {
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -638,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_ack() {
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -652,7 +648,7 @@ mod tests {
 
     #[test]
     fn test_add_emoji() {
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -671,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_add_emoji_multiple_same() {
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -690,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_add_emoji_different() {
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
@@ -705,8 +701,8 @@ mod tests {
 
     #[test]
     fn test_reply_quote_found() {
-        let mut entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
-        let entry = ChannelViewEntry::new(
+        let mut entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Original message".into()),
@@ -714,22 +710,22 @@ mod tests {
         );
         entries.insert(MessageId::from(1), entry);
 
-        let quote = ChannelViewEntry::reply_quote(&entries, &MessageId::from(1));
+        let quote = MCMessage::reply_quote(&entries, &MessageId::from(1));
         assert!(quote.expect("No quote").contains("Re:"));
     }
 
     #[test]
     fn test_reply_quote_not_found() {
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
-        let quote = ChannelViewEntry::reply_quote(&entries, &MessageId::from(999));
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let quote = MCMessage::reply_quote(&entries, &MessageId::from(999));
         assert!(quote.is_none());
     }
 
     #[test]
     fn test_reply_quote_truncates_long_message() {
-        let mut entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let mut entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let long_message = "This is a very long message that should be truncated when quoted";
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage(long_message.into()),
@@ -737,7 +733,7 @@ mod tests {
         );
         entries.insert(MessageId::from(1), entry);
 
-        let quote = ChannelViewEntry::reply_quote(&entries, &MessageId::from(1))
+        let quote = MCMessage::reply_quote(&entries, &MessageId::from(1))
             .expect("Could not get reply quoted");
         assert!(quote.len() < long_message.len() + 10); // "Re: " prefix plus some truncation
         assert!(quote.ends_with("..."));
@@ -745,33 +741,25 @@ mod tests {
 
     #[test]
     fn test_sort_by_timestamp() {
-        let older = ChannelViewEntry::new(
+        let older = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("old".into()),
             TimeStamp::from(1000),
         );
-        let newer = ChannelViewEntry::new(
+        let newer = MCMessage::new(
             MessageId::from(2),
             NodeId::from(100u64),
             NewTextMessage("new".into()),
             TimeStamp::from(2000),
         );
 
-        let ordering = ChannelViewEntry::sort_by_timestamp(
-            &MessageId::from(1),
-            &older,
-            &MessageId::from(2),
-            &newer,
-        );
+        let ordering =
+            MCMessage::sort_by_timestamp(&MessageId::from(1), &older, &MessageId::from(2), &newer);
         assert_eq!(ordering, Ordering::Less);
 
-        let ordering = ChannelViewEntry::sort_by_timestamp(
-            &MessageId::from(2),
-            &newer,
-            &MessageId::from(1),
-            &older,
-        );
+        let ordering =
+            MCMessage::sort_by_timestamp(&MessageId::from(2), &newer, &MessageId::from(1), &older);
         assert_eq!(ordering, Ordering::Greater);
     }
 
@@ -808,7 +796,7 @@ mod tests {
     #[test]
     fn test_channel_view_entry_time() {
         let timestamp = MeshChat::now();
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
@@ -1041,7 +1029,7 @@ mod tests {
     fn test_color_from_id_returns_valid_color() {
         use crate::styles::COLOR_DICTIONARY;
 
-        let color = ChannelViewEntry::color_from_id(NodeId::from(12345u64));
+        let color = MCMessage::color_from_id(NodeId::from(12345u64));
         // The color should be one of the colors in COLOR_DICTIONARY
         assert!(COLOR_DICTIONARY.contains(&color));
     }
@@ -1049,17 +1037,17 @@ mod tests {
     #[test]
     fn test_color_from_id_consistent() {
         // Same id should always return the same color
-        let color1 = ChannelViewEntry::color_from_id(NodeId::from(42u64));
-        let color2 = ChannelViewEntry::color_from_id(NodeId::from(42u64));
+        let color1 = MCMessage::color_from_id(NodeId::from(42u64));
+        let color2 = MCMessage::color_from_id(NodeId::from(42u64));
         assert_eq!(color1, color2);
     }
 
     #[test]
     fn test_color_from_id_different_ids_can_differ() {
         // Different ids may produce different colors (though collisions are possible)
-        let color1 = ChannelViewEntry::color_from_id(NodeId::from(1u64));
-        let color2 = ChannelViewEntry::color_from_id(NodeId::from(2u64));
-        let color3 = ChannelViewEntry::color_from_id(NodeId::from(3u64));
+        let color1 = MCMessage::color_from_id(NodeId::from(1u64));
+        let color2 = MCMessage::color_from_id(NodeId::from(2u64));
+        let color3 = MCMessage::color_from_id(NodeId::from(3u64));
         // At least some should be different (testing distribution)
         let all_same = color1 == color2 && color2 == color3;
         // It's statistically unlikely all three are the same
@@ -1070,7 +1058,7 @@ mod tests {
     fn test_color_from_id_zero() {
         use crate::styles::COLOR_DICTIONARY;
 
-        let color = ChannelViewEntry::color_from_id(NodeId::from(0u64));
+        let color = MCMessage::color_from_id(NodeId::from(0u64));
         assert!(COLOR_DICTIONARY.contains(&color));
     }
 
@@ -1078,7 +1066,7 @@ mod tests {
     fn test_color_from_id_max_u32() {
         use crate::styles::COLOR_DICTIONARY;
 
-        let color = ChannelViewEntry::color_from_id(NodeId::from(u64::MAX));
+        let color = MCMessage::color_from_id(NodeId::from(u64::MAX));
         assert!(COLOR_DICTIONARY.contains(&color));
     }
 
@@ -1089,7 +1077,7 @@ mod tests {
 
         // Create a specific local time
         let datetime = Local.with_ymd_and_hms(2024, 6, 15, 14, 30, 0).unwrap();
-        let text_widget = ChannelViewEntry::time_to_text(datetime);
+        let text_widget = MCMessage::time_to_text(datetime);
 
         // We can't easily inspect the Text widget's content, but we can verify it doesn't panic
         // and returns a valid widget
@@ -1101,7 +1089,7 @@ mod tests {
         use chrono::TimeZone;
 
         let datetime = Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
-        let text_widget = ChannelViewEntry::time_to_text(datetime);
+        let text_widget = MCMessage::time_to_text(datetime);
         let _ = text_widget;
     }
 
@@ -1110,7 +1098,7 @@ mod tests {
         use chrono::TimeZone;
 
         let datetime = Local.with_ymd_and_hms(2024, 12, 31, 23, 59, 59).unwrap();
-        let text_widget = ChannelViewEntry::time_to_text(datetime);
+        let text_widget = MCMessage::time_to_text(datetime);
         let _ = text_widget;
     }
 
@@ -1119,7 +1107,7 @@ mod tests {
         use chrono::TimeZone;
 
         let datetime = Local.with_ymd_and_hms(2024, 6, 15, 9, 5, 0).unwrap();
-        let text_widget = ChannelViewEntry::time_to_text(datetime);
+        let text_widget = MCMessage::time_to_text(datetime);
         let _ = text_widget;
     }
 
@@ -1129,7 +1117,7 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let sources: Vec<NodeId> = vec![];
 
-        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let element = MCMessage::list_of_nodes(&nodes, &sources);
         // Element should be created without a panic
         let _ = element;
     }
@@ -1159,7 +1147,7 @@ mod tests {
         );
         let sources = vec![NodeId::from(100u64)];
 
-        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let element = MCMessage::list_of_nodes(&nodes, &sources);
         let _ = element;
     }
 
@@ -1208,7 +1196,7 @@ mod tests {
         );
         let sources = vec![NodeId::from(1u64), NodeId::from(2u64)];
 
-        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let element = MCMessage::list_of_nodes(&nodes, &sources);
         let _ = element;
     }
 
@@ -1218,7 +1206,7 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let sources = vec![NodeId::from(999u64)]; // This node doesn't exist in the map
 
-        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let element = MCMessage::list_of_nodes(&nodes, &sources);
         let _ = element;
     }
 
@@ -1248,7 +1236,7 @@ mod tests {
         // sources include both known (1) and unknown (999) nodes
         let sources = vec![NodeId::from(1u64), NodeId::from(999u64)];
 
-        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let element = MCMessage::list_of_nodes(&nodes, &sources);
         let _ = element;
     }
 
@@ -1266,7 +1254,7 @@ mod tests {
         );
         let sources = vec![NodeId::from(50u64)];
 
-        let element = ChannelViewEntry::list_of_nodes(&nodes, &sources);
+        let element = MCMessage::list_of_nodes(&nodes, &sources);
         let _ = element;
     }
 
@@ -1346,7 +1334,7 @@ mod tests {
         use crate::widgets::emoji_picker::EmojiPicker;
         use iced::widget::Column;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello".into()),
@@ -1373,7 +1361,7 @@ mod tests {
         use crate::widgets::emoji_picker::EmojiPicker;
         use iced::widget::Column;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
             NewTextMessage("DM message".into()),
@@ -1400,7 +1388,7 @@ mod tests {
         use crate::widgets::emoji_picker::EmojiPicker;
         use iced::widget::Column;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(3),
             NodeId::from(300u64),
             NewTextMessage("test".into()),
@@ -1427,7 +1415,7 @@ mod tests {
         use crate::widgets::emoji_picker::EmojiPicker;
         use iced::widget::Column;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(4),
             NodeId::from(400u64),
             NewTextMessage("こんにちは".into()),
@@ -1453,7 +1441,7 @@ mod tests {
     fn test_emoji_row_no_emojis() {
         use iced::widget::Column;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
@@ -1470,7 +1458,7 @@ mod tests {
     fn test_emoji_row_with_single_emoji() {
         use iced::widget::Column;
 
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
@@ -1509,7 +1497,7 @@ mod tests {
     fn test_emoji_row_with_multiple_emojis() {
         use iced::widget::Column;
 
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
@@ -1530,7 +1518,7 @@ mod tests {
     fn test_emoji_row_same_emoji_multiple_senders() {
         use iced::widget::Column;
 
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
@@ -1553,7 +1541,7 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("test".into()),
@@ -1571,7 +1559,7 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
             NewTextMessage("dm test".into()),
@@ -1594,7 +1582,7 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(3),
             NodeId::from(300u64),
             NewTextMessage("test".into()),
@@ -1613,7 +1601,7 @@ mod tests {
         use crate::widgets::emoji_picker::EmojiPicker;
 
         let long_msg = "This is a very long message that might affect how the menu displays or behaves when copied or forwarded to other users in the mesh network.";
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(4),
             NodeId::from(400u64),
             NewTextMessage(long_msg.into()),
@@ -1631,7 +1619,7 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(5),
             NodeId::from(500u64),
             NewTextMessage("Привет мир! 🌍".into()),
@@ -1655,13 +1643,13 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Hello world".into()),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
@@ -1675,13 +1663,13 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
             NewTextMessage("Message from other".into()),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         nodes.insert(
             NodeId::from(200u64),
@@ -1715,13 +1703,13 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(3),
             NodeId::from(100u64),
             AlertMessage("System alert!".into()),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
@@ -1736,17 +1724,17 @@ mod tests {
         use crate::widgets::emoji_picker::EmojiPicker;
 
         // Create the original message first
-        let original = ChannelViewEntry::new(
+        let original = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             NewTextMessage("Original message".into()),
             MeshChat::now(),
         );
-        let mut entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let mut entries: RingMap<MessageId, MCMessage> = RingMap::new();
         entries.insert(MessageId::from(1), original);
 
         // Create the reply
-        let reply = ChannelViewEntry::new(
+        let reply = MCMessage::new(
             MessageId::from(2),
             NodeId::from(200u64),
             TextMessageReply(MessageId::from(1), "This is my reply".into()),
@@ -1790,13 +1778,13 @@ mod tests {
             seq_number: 0,
             precision_bits: 0,
         };
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(4),
             NodeId::from(100u64),
             PositionMessage(position),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
@@ -1810,13 +1798,13 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(5),
             NodeId::from(100u64),
             EmojiReply(MessageId::from(1), "👍".into()),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
@@ -1842,13 +1830,13 @@ mod tests {
             public_key: vec![],
             is_unmessagable: false,
         };
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(6),
             NodeId::from(100u64),
             UserMessage(user),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
@@ -1862,7 +1850,7 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(7),
             NodeId::from(100u64),
             NewTextMessage("Popular message".into()),
@@ -1871,7 +1859,7 @@ mod tests {
         entry.add_emoji("👍".to_string(), NodeId::from(200u64));
         entry.add_emoji("❤️".to_string(), NodeId::from(300u64));
 
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
@@ -1885,7 +1873,7 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let mut entry = ChannelViewEntry::new(
+        let mut entry = MCMessage::new(
             MessageId::from(8),
             NodeId::from(100u64),
             NewTextMessage("Acked message".into()),
@@ -1893,7 +1881,7 @@ mod tests {
         );
         entry.ack();
 
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
@@ -1907,13 +1895,13 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(9),
             NodeId::from(100u64),
             NewTextMessage("DM message".into()),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Node(NodeId::from(200u64)); // DM channel
         let emoji_picker = EmojiPicker::new();
@@ -1927,13 +1915,13 @@ mod tests {
         use crate::channel_id::ChannelId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(10),
             NodeId::from(100u64),
             NewTextMessage("Check out https://example.com for more info".into()),
             MeshChat::now(),
         );
-        let entries: RingMap<MessageId, ChannelViewEntry> = RingMap::new();
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let channel_id = ChannelId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();

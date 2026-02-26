@@ -1,13 +1,11 @@
 use crate::channel_id::ChannelId;
 use crate::channel_id::ChannelId::Node;
-use crate::channel_view_entry::MCContent::{
-    AlertMessage, EmojiReply, NewTextMessage, TextMessageReply,
-};
 use crate::device::SubscriberMessage::{
     Connect, Disconnect, MeshTasticRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo,
     SendText,
 };
 use crate::mesht::subscription::DeviceState::{Connected, Disconnected};
+use crate::message::MCContent::{AlertMessage, EmojiReply, NewTextMessage, TextMessageReply};
 
 use crate::channel_id;
 use crate::device::SubscriptionEvent::{

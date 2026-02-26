@@ -1,5 +1,4 @@
 use crate::channel_view::{ChannelView, ChannelViewMessage, MESSAGE_INPUT_ID};
-use crate::channel_view_entry::{ChannelViewEntry, MCContent};
 use crate::config::{Config, HistoryLength};
 use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
 use crate::device::DeviceViewMessage::{
@@ -15,6 +14,7 @@ use crate::device::SubscriptionEvent::{
     ChannelName, ConnectedEvent, ConnectingEvent, ConnectionError, DisconnectedEvent,
     DisconnectingEvent, MyPosition, MyUserInfo, NotReady, Ready, SendError,
 };
+use crate::message::{MCContent, MCMessage};
 use crate::{MeshChat, Message, icons};
 
 use crate::Message::{
@@ -23,7 +23,6 @@ use crate::Message::{
 };
 use crate::channel_id::ChannelId::Node;
 use crate::channel_id::{ChannelId, ChannelIndex, MessageId, NodeId};
-use crate::channel_view_entry::MCContent::{PositionMessage, UserMessage};
 use crate::device::SubscriptionEvent::{
     DeviceBatteryLevel, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification,
@@ -31,6 +30,7 @@ use crate::device::SubscriptionEvent::{
 use crate::device_list::{DeviceList, RadioType};
 use crate::meshchat::View::DeviceListView;
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition, MCUser, View};
+use crate::message::MCContent::{PositionMessage, UserMessage};
 use crate::styles::{
     DAY_SEPARATOR_STYLE, battery_style, button_chip_style, channel_row_style, count_style,
     fav_button_style, scrollbar_style, text_input_button_style, text_input_container_style,
@@ -153,7 +153,7 @@ pub enum DeviceViewMessage {
     SearchInput(String),
     StartEditingAlias(NodeId),
     AliasInput(String),
-    StartForwardingMessage(ChannelViewEntry),
+    StartForwardingMessage(MCMessage),
     ForwardMessage(ChannelId),
     StopForwardingMessage,
     ClearFilter,
@@ -179,7 +179,7 @@ pub struct Device {
     battery_level: Option<u32>,
     editing_alias: Option<NodeId>,
     alias: String,
-    pub forwarding_message: Option<ChannelViewEntry>,
+    pub forwarding_message: Option<MCMessage>,
     history_length: HistoryLength,
     show_position_updates: bool,
     show_user_updates: bool,
@@ -478,7 +478,7 @@ impl Device {
             }
             MCMessageReceived(channel_id, id, from, mc_message, timestamp) => {
                 if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                    let new_message = ChannelViewEntry::new(id, from, mc_message, timestamp);
+                    let new_message = MCMessage::new(id, from, mc_message, timestamp);
                     channel_view.new_message(new_message, &self.history_length)
                 } else {
                     eprintln!("No channel for MCMessage: channel_id = {:?}", channel_id);
@@ -494,7 +494,7 @@ impl Device {
 
                 if self.show_user_updates {
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                        let new_message = ChannelViewEntry::new(id, from, UserMessage(mc_user), timestamp);
+                        let new_message = MCMessage::new(id, from, UserMessage(mc_user), timestamp);
                         return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("NewNodeInfo: Node '{}' unknown", mc_user.long_name);
@@ -506,7 +506,7 @@ impl Device {
                 self.update_node_position(from, &position);
                 if self.show_position_updates {
                     if let Some(channel_view) = &mut self.channel_views.get_mut(&channel_id) {
-                            let new_message = ChannelViewEntry::new(
+                            let new_message = MCMessage::new(
                                 id,
                                 from,
                                 PositionMessage(position),
@@ -1488,7 +1488,7 @@ mod tests {
         let mut device_view = Device::default();
         assert!(device_view.forwarding_message.is_none());
 
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             MCContent::NewTextMessage("test".into()),
@@ -1502,7 +1502,7 @@ mod tests {
     #[test]
     fn test_stop_forwarding_message() {
         let mut device_view = Device::default();
-        let entry = ChannelViewEntry::new(
+        let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
             MCContent::NewTextMessage("test".into()),

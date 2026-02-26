@@ -1,11 +1,11 @@
 use crate::channel_id::{ChannelId, MessageId, NodeId};
-use crate::channel_view_entry::MCContent;
 use crate::config::HistoryLength;
 use crate::device::Device;
 use crate::device::DeviceViewMessage::SubscriptionMessage;
 use crate::device::SubscriptionEvent::MyNodeNum;
 use crate::meshchat::MCChannel;
-use crate::{MeshChat, channel_view_entry};
+use crate::message::MCContent;
+use crate::{MeshChat, message};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static MESSAGE_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -27,7 +27,7 @@ pub fn test_app() -> MeshChat {
 impl MeshChat {
     pub fn new_message(&mut self, msg: MCContent) {
         let message_id = MESSAGE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let channel_view_entry = channel_view_entry::ChannelViewEntry::new(
+        let channel_view_entry = message::MCMessage::new(
             MessageId::from(message_id),
             NodeId::from(1u64),
             msg,

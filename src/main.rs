@@ -10,11 +10,11 @@ use iced::window;
 mod meshchat;
 
 mod channel_view;
-mod channel_view_entry;
 mod config;
 mod device;
 mod device_list;
 mod discovery;
+mod message;
 mod styles;
 mod widgets;
 

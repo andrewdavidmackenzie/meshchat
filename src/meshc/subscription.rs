@@ -23,8 +23,8 @@ use std::pin::Pin;
 use tokio::sync::mpsc::channel;
 use tokio_stream::StreamExt;
 
-use crate::channel_view_entry::MCContent;
 use crate::meshchat::{MCPosition, MCUser, MeshChat};
+use crate::message::MCContent;
 use tokio::time::{Duration, timeout};
 
 enum DeviceState {
