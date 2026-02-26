@@ -928,7 +928,7 @@ mod test {
         let now = TimeStamp::now();
 
         // Add an old message (2 hours ago)
-        let old_time = now - TimeStamp::from(7200u64);
+        let old_time = now - TimeStamp::from(7_200_000_u64);
         let old_message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
