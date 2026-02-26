@@ -190,9 +190,9 @@ impl Conversation {
                     Task::none()
                 }
             }
-            PrepareReply(entry_id) => {
-                if self.messages.contains_key(&entry_id) {
-                    self.preparing_reply_to = Some(entry_id);
+            PrepareReply(message_id) => {
+                if self.messages.contains_key(&message_id) {
+                    self.preparing_reply_to = Some(message_id);
                     operation::focus(MESSAGE_INPUT_ID)
                 } else {
                     Task::none()
@@ -203,8 +203,8 @@ impl Conversation {
                 Task::none()
             }
             MessageSeen(message_id) => {
-                if let Some(channel_view_entry) = self.messages.get_mut(&message_id) {
-                    channel_view_entry.mark_seen();
+                if let Some(message) = self.messages.get_mut(&message_id) {
+                    message.mark_seen();
                 } else {
                     println!("Error Message {} not found in ChannelView", message_id);
                 }

@@ -622,16 +622,16 @@ mod tests {
 
     #[test]
     fn test_mark_seen() {
-        let mut entry = MCMessage::new(
+        let mut message = MCMessage::new(
             MessageId::from(1),
             NodeId::from(1u64),
             NewTextMessage("test".into()),
             MeshChat::now(),
         );
-        assert!(!entry.seen());
+        assert!(!message.seen());
 
-        entry.mark_seen();
-        assert!(entry.seen());
+        message.mark_seen();
+        assert!(message.seen());
     }
 
     #[test]
