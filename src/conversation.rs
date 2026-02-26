@@ -104,10 +104,10 @@ impl Conversation {
                 }
             }
             HistoryLength::Duration(duration) => {
-                let oldest = Self::now_local() - *duration;
+                let oldest = u128::from(TimeStamp::now()) - duration.as_millis();
                 while self
                     .messages
-                    .pop_front_if(|_k, channel_view_entry| channel_view_entry.time() < oldest)
+                    .pop_front_if(|_k, message| u128::from(message.time()) < oldest)
                     .is_some()
                 {}
             }
@@ -206,7 +206,7 @@ impl Conversation {
                 if let Some(message) = self.messages.get_mut(&message_id) {
                     message.mark_seen();
                 } else {
-                    println!("Error Message {} not found in ChannelView", message_id);
+                    eprintln!("Message {} not found in ChannelView", message_id);
                 }
                 Task::none()
             }
@@ -313,12 +313,14 @@ impl Conversation {
                     continue;
                 }
 
-                let message_day = message.time().day();
+                let datetime_local = MCMessage::datetime_local(message.time());
+
+                let message_day = datetime_local.day();
 
                 // Add a day separator when the day of an entry changes
                 if message_day != previous_day {
                     channel_view_content =
-                        channel_view_content.push(Self::day_separator(&message.time()));
+                        channel_view_content.push(Self::day_separator(&datetime_local));
                     previous_day = message_day;
                 }
 

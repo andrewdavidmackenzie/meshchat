@@ -526,9 +526,9 @@ impl Device {
 
     ///  Add a new node to the list if it has the User info we want and is not marked to be ignored
     fn add_node(&mut self, node_info: MCNodeInfo) {
-        if node_info.is_ignored {
-            println!("Node is ignored!: {:?}", node_info);
-        } else if let Some(my_node_num) = self.my_node_id {
+        if !node_info.is_ignored
+            && let Some(my_node_num) = self.my_node_id
+        {
             if node_info.node_id == my_node_num {
                 self.my_position = node_info.position.clone();
                 self.my_user = node_info.user.clone();

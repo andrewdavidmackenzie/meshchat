@@ -729,7 +729,7 @@ async fn handle_radio_event(
         EventType::LogData => { /* LogData payload */ }
         EventType::MsgSent => { /* Doesn't have the message body to reflect back to GUI */ }
         _ => {
-            println!(
+            eprintln!(
                 "Unhandled Event Type ({}) = {meshcore_event:?}",
                 meshcore_event.event_type as u32
             );

@@ -72,7 +72,7 @@ pub struct MCMessage {
     from: NodeId,
     message_id: MessageId,
     /// The daytime the message was sent/received
-    datetime: DateTime<Local>,
+    timestamp: TimeStamp,
     /// The message contents of differing types
     message: MCContent,
     /// Has the user of the app seen this message?
@@ -96,17 +96,10 @@ impl MCMessage {
         MCMessage {
             from,
             message_id,
-            datetime: Self::local_time(timestamp),
+            timestamp,
             message,
             ..Default::default()
         }
-    }
-
-    /// Get the time now as a [DateTime<Local>]
-    pub fn local_time(timestamp: TimeStamp) -> DateTime<Local> {
-        let datetime_utc =
-            DateTime::<Utc>::from_timestamp_millis(timestamp.into()).unwrap_or_default();
-        datetime_utc.with_timezone(&Local)
     }
 
     /// Return the node id that sent the message
@@ -158,13 +151,13 @@ impl MCMessage {
     }
 
     /// Return the time this message was received/sent as u64 seconds in EPOCH time
-    pub fn time(&self) -> DateTime<Local> {
-        self.datetime
+    pub fn time(&self) -> TimeStamp {
+        self.timestamp
     }
 
     /// Order two messages - using the rx_daytime field.
     pub fn sort_by_timestamp(_: &MessageId, left: &Self, _: &MessageId, right: &Self) -> Ordering {
-        left.datetime.cmp(&right.datetime)
+        left.timestamp.cmp(&right.timestamp)
     }
 
     /// Return the text to use when replying to this message
@@ -204,9 +197,16 @@ impl MCMessage {
         COLOR_DICTIONARY[index]
     }
 
+    pub fn datetime_local(timestamp: TimeStamp) -> DateTime<Local> {
+        let datetime_utc =
+            DateTime::<Utc>::from_timestamp_millis(timestamp.into()).unwrap_or_default();
+        datetime_utc.with_timezone(&Local)
+    }
+
     /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
     /// it occurs in. These will be separated by Day specifiers, so day is not needed.
-    fn time_to_text(datetime_local: DateTime<Local>) -> Text<'static> {
+    fn time_to_text(timestamp: TimeStamp) -> Text<'static> {
+        let datetime_local = Self::datetime_local(timestamp);
         let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
         text(time_str)
             .color(TIME_TEXT_COLOR)
@@ -505,7 +505,7 @@ fn menu_root_button(label: &str) -> button::Button<'_, Message, Theme, Renderer>
 #[cfg(test)]
 impl PartialEq<Self> for MCMessage {
     fn eq(&self, other: &Self) -> bool {
-        self.datetime == other.datetime
+        self.timestamp == other.timestamp
     }
 }
 
@@ -516,7 +516,6 @@ mod tests {
     use crate::meshchat::MCNodeInfo;
     use crate::message::MCContent::{AlertMessage, EmojiReply, NewTextMessage, TextMessageReply};
     use crate::timestamp::TimeStamp;
-    use chrono::Datelike;
     use ringmap::RingMap;
 
     #[test]
@@ -795,21 +794,6 @@ mod tests {
     }
 
     #[test]
-    fn test_channel_view_entry_time() {
-        let timestamp = TimeStamp::now();
-        let entry = MCMessage::new(
-            MessageId::from(1),
-            NodeId::from(100u64),
-            NewTextMessage("test".into()),
-            timestamp,
-        );
-
-        // The time should be convertible and reasonable
-        let time = entry.time();
-        assert!(time.year() >= 2020);
-    }
-
-    #[test]
     fn test_mc_message_display_position() {
         let position = MCPosition {
             latitude: 37.7749,
@@ -1069,47 +1053,6 @@ mod tests {
 
         let color = MCMessage::color_from_id(NodeId::from(u64::MAX));
         assert!(COLOR_DICTIONARY.contains(&color));
-    }
-
-    // Tests for time_to_text()
-    #[test]
-    fn test_time_to_text_formats_correctly() {
-        use chrono::TimeZone;
-
-        // Create a specific local time
-        let datetime = Local.with_ymd_and_hms(2024, 6, 15, 14, 30, 0).unwrap();
-        let text_widget = MCMessage::time_to_text(datetime);
-
-        // We can't easily inspect the Text widget's content, but we can verify it doesn't panic
-        // and returns a valid widget
-        let _ = text_widget;
-    }
-
-    #[test]
-    fn test_time_to_text_midnight() {
-        use chrono::TimeZone;
-
-        let datetime = Local.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
-        let text_widget = MCMessage::time_to_text(datetime);
-        let _ = text_widget;
-    }
-
-    #[test]
-    fn test_time_to_text_end_of_day() {
-        use chrono::TimeZone;
-
-        let datetime = Local.with_ymd_and_hms(2024, 12, 31, 23, 59, 59).unwrap();
-        let text_widget = MCMessage::time_to_text(datetime);
-        let _ = text_widget;
-    }
-
-    #[test]
-    fn test_time_to_text_single_digit_hour() {
-        use chrono::TimeZone;
-
-        let datetime = Local.with_ymd_and_hms(2024, 6, 15, 9, 5, 0).unwrap();
-        let text_widget = MCMessage::time_to_text(datetime);
-        let _ = text_widget;
     }
 
     // Tests for list_of_nodes()

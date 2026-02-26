@@ -2,7 +2,7 @@ use std::ops::Sub;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Time in EPOC in seconds timestamp
-#[derive(PartialEq, PartialOrd, Debug, Default, Clone, Copy)]
+#[derive(PartialEq, PartialOrd, Ord, Eq, Debug, Default, Clone, Copy)]
 pub struct TimeStamp(u128);
 
 impl From<u128> for TimeStamp {
@@ -20,6 +20,12 @@ impl From<u64> for TimeStamp {
 impl From<u32> for TimeStamp {
     fn from(value: u32) -> Self {
         TimeStamp(value as u128)
+    }
+}
+
+impl From<TimeStamp> for u128 {
+    fn from(value: TimeStamp) -> Self {
+        value.0
     }
 }
 
