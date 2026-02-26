@@ -20,8 +20,6 @@ mod widgets;
 
 mod conversation_id;
 mod notification;
-#[cfg(test)]
-mod test_helper;
 
 #[cfg(feature = "meshcore")]
 mod meshc;

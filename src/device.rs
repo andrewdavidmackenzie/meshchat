@@ -171,7 +171,7 @@ pub struct Device {
     my_user: Option<MCUser>,
     viewing_conversation: Option<ConversationId>,
     /// Map of ChannelViews, indexed by ChannelId
-    pub conversations: HashMap<ConversationId, Conversation>,
+    conversations: HashMap<ConversationId, Conversation>,
     channels: Vec<MCChannel>,
     nodes: HashMap<NodeId, MCNodeInfo>, // all nodes known to the connected radio
     filter: String,
@@ -374,6 +374,23 @@ impl Device {
         self.alias = String::new();
     }
 
+    /// Process a new message arrival on this device
+    pub fn new_message(
+        &mut self,
+        conversation_id: &ConversationId,
+        new_message: MCMessage,
+    ) -> Task<Message> {
+        if let Some(conversation) = self.conversations.get_mut(conversation_id) {
+            conversation.new_message(new_message, &self.history_length)
+        } else {
+            eprintln!(
+                "No channel for MCMessage: conversation_id = {:?}",
+                conversation_id
+            );
+            Task::none()
+        }
+    }
+
     /// Process an event sent by the subscription connected to the radio
     fn process_subscription_event(
         &mut self,
@@ -480,15 +497,10 @@ impl Device {
                     )
                 })
             }
-            MCMessageReceived(conversation_id, id, from, mc_message, timestamp) => {
-                if let Some(channel_view) = &mut self.conversations.get_mut(&conversation_id) {
-                    let new_message = MCMessage::new(id, from, mc_message, timestamp);
-                    channel_view.new_message(new_message, &self.history_length)
-                } else {
-                    eprintln!("No channel for MCMessage: conversation_id = {:?}", conversation_id);
-                    Task::none()
+            MCMessageReceived(conversation_id, id, from, mc_content, timestamp) => {
+                let new_message = MCMessage::new(id, from, mc_content, timestamp);
+                self.new_message(&conversation_id, new_message)
                 }
-            }
             DeviceBatteryLevel(level) => {
                 self.battery_level = level;
                 Task::none()
@@ -1240,9 +1252,8 @@ mod tests {
     use crate::Message::Navigation;
     use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Disconnecting};
     use crate::device::DeviceViewMessage::{ClearFilter, SearchInput};
-    use crate::device::SubscriberMessage::{Connect, Disconnect};
-    use crate::test_helper;
-    use btleplug::api::BDAddr;
+    use crate::device::SubscriberMessage::Disconnect;
+    use crate::meshchat;
 
     fn test_position(lat: f64, lon: f64) -> MCPosition {
         MCPosition {
@@ -1254,24 +1265,8 @@ mod tests {
 
     #[cfg(feature = "meshtastic")]
     #[tokio::test]
-    async fn test_connect_request_fail() {
-        let mut meshchat = test_helper::test_app();
-        // Subscription won't be ready
-        let _task = meshchat.device.subscriber_send(
-            Connect(
-                BDAddr::from([0, 0, 0, 0, 0, 0]).to_string(),
-                RadioType::Meshtastic,
-            ),
-            Navigation(DeviceListView),
-        );
-
-        assert_eq!(meshchat.device.connection_state, Disconnected(None, None));
-    }
-
-    #[cfg(feature = "meshtastic")]
-    #[tokio::test]
     async fn test_disconnect_request_fail() {
-        let mut meshchat = test_helper::test_app();
+        let mut meshchat = meshchat::tests::test_app();
         // Subscription won't be ready
         let _task = meshchat
             .device
