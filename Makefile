@@ -1,5 +1,8 @@
 all: clippy udeps test features debug
 
+dependencies:
+	cargo install cargo-udeps
+
 pr: checks tests
 
 checks: format clippy publish udeps todos
