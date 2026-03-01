@@ -36,12 +36,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
                         Ok(adapters) => match adapters.into_iter().next() {
                             Some(adapter) => {
                                 // start scanning for MeshTastic radios
-                                match adapter
-                                    .start_scan(ScanFilter {
-                                        services: service_filter,
-                                    })
-                                    .await
-                                {
+                                match adapter.start_scan(ScanFilter::default()).await {
                                     Ok(()) => scan_for_devices(&mut gui_sender, &adapter).await,
                                     Err(e) => {
                                         gui_sender.send(Error(e.to_string())).await.unwrap_or_else(
