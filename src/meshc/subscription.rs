@@ -231,10 +231,12 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
 /// Connect to a specific BlueTooth device by name and return a [MeshCore] that receives messages
 /// from the radio and can be used to send messages to the radio.
 async fn do_connect(ble_device: &DeviceIdentifier) -> meshcore_rs::Result<MeshCore> {
-    // TODO handle MAC for Windows
     timeout(
         Duration::from_secs(10),
+        #[cfg(not(windows))]
         MeshCore::ble_connect(&ble_device.name()),
+        #[cfg(windows)]
+        MeshCore::ble_connect(&ble_device.mac()),
     )
     .await
     .map_err(|_| Error::Timeout("Connect".to_string()))?

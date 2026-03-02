@@ -79,6 +79,12 @@ impl DeviceIdentifier {
     pub fn name(&self) -> String {
         self.name.clone().unwrap_or("Unknown".to_string())
     }
+
+    pub fn mac(&self) -> String {
+        self.mac
+            .map(|mac| mac.to_string())
+            .unwrap_or("Unknown".to_string())
+    }
 }
 
 impl From<&str> for DeviceIdentifier {
