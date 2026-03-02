@@ -158,26 +158,26 @@ impl DeviceList {
             Connecting(device) => {
                 let name_button = iced::widget::button(text(format!(
                     "Connecting to {}",
-                    self.device_name_or_alias(device, config)
+                    self.device_name_or_alias(&device.name(), config)
                 )))
                 .style(button_chip_style);
                 header_row.push(Space::new().width(Fill)).push(name_button)
             }
-            Connected(mac_address, _) => header_row
+            Connected(device, _) => header_row
                 .push(
                     button(text(format!(
                         "📱 {}",
-                        self.device_name_or_alias(mac_address, config)
+                        self.device_name_or_alias(&device.name(), config)
                     )))
                     .style(button_chip_style)
                     .on_press(Navigation(View::DeviceView(None))),
                 )
                 .push(Space::new().width(Fill)),
-            Disconnecting(device_name) => header_row
+            Disconnecting(device) => header_row
                 .push(
                     button(text(format!(
                         "📱 {}",
-                        self.device_name_or_alias(device_name, config)
+                        self.device_name_or_alias(&device.name(), config)
                     )))
                     .style(button_chip_style),
                 )
@@ -278,7 +278,7 @@ impl DeviceList {
             device_row = device_row.push(Space::new().width(6));
             match &connection_state {
                 Connected(connected_device, _) => {
-                    if connected_device == ble_device {
+                    if connected_device == device_identifier {
                         device_row = device_row.push(
                             button("Disconnect")
                                 .on_press(DeviceViewEvent(DisconnectRequest(false)))
@@ -290,20 +290,20 @@ impl DeviceList {
                     device_row = device_row.push(
                         button("Connect")
                             .on_press(DeviceViewEvent(ConnectRequest(
-                                ble_device.clone(),
+                                device_identifier.clone(),
                                 device_info.radio_type,
                                 None,
                             )))
                             .style(button_chip_style),
                     );
                 }
-                Connecting(connecting_mac_address) => {
-                    if connecting_mac_address == ble_device {
+                Connecting(connecting_device) => {
+                    if connecting_device == device_identifier {
                         device_row = device_row.push(button("Connecting").style(button_chip_style));
                     }
                 }
-                Disconnecting(disconnecting_mac_address) => {
-                    if disconnecting_mac_address == ble_device {
+                Disconnecting(disconnecting_device) => {
+                    if disconnecting_device == device_identifier {
                         device_row =
                             device_row.push(button("Disconnecting").style(button_chip_style));
                     }

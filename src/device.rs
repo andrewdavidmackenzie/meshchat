@@ -54,10 +54,10 @@ use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConnectionState {
-    Disconnected(Option<String>, Option<String>),
-    Connecting(String),
-    Connected(String, RadioType),
-    Disconnecting(String),
+    Disconnected(Option<DeviceIdentifier>, Option<String>),
+    Connecting(DeviceIdentifier),
+    Connected(DeviceIdentifier, RadioType),
+    Disconnecting(DeviceIdentifier),
 }
 
 impl Default for ConnectionState {
@@ -73,6 +73,12 @@ impl Default for ConnectionState {
 pub struct DeviceIdentifier {
     pub(crate) name: Option<String>,
     pub(crate) mac: Option<BDAddr>,
+}
+
+impl DeviceIdentifier {
+    pub fn name(&self) -> String {
+        self.name.clone().unwrap_or("Unknown".to_string())
+    }
 }
 
 impl From<&str> for DeviceIdentifier {
@@ -138,11 +144,11 @@ const CHANNEL_SEARCH_ID: Id = Id::new("message_input");
 pub enum DeviceEvent {
     /// The subscription is ready to receive [DeviceCommand] from the GUI
     Ready(Sender<DeviceCommand>, RadioType),
-    ConnectedEvent(String, RadioType),
-    ConnectingEvent(String),
-    DisconnectingEvent(String),
-    DisconnectedEvent(String),
-    ConnectionError(String, String, String),
+    ConnectedEvent(DeviceIdentifier, RadioType),
+    ConnectingEvent(DeviceIdentifier),
+    DisconnectingEvent(DeviceIdentifier),
+    DisconnectedEvent(DeviceIdentifier),
+    ConnectionError(DeviceIdentifier, String, String),
     SendError(String, String),
     NotReady,
     MyNodeNum(NodeId),
@@ -163,7 +169,7 @@ pub enum DeviceEvent {
 
 /// Messages sent from the GUI to the subscription
 pub enum DeviceCommand {
-    Connect(String, RadioType),
+    Connect(DeviceIdentifier, RadioType),
     Disconnect,
     SendText(String, ConversationId, Option<MessageId>), // Optional reply to message id
     SendEmojiReply(String, ConversationId, MessageId),
@@ -177,7 +183,7 @@ pub enum DeviceCommand {
 
 #[derive(Debug, Clone)]
 pub enum DeviceMessage {
-    ConnectRequest(String, RadioType, Option<ConversationId>),
+    ConnectRequest(DeviceIdentifier, RadioType, Option<ConversationId>),
     DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(DeviceEvent),
     ShowChannel(Option<ConversationId>),
@@ -684,7 +690,7 @@ impl Device {
             Connecting(ble_device) => {
                 let name_button = button(text(format!(
                     "Connecting to {}",
-                    device_list_view.device_name_or_alias(ble_device, config)
+                    device_list_view.device_name_or_alias(&ble_device.name(), config)
                 )))
                 .style(button_chip_style);
                 header.push(Space::new().width(Fill)).push(name_button)
@@ -693,7 +699,7 @@ impl Device {
                 let name_row = Row::new()
                     .push(text(format!(
                         "📱 {}",
-                        device_list_view.device_name_or_alias(device, config)
+                        device_list_view.device_name_or_alias(&device.name(), config)
                     )))
                     .push(Space::new().width(4))
                     .push(Self::unread_counter(self.unread_count(
@@ -711,11 +717,11 @@ impl Device {
                     .push(Space::new().width(4))
                     .push(self.battery_level())
             }
-            Disconnecting(device_name) => header
+            Disconnecting(device) => header
                 .push(
                     button(text(format!(
                         "📱 {}",
-                        device_list_view.device_name_or_alias(device_name, config)
+                        device_list_view.device_name_or_alias(&device.name(), config)
                     )))
                     .style(button_chip_style),
                 )
