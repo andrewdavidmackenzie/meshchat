@@ -588,7 +588,18 @@ async fn do_connect(
 ) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
     // On windows try and connect using MAC Address, on other platforms use the name
     #[cfg(windows)]
-    let ble_id = BleId::from_mac_address(ble_device.mac?.as_bytes());
+    let ble_id = BleId::from_mac_address(
+        ble_device
+            .mac
+            .ok_or(Err(Error::StreamBuildError {
+                source: Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "No name or MAC address",
+                )),
+                description: "Connect".to_string(),
+            }))?
+            .as_bytes(),
+    );
     #[cfg(not(windows))]
     let ble_id = if let Some(name) = &ble_device.name {
         BleId::from_name(name)
