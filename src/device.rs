@@ -38,6 +38,7 @@ use crate::styles::{
 };
 use crate::timestamp::TimeStamp;
 use crate::widgets::battery::{Battery, BatteryState};
+use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Button, Column, Container, Id, Row, Space, button, container, operation, scrollable, text,
@@ -62,6 +63,71 @@ pub enum ConnectionState {
 impl Default for ConnectionState {
     fn default() -> Self {
         Disconnected(None, None)
+    }
+}
+
+/// Due to cross-platform differences, one cannot reliably be used. But one of the two must exist
+/// so that we can connect to it later. Discovery will try to get both (depending on the platform).
+/// But subscription will try to connect using the one it knows that works by platform
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct DeviceIdentifier {
+    pub(crate) name: Option<String>,
+    pub(crate) mac: Option<BDAddr>,
+}
+
+impl From<&str> for DeviceIdentifier {
+    fn from(value: &str) -> Self {
+        if let Ok(mac) = BDAddr::from_str_delim(value) {
+            DeviceIdentifier {
+                name: None,
+                mac: Some(mac),
+            }
+        } else {
+            DeviceIdentifier {
+                name: Some(value.to_string()),
+                mac: None,
+            }
+        }
+    }
+}
+
+impl From<String> for DeviceIdentifier {
+    fn from(value: String) -> Self {
+        if let Ok(mac) = BDAddr::from_str_delim(&value) {
+            DeviceIdentifier {
+                name: None,
+                mac: Some(mac),
+            }
+        } else {
+            DeviceIdentifier {
+                name: Some(value),
+                mac: None,
+            }
+        }
+    }
+}
+
+impl From<DeviceIdentifier> for String {
+    fn from(value: DeviceIdentifier) -> Self {
+        if let Some(name) = value.name {
+            name
+        } else if let Some(mac) = value.mac {
+            mac.to_string()
+        } else {
+            "Unknown".to_string()
+        }
+    }
+}
+
+impl From<&DeviceIdentifier> for String {
+    fn from(value: &DeviceIdentifier) -> Self {
+        if let Some(name) = &value.name {
+            name.to_string()
+        } else if let Some(mac) = value.mac {
+            mac.to_string()
+        } else {
+            "Unknown".to_string()
+        }
     }
 }
 
