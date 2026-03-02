@@ -30,8 +30,11 @@ udeps:
 todos:
 	find . -name "*.rs" -exec grep "TODO" {} \; -print
 
-debug:
+build:
 	cargo build
+
+debug:
+	cargo run
 
 release:
 	cargo build --release
