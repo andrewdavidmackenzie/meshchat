@@ -594,12 +594,12 @@ async fn do_connect(
             .ok_or(Err(Error::StreamBuildError {
                 source: Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
-                    "No name or MAC address",
+                    "MAC address required on Windows",
                 )),
                 description: "Connect".to_string(),
-            }))?
+            }))
             .as_bytes(),
-    );
+    )?;
     #[cfg(not(windows))]
     let ble_id = if let Some(name) = &ble_device.name {
         BleId::from_name(name)
