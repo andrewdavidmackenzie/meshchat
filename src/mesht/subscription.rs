@@ -591,13 +591,13 @@ async fn do_connect(
     let ble_id = BleId::from_mac_address(
         ble_device
             .mac
-            .ok_or_else(Err(Error::StreamBuildError {
+            .ok_or_else(|| Error::StreamBuildError {
                 source: Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidInput,
                     "Meshtastic subscription",
                 )),
                 description: "MAC address required on Windows".to_string(),
-            }))?
+            })?
             .to_string()
             .as_str(),
     )?;
