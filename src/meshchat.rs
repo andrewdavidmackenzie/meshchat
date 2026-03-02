@@ -12,11 +12,11 @@ use crate::Message::{
 use crate::config::{Config, HistoryLength, load_config};
 use crate::conversation_id::{ConversationId, NodeId};
 use crate::device::ConnectionState::Connected;
-use crate::device::Device;
 use crate::device::DeviceMessage;
 use crate::device::DeviceMessage::DisconnectRequest;
 #[cfg(any(feature = "meshtastic", feature = "meshcore"))]
 use crate::device::DeviceMessage::SubscriptionMessage;
+use crate::device::{Device, DeviceIdentifier};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;
 use crate::notification::{Notification, Notifications};
@@ -126,7 +126,10 @@ pub enum Message {
     DeviceViewEvent(DeviceMessage),
     Exit,
     ConfigLoaded(Config),
-    DeviceAndChannelConfigChange(Option<(String, RadioType)>, Option<ConversationId>),
+    DeviceAndChannelConfigChange(
+        Option<(DeviceIdentifier, RadioType)>,
+        Option<ConversationId>,
+    ),
     ShowLocation(MCPosition),
     ShowUserInfo(MCUser),
     CloseShowUser,
@@ -271,7 +274,7 @@ impl MeshChat {
                     && self.config.auto_reconnect
                 {
                     tasks.push(self.device.update(DeviceMessage::ConnectRequest(
-                        ble_device_name.clone(),
+                        DeviceIdentifier::from(ble_device_name.as_str()),
                         *radio_type,
                         self.config.conversation_id,
                     )))
@@ -293,9 +296,10 @@ impl MeshChat {
 
                 Task::batch(tasks)
             }
-            DeviceAndChannelConfigChange(ble_device, channel) => {
-                self.config.ble_device = ble_device;
-                self.config.conversation_id = channel;
+            DeviceAndChannelConfigChange(ble_device, conversation_id) => {
+                self.config.ble_device =
+                    ble_device.map(|(device_id, radio_type)| (String::from(device_id), radio_type));
+                self.config.conversation_id = conversation_id;
                 // and save it asynchronously, so that we don't block the GUI thread
                 self.config.save_config()
             }

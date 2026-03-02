@@ -13,7 +13,7 @@ use crate::device::DeviceEvent::{
     DisconnectedEvent, MCMessageReceived, MessageACK, MyNodeNum, NewChannel, NewNode, NewNodeInfo,
     NewNodePosition, RadioNotification, SendError,
 };
-use crate::device::{DeviceCommand, DeviceEvent};
+use crate::device::{DeviceCommand, DeviceEvent, DeviceIdentifier};
 use crate::device_list::RadioType;
 use crate::meshchat::{MCChannel, MCNodeInfo, MCPosition};
 use crate::timestamp::TimeStamp;
@@ -42,7 +42,7 @@ use tokio_stream::{Stream, StreamExt};
 
 enum DeviceState {
     Disconnected,
-    Connected(String, PacketReceiver),
+    Connected(DeviceIdentifier, PacketReceiver),
 }
 
 struct MyRouter {
@@ -337,7 +337,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                     gui_sender
                                         .send(ConnectionError(
                                             ble_device.clone(),
-                                            format!("Failed to connect to {}", ble_device),
+                                            format!("Failed to connect to {}", ble_device.name()),
                                             e.to_string(),
                                         ))
                                         .await
@@ -583,8 +583,39 @@ async fn send_user(
 
 /// Connect to a specific [BleDevice] and return a [PacketReceiver] that receives messages from the
 /// radio and a [ConnectedStreamApi] that can be used to send messages to the radio.
-async fn do_connect(ble_device: &str) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
-    let ble_id = BleId::from_mac_address(ble_device).unwrap_or(BleId::from_name(ble_device));
+async fn do_connect(
+    ble_device: &DeviceIdentifier,
+) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
+    // On windows try and connect using MAC Address, on other platforms use the name
+    #[cfg(windows)]
+    let ble_id = BleId::from_mac_address(
+        ble_device
+            .mac
+            .ok_or_else(|| Error::StreamBuildError {
+                source: Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Meshtastic subscription",
+                )),
+                description: "MAC address required on Windows".to_string(),
+            })?
+            .to_string()
+            .as_str(),
+    )?;
+    #[cfg(not(windows))]
+    let ble_id = if let Some(name) = &ble_device.name {
+        BleId::from_name(name)
+    } else if let Some(mac) = &ble_device.mac {
+        BleId::from_mac_address(mac.to_string().as_str())?
+    } else {
+        return Err(Error::StreamBuildError {
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Meshtastic subscription",
+            )),
+            description: "No name or MAC address".to_string(),
+        });
+    };
+
     let ble_stream = timeout(
         Duration::from_secs(30),
         utils::stream::build_ble_stream::<BleId>(ble_id, Duration::from_secs(10)),

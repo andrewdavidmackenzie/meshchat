@@ -38,6 +38,7 @@ use crate::styles::{
 };
 use crate::timestamp::TimeStamp;
 use crate::widgets::battery::{Battery, BatteryState};
+use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
     Button, Column, Container, Id, Row, Space, button, container, operation, scrollable, text,
@@ -53,15 +54,92 @@ use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum ConnectionState {
-    Disconnected(Option<String>, Option<String>),
-    Connecting(String),
-    Connected(String, RadioType),
-    Disconnecting(String),
+    Disconnected(Option<DeviceIdentifier>, Option<String>),
+    Connecting(DeviceIdentifier),
+    Connected(DeviceIdentifier, RadioType),
+    Disconnecting(DeviceIdentifier),
 }
 
 impl Default for ConnectionState {
     fn default() -> Self {
         Disconnected(None, None)
+    }
+}
+
+/// Due to cross-platform differences, one cannot reliably be used. But one of the two must exist
+/// so that we can connect to it later. Discovery will try to get both (depending on the platform).
+/// But subscription will try to connect using the one it knows that works by platform
+#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct DeviceIdentifier {
+    pub(crate) name: Option<String>,
+    pub(crate) mac: Option<BDAddr>,
+}
+
+impl DeviceIdentifier {
+    pub fn name(&self) -> String {
+        self.name.clone().unwrap_or("Unknown".to_string())
+    }
+
+    pub fn mac(&self) -> String {
+        self.mac
+            .map(|mac| mac.to_string())
+            .unwrap_or("Unknown".to_string())
+    }
+}
+
+impl From<&str> for DeviceIdentifier {
+    fn from(value: &str) -> Self {
+        if let Ok(mac) = BDAddr::from_str_delim(value) {
+            DeviceIdentifier {
+                name: None,
+                mac: Some(mac),
+            }
+        } else {
+            DeviceIdentifier {
+                name: Some(value.to_string()),
+                mac: None,
+            }
+        }
+    }
+}
+
+impl From<String> for DeviceIdentifier {
+    fn from(value: String) -> Self {
+        if let Ok(mac) = BDAddr::from_str_delim(&value) {
+            DeviceIdentifier {
+                name: None,
+                mac: Some(mac),
+            }
+        } else {
+            DeviceIdentifier {
+                name: Some(value),
+                mac: None,
+            }
+        }
+    }
+}
+
+impl From<DeviceIdentifier> for String {
+    fn from(value: DeviceIdentifier) -> Self {
+        if let Some(name) = value.name {
+            name
+        } else if let Some(mac) = value.mac {
+            mac.to_string()
+        } else {
+            "Unknown".to_string()
+        }
+    }
+}
+
+impl From<&DeviceIdentifier> for String {
+    fn from(value: &DeviceIdentifier) -> Self {
+        if let Some(name) = &value.name {
+            name.to_string()
+        } else if let Some(mac) = value.mac {
+            mac.to_string()
+        } else {
+            "Unknown".to_string()
+        }
     }
 }
 
@@ -72,11 +150,11 @@ const CHANNEL_SEARCH_ID: Id = Id::new("message_input");
 pub enum DeviceEvent {
     /// The subscription is ready to receive [DeviceCommand] from the GUI
     Ready(Sender<DeviceCommand>, RadioType),
-    ConnectedEvent(String, RadioType),
-    ConnectingEvent(String),
-    DisconnectingEvent(String),
-    DisconnectedEvent(String),
-    ConnectionError(String, String, String),
+    ConnectedEvent(DeviceIdentifier, RadioType),
+    ConnectingEvent(DeviceIdentifier),
+    DisconnectingEvent(DeviceIdentifier),
+    DisconnectedEvent(DeviceIdentifier),
+    ConnectionError(DeviceIdentifier, String, String),
     SendError(String, String),
     NotReady,
     MyNodeNum(NodeId),
@@ -97,7 +175,7 @@ pub enum DeviceEvent {
 
 /// Messages sent from the GUI to the subscription
 pub enum DeviceCommand {
-    Connect(String, RadioType),
+    Connect(DeviceIdentifier, RadioType),
     Disconnect,
     SendText(String, ConversationId, Option<MessageId>), // Optional reply to message id
     SendEmojiReply(String, ConversationId, MessageId),
@@ -111,7 +189,7 @@ pub enum DeviceCommand {
 
 #[derive(Debug, Clone)]
 pub enum DeviceMessage {
-    ConnectRequest(String, RadioType, Option<ConversationId>),
+    ConnectRequest(DeviceIdentifier, RadioType, Option<ConversationId>),
     DisconnectRequest(bool), // bool is to exit or not
     SubscriptionMessage(DeviceEvent),
     ShowChannel(Option<ConversationId>),
@@ -618,7 +696,7 @@ impl Device {
             Connecting(ble_device) => {
                 let name_button = button(text(format!(
                     "Connecting to {}",
-                    device_list_view.device_name_or_alias(ble_device, config)
+                    device_list_view.device_name_or_alias(&ble_device.name(), config)
                 )))
                 .style(button_chip_style);
                 header.push(Space::new().width(Fill)).push(name_button)
@@ -627,7 +705,7 @@ impl Device {
                 let name_row = Row::new()
                     .push(text(format!(
                         "📱 {}",
-                        device_list_view.device_name_or_alias(device, config)
+                        device_list_view.device_name_or_alias(&device.name(), config)
                     )))
                     .push(Space::new().width(4))
                     .push(Self::unread_counter(self.unread_count(
@@ -645,11 +723,11 @@ impl Device {
                     .push(Space::new().width(4))
                     .push(self.battery_level())
             }
-            Disconnecting(device_name) => header
+            Disconnecting(device) => header
                 .push(
                     button(text(format!(
                         "📱 {}",
-                        device_list_view.device_name_or_alias(device_name, config)
+                        device_list_view.device_name_or_alias(&device.name(), config)
                     )))
                     .style(button_chip_style),
                 )

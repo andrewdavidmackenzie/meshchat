@@ -26,7 +26,7 @@ const ONE_DAY_IN_SECONDS: u64 = 60 * 60 * 24;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
-    pub ble_device: Option<(String, RadioType)>,
+    pub ble_device: Option<(String, RadioType)>, // Keep as String of name or MAC
     #[serde(default, rename = "channel", skip_serializing_if = "Option::is_none")]
     pub conversation_id: Option<ConversationId>,
     #[serde(default = "HashSet::new", skip_serializing_if = "HashSet::is_empty")]

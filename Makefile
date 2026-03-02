@@ -1,4 +1,4 @@
-all: clippy udeps test features debug
+all: clippy udeps test features build
 
 dependencies:
 	cargo install cargo-udeps

@@ -8,7 +8,7 @@ use crate::device::DeviceEvent::{
     MCMessageReceived, MessageACK, MyNodeNum, MyPosition, MyUserInfo, NewChannel, NewNode,
     SendError,
 };
-use crate::device::{DeviceCommand, DeviceEvent};
+use crate::device::{DeviceCommand, DeviceEvent, DeviceIdentifier};
 use crate::device_list::RadioType;
 use crate::meshc::subscription::DeviceState::{Connected, Disconnected};
 use futures::{SinkExt, Stream};
@@ -30,7 +30,7 @@ use tokio::time::{Duration, timeout};
 
 enum DeviceState {
     Disconnected,
-    Connected(String, MeshCore),
+    Connected(DeviceIdentifier, MeshCore),
 }
 
 #[derive(Debug, Default)]
@@ -103,7 +103,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                     gui_sender
                                         .send(ConnectionError(
                                             ble_device.clone(),
-                                            format!("Failed to connect to {}", ble_device),
+                                            format!("Failed to connect to {}", ble_device.name()),
                                             e.to_string(),
                                         ))
                                         .await
@@ -174,6 +174,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                         }
                                         MeshCoreRadioPacket(meshcore_event) => {
                                             handle_radio_event(
+                                                &ble_device,
                                                 &mut radio_cache,
                                                 &meshcore,
                                                 meshcore_event,
@@ -229,10 +230,16 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
 
 /// Connect to a specific BlueTooth device by name and return a [MeshCore] that receives messages
 /// from the radio and can be used to send messages to the radio.
-async fn do_connect(ble_device: &str) -> meshcore_rs::Result<MeshCore> {
-    timeout(Duration::from_secs(10), MeshCore::ble_connect(ble_device))
-        .await
-        .map_err(|_| Error::Timeout("Connect".to_string()))?
+async fn do_connect(ble_device: &DeviceIdentifier) -> meshcore_rs::Result<MeshCore> {
+    timeout(
+        Duration::from_secs(10),
+        #[cfg(not(windows))]
+        MeshCore::ble_connect(&ble_device.name()),
+        #[cfg(windows)]
+        MeshCore::ble_connect(&ble_device.mac()),
+    )
+    .await
+    .map_err(|_| Error::Timeout("Connect".to_string()))?
 }
 
 /// Disconnect from the radio we are currently connected to using the [MeshCore]
@@ -618,6 +625,7 @@ async fn handle_new_contact_message(
 }
 
 async fn handle_radio_event(
+    connected_device_id: &DeviceIdentifier,
     radio_cache: &mut RadioCache,
     meshcore: &MeshCore,
     meshcore_event: Box<MeshCoreEvent>,
@@ -718,7 +726,7 @@ async fn handle_radio_event(
             if let EventPayload::String(message) = meshcore_event.payload {
                 gui_sender
                     .send(ConnectionError(
-                        radio_cache.self_id.to_string(),
+                        connected_device_id.clone(),
                         "Radio Error".to_string(),
                         message,
                     ))
