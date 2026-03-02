@@ -7,4 +7,5 @@ target
 # MacOS files
 .DS_Store
 **/.DS_Store
-.vscode/launch.json
+
+.vscode
