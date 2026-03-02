@@ -597,8 +597,9 @@ async fn do_connect(
                     "MAC address required on Windows",
                 )),
                 description: "Connect".to_string(),
-            }))
-            .as_bytes(),
+            }))?
+            .to_string()
+            .as_str(),
     )?;
     #[cfg(not(windows))]
     let ble_id = if let Some(name) = &ble_device.name {
