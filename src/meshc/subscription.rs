@@ -122,78 +122,90 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
 
                                 let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
 
-                                while let Some(message) = StreamExt::next(&mut merged_stream).await
-                                {
-                                    let result = match message {
-                                        Disconnect => break,
-                                        SendText(text, conversation_id, reply_to_message_id) => {
-                                            send_text_message(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                text,
-                                                reply_to_message_id,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        SendPosition(conversation_id, mcposition) => {
-                                            send_position(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                mcposition,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        SendSelfInfo(conversation_id, mcuser) => {
-                                            send_self_info(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                mcuser,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        SendEmojiReply(
-                                            emoji,
-                                            conversation_id,
-                                            reply_to_message_id,
-                                        ) => {
-                                            send_emoji_reply(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                emoji,
-                                                reply_to_message_id,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        MeshCoreRadioPacket(meshcore_event) => {
-                                            handle_radio_event(
-                                                &ble_device,
-                                                &mut radio_cache,
-                                                &meshcore,
-                                                meshcore_event,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        #[allow(unreachable_patterns)]
-                                        _ => Ok(()),
-                                    };
+                                loop {
+                                    match StreamExt::next(&mut merged_stream).await {
+                                        Some(message) => {
+                                            let result = match message {
+                                                Disconnect => break,
+                                                SendText(
+                                                    text,
+                                                    conversation_id,
+                                                    reply_to_message_id,
+                                                ) => {
+                                                    send_text_message(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        text,
+                                                        reply_to_message_id,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                SendPosition(conversation_id, mcposition) => {
+                                                    send_position(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        mcposition,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                SendSelfInfo(conversation_id, mcuser) => {
+                                                    send_self_info(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        mcuser,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                SendEmojiReply(
+                                                    emoji,
+                                                    conversation_id,
+                                                    reply_to_message_id,
+                                                ) => {
+                                                    send_emoji_reply(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        emoji,
+                                                        reply_to_message_id,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                MeshCoreRadioPacket(meshcore_event) => {
+                                                    handle_radio_event(
+                                                        &ble_device,
+                                                        &mut radio_cache,
+                                                        &meshcore,
+                                                        meshcore_event,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                #[allow(unreachable_patterns)]
+                                                _ => Ok(()),
+                                            };
 
-                                    if let Err(e) = result {
-                                        gui_sender
-                                            .send(SendError(
-                                                "Subscription Error".to_string(),
-                                                e.to_string(),
-                                            ))
-                                            .await
-                                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                            // If there was an error processing the message, then
+                                            // report it
+                                            if let Err(e) = result {
+                                                gui_sender
+                                                    .send(SendError(
+                                                        "Subscription Error".to_string(),
+                                                        e.to_string(),
+                                                    ))
+                                                    .await
+                                                    .unwrap_or_else(|e| {
+                                                        eprintln!("Send error: {e}")
+                                                    });
+                                            }
+                                        }
+                                        None => break,
                                     }
                                 }
                             }
