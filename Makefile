@@ -1,5 +1,8 @@
 all: clippy udeps test features build
 
+clean:
+	cargo clean
+
 dependencies:
 	cargo install cargo-udeps
 

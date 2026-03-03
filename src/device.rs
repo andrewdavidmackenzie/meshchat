@@ -169,7 +169,7 @@ pub enum DeviceEvent {
     MessageACK(ConversationId, MessageId),
     NewNodeInfo(ConversationId, MessageId, NodeId, MCUser, TimeStamp), // conversation_id, id, from, MCUser, TimeStamp
     NewNodePosition(ConversationId, MessageId, NodeId, MCPosition, TimeStamp), // conversation_id, id, from, MCPosition, TimeStamp
-    DeviceBatteryLevel(Option<u32>),
+    DeviceBatteryLevel(Option<u8>),
     ChannelName(i32, String), // channel number, name
 }
 
@@ -224,7 +224,7 @@ pub struct Device {
     nodes: HashMap<NodeId, MCNodeInfo>, // all nodes known to the connected radio
     filter: String,
     exit_pending: bool,
-    battery_level: Option<u32>,
+    battery_level: Option<u8>,
     editing_alias: Option<NodeId>,
     alias: String,
     pub forwarding_message: Option<MCMessage>,

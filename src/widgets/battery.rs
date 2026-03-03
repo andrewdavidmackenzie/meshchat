@@ -48,7 +48,7 @@ pub enum BatteryState {
     /// Battery is charging (show charging icon)
     Charging,
     /// Battery is charged/discharging with the given percentage (0-100)
-    Charged(u32),
+    Charged(u8),
     /// Battery state is unknown (show question mark)
     Unknown,
 }
@@ -193,14 +193,14 @@ where
             height: terminal_height,
         };
 
-        // Create border for battery body
+        // Create the border for the battery body
         let battery_border = Border {
             radius: Radius::from(2.0),
             width: border_width,
             color: custom_style.border_color,
         };
 
-        // Create border for battery terminal
+        // Create the border for the battery terminal
         let terminal_border = Border {
             radius: Radius::from(1.0),
             width: border_width / 2.0,
@@ -771,7 +771,7 @@ mod tests {
     fn test_battery_class() {
         let battery: Battery<Theme> = Battery::new()
             .class(Box::new(|_theme: &Theme, _state| Style::default()) as StyleFn<Theme>);
-        // Verify it compiles and the battery is configured
+        // Verify it compiles, and the battery is configured
         assert_eq!(battery.state, BatteryState::Charged(100));
     }
 
@@ -851,7 +851,7 @@ mod tests {
     fn test_battery_size_with_states() {
         use iced::advanced::Widget;
 
-        // Test size is independent of battery state
+        // Test size is independent of the battery state
         let battery_charging: Battery<Theme> = Battery::new().state(BatteryState::Charging);
         let battery_unknown: Battery<Theme> = Battery::new().state(BatteryState::Unknown);
         let battery_low: Battery<Theme> = Battery::new().state(BatteryState::Charged(10));

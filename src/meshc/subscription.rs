@@ -552,8 +552,9 @@ async fn handle_battery_info(
     battery_info: &BatteryInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
+    println!("Battery Info: {:?}", battery_info);
     gui_sender
-        .send(DeviceBatteryLevel(Some(battery_info.level as u32)))
+        .send(DeviceBatteryLevel(Some(battery_info.percentage())))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
@@ -879,8 +880,9 @@ mod tests {
     #[tokio::test]
     async fn handle_battery_info_sends_event() {
         let battery_info = BatteryInfo {
-            level: 75,
-            storage: 1000,
+            battery_mv: 3100,
+            used_kb: Some(1000),
+            total_kb: Some(1000),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -894,14 +896,15 @@ mod tests {
         let DeviceBatteryLevel(level) = event else {
             unreachable!("Expected DeviceBatteryLevel event")
         };
-        assert_eq!(level, Some(75));
+        assert_eq!(level, Some(10));
     }
 
     #[tokio::test]
     async fn handle_battery_info_zero_level() {
         let battery_info = BatteryInfo {
-            level: 0,
-            storage: 0,
+            battery_mv: 0,
+            used_kb: Some(1000),
+            total_kb: Some(1000),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -921,8 +924,9 @@ mod tests {
     #[tokio::test]
     async fn handle_battery_info_full() {
         let battery_info = BatteryInfo {
-            level: 100,
-            storage: 5000,
+            battery_mv: 4000,
+            used_kb: Some(5000),
+            total_kb: Some(5000),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -1031,8 +1035,9 @@ mod tests {
     #[tokio::test]
     async fn handle_battery_info_max_level() {
         let battery_info = BatteryInfo {
-            level: u16::MAX,
-            storage: u16::MAX,
+            battery_mv: u16::MAX,
+            used_kb: Some(u32::MAX),
+            total_kb: Some(u32::MAX),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -1046,7 +1051,7 @@ mod tests {
         let DeviceBatteryLevel(level) = event else {
             unreachable!("Expected DeviceBatteryLevel event")
         };
-        assert_eq!(level, Some(u16::MAX as u32));
+        assert_eq!(level, Some(100));
     }
 
     // Test that multiple events can be sent through the channel
@@ -1058,24 +1063,27 @@ mod tests {
         // Send multiple battery updates
         handle_battery_info(
             &BatteryInfo {
-                level: 100,
-                storage: 0,
+                battery_mv: 3100,
+                used_kb: Some(0),
+                total_kb: Some(0),
             },
             &mut sender,
         )
         .await;
         handle_battery_info(
             &BatteryInfo {
-                level: 75,
-                storage: 0,
+                battery_mv: 3200,
+                used_kb: Some(0),
+                total_kb: Some(0),
             },
             &mut sender,
         )
         .await;
         handle_battery_info(
             &BatteryInfo {
-                level: 50,
-                storage: 0,
+                battery_mv: 3300,
+                used_kb: Some(0),
+                total_kb: Some(0),
             },
             &mut sender,
         )
@@ -1092,9 +1100,9 @@ mod tests {
             unreachable!("Expected DeviceBatteryLevel")
         };
 
-        assert_eq!(level1, Some(100));
-        assert_eq!(level2, Some(75));
-        assert_eq!(level3, Some(50));
+        assert_eq!(level1, Some(10));
+        assert_eq!(level2, Some(21));
+        assert_eq!(level3, Some(32));
     }
 
     #[test]
