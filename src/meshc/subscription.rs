@@ -1,7 +1,8 @@
 use crate::conversation_id::ConversationId::{Channel, Node};
 use crate::conversation_id::{ChannelIndex, ConversationId, MessageId, NodeId};
 use crate::device::DeviceCommand::{
-    Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
+    BatteryTick, Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition,
+    SendSelfInfo, SendText,
 };
 use crate::device::DeviceEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
@@ -26,12 +27,15 @@ use tokio_stream::StreamExt;
 use crate::meshchat::{MCPosition, MCUser};
 use crate::message::MCContent;
 use crate::timestamp::TimeStamp;
-use tokio::time::{Duration, timeout};
+use tokio::time::{Duration, interval, timeout};
+use tokio_stream::wrappers::IntervalStream;
 
 enum DeviceState {
     Disconnected,
     Connected(DeviceIdentifier, MeshCore),
 }
+
+const BATTERY_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug, Default)]
 struct RadioCache {
@@ -117,83 +121,109 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                             Ok(_) => {
                                 let from_radio_stream =
                                     meshcore.event_stream().map(|from_radio_packet| {
-                                        MeshCoreRadioPacket(Box::new(from_radio_packet))
+                                        Ok::<_, Error>(MeshCoreRadioPacket(Box::new(
+                                            from_radio_packet,
+                                        )))
                                     });
 
-                                let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
+                                // Battery polling every 30 minutes
+                                let battery_interval = interval(BATTERY_INTERVAL);
+                                let battery_stream = IntervalStream::new(battery_interval)
+                                    .map(|_| Ok::<_, Error>(BatteryTick));
 
-                                while let Some(message) = StreamExt::next(&mut merged_stream).await
-                                {
-                                    let result = match message {
-                                        Disconnect => break,
-                                        SendText(text, conversation_id, reply_to_message_id) => {
-                                            send_text_message(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                text,
-                                                reply_to_message_id,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        SendPosition(conversation_id, mcposition) => {
-                                            send_position(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                mcposition,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        SendSelfInfo(conversation_id, mcuser) => {
-                                            send_self_info(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                mcuser,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        SendEmojiReply(
-                                            emoji,
-                                            conversation_id,
-                                            reply_to_message_id,
-                                        ) => {
-                                            send_emoji_reply(
-                                                &meshcore,
-                                                &mut radio_cache,
-                                                conversation_id,
-                                                emoji,
-                                                reply_to_message_id,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        MeshCoreRadioPacket(meshcore_event) => {
-                                            handle_radio_event(
-                                                &ble_device,
-                                                &mut radio_cache,
-                                                &meshcore,
-                                                meshcore_event,
-                                                &mut gui_sender,
-                                            )
-                                            .await
-                                        }
-                                        #[allow(unreachable_patterns)]
-                                        _ => Ok(()),
-                                    };
+                                let gui_result_stream = (&mut gui_stream).map(Ok::<_, Error>);
+                                let mut merged_stream = from_radio_stream
+                                    .merge(gui_result_stream)
+                                    .merge(battery_stream);
 
-                                    if let Err(e) = result {
-                                        gui_sender
-                                            .send(SendError(
-                                                "Subscription Error".to_string(),
-                                                e.to_string(),
-                                            ))
-                                            .await
-                                            .unwrap_or_else(|e| eprintln!("Send error: {e}"));
+                                loop {
+                                    match merged_stream.try_next().await {
+                                        Ok(Some(message)) => {
+                                            let result = match message {
+                                                Disconnect => break,
+                                                SendText(
+                                                    text,
+                                                    conversation_id,
+                                                    reply_to_message_id,
+                                                ) => {
+                                                    send_text_message(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        text,
+                                                        reply_to_message_id,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                SendPosition(conversation_id, mcposition) => {
+                                                    send_position(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        mcposition,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                SendSelfInfo(conversation_id, mcuser) => {
+                                                    send_self_info(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        mcuser,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                SendEmojiReply(
+                                                    emoji,
+                                                    conversation_id,
+                                                    reply_to_message_id,
+                                                ) => {
+                                                    send_emoji_reply(
+                                                        &meshcore,
+                                                        &mut radio_cache,
+                                                        conversation_id,
+                                                        emoji,
+                                                        reply_to_message_id,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                MeshCoreRadioPacket(meshcore_event) => {
+                                                    handle_radio_event(
+                                                        &ble_device,
+                                                        &mut radio_cache,
+                                                        &meshcore,
+                                                        meshcore_event,
+                                                        &mut gui_sender,
+                                                    )
+                                                    .await
+                                                }
+                                                BatteryTick => request_battery(&meshcore).await,
+                                                _ => Ok(()),
+                                            };
+
+                                            // If there was an error processing the message, then
+                                            // report it
+                                            if let Err(e) = result {
+                                                gui_sender
+                                                    .send(SendError(
+                                                        "Subscription Error".to_string(),
+                                                        e.to_string(),
+                                                    ))
+                                                    .await
+                                                    .unwrap_or_else(|e| {
+                                                        eprintln!("Send error: {e}")
+                                                    });
+                                            }
+                                        }
+                                        Ok(None) => break,
+                                        Err(e) => {
+                                            eprintln!("Stream error: {e}");
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -201,7 +231,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                 gui_sender
                                     .send(ConnectionError(
                                         ble_device.clone(),
-                                        "Subscription Could not get SelfInfo".to_string(),
+                                        "Could not initiate comms with the radio".to_string(),
                                         e.to_string(),
                                     ))
                                     .await
@@ -269,11 +299,6 @@ async fn initiate(
     get_channels(meshcore, gui_sender).await?;
 
     get_pending_messages(radio_cache, meshcore, gui_sender).await;
-
-    // Get battery info
-    if let Ok(battery) = meshcore.commands().lock().await.get_bat().await {
-        handle_battery_info(&battery, gui_sender).await;
-    }
 
     send_advert(meshcore).await?;
 
@@ -547,13 +572,20 @@ async fn handle_new_contact(
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
 
-/// Handle reception of Battery Info and send it to the GUI
+/// Request battery level from the device.
+/// The response comes through the event stream and is handled by handle_radio_event.
+async fn request_battery(meshcore: &MeshCore) -> meshcore_rs::Result<()> {
+    meshcore.commands().lock().await.get_bat().await?;
+    Ok(())
+}
+
 async fn handle_battery_info(
     battery_info: &BatteryInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
+    println!("Battery level: {}", battery_info.percentage());
     gui_sender
-        .send(DeviceBatteryLevel(Some(battery_info.level as u32)))
+        .send(DeviceBatteryLevel(Some(battery_info.percentage())))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
@@ -879,8 +911,9 @@ mod tests {
     #[tokio::test]
     async fn handle_battery_info_sends_event() {
         let battery_info = BatteryInfo {
-            level: 75,
-            storage: 1000,
+            battery_mv: 3100,
+            used_kb: Some(1000),
+            total_kb: Some(1000),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -894,14 +927,15 @@ mod tests {
         let DeviceBatteryLevel(level) = event else {
             unreachable!("Expected DeviceBatteryLevel event")
         };
-        assert_eq!(level, Some(75));
+        assert_eq!(level, Some(10));
     }
 
     #[tokio::test]
     async fn handle_battery_info_zero_level() {
         let battery_info = BatteryInfo {
-            level: 0,
-            storage: 0,
+            battery_mv: 0,
+            used_kb: Some(1000),
+            total_kb: Some(1000),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -921,8 +955,9 @@ mod tests {
     #[tokio::test]
     async fn handle_battery_info_full() {
         let battery_info = BatteryInfo {
-            level: 100,
-            storage: 5000,
+            battery_mv: 4000,
+            used_kb: Some(5000),
+            total_kb: Some(5000),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -1031,8 +1066,9 @@ mod tests {
     #[tokio::test]
     async fn handle_battery_info_max_level() {
         let battery_info = BatteryInfo {
-            level: u16::MAX,
-            storage: u16::MAX,
+            battery_mv: u16::MAX,
+            used_kb: Some(u32::MAX),
+            total_kb: Some(u32::MAX),
         };
 
         let (mut sender, mut receiver) = create_test_channel();
@@ -1046,7 +1082,7 @@ mod tests {
         let DeviceBatteryLevel(level) = event else {
             unreachable!("Expected DeviceBatteryLevel event")
         };
-        assert_eq!(level, Some(u16::MAX as u32));
+        assert_eq!(level, Some(100));
     }
 
     // Test that multiple events can be sent through the channel
@@ -1058,24 +1094,27 @@ mod tests {
         // Send multiple battery updates
         handle_battery_info(
             &BatteryInfo {
-                level: 100,
-                storage: 0,
+                battery_mv: 3100,
+                used_kb: Some(0),
+                total_kb: Some(0),
             },
             &mut sender,
         )
         .await;
         handle_battery_info(
             &BatteryInfo {
-                level: 75,
-                storage: 0,
+                battery_mv: 3200,
+                used_kb: Some(0),
+                total_kb: Some(0),
             },
             &mut sender,
         )
         .await;
         handle_battery_info(
             &BatteryInfo {
-                level: 50,
-                storage: 0,
+                battery_mv: 3300,
+                used_kb: Some(0),
+                total_kb: Some(0),
             },
             &mut sender,
         )
@@ -1092,9 +1131,9 @@ mod tests {
             unreachable!("Expected DeviceBatteryLevel")
         };
 
-        assert_eq!(level1, Some(100));
-        assert_eq!(level2, Some(75));
-        assert_eq!(level3, Some(50));
+        assert_eq!(level1, Some(10));
+        assert_eq!(level2, Some(21));
+        assert_eq!(level3, Some(32));
     }
 
     #[test]

@@ -2738,9 +2738,9 @@ dependencies = [
 
 [[package]]
 name = "meshcore-rs"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "330c4df6e6ce4a978b06b2639feeb3bf6fd3bb4426cf42767e62801c3a6c42d3"
+checksum = "81ad4222df48e5d684779fe1d2ce1de63ad998e8c981430ee8a1f027e70c207e"
 dependencies = [
  "btleplug",
  "bytes",

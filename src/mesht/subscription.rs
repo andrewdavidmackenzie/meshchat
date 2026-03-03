@@ -244,7 +244,9 @@ impl MyRouter {
                         && let Some(DeviceMetrics(metrics)) = telemetry.variant
                     {
                         self.gui_sender
-                            .send(DeviceBatteryLevel(metrics.battery_level))
+                            .send(DeviceBatteryLevel(
+                                metrics.battery_level.map(|level| level as u8),
+                            ))
                             .await
                             .unwrap_or_else(|e| eprintln!("Send error: {e}"));
                     }
