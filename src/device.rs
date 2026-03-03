@@ -185,6 +185,8 @@ pub enum DeviceCommand {
     MeshTasticRadioPacket(Box<FromRadio>), // Sent from the radio to the subscription, not GUI
     #[cfg(feature = "meshcore")]
     MeshCoreRadioPacket(Box<MeshCoreEvent>), // Sent from the radio to the subscription, not GUI
+    #[cfg(feature = "meshcore")]
+    BatteryTick, // Periodic timer to request battery level
 }
 
 #[derive(Debug, Clone)]

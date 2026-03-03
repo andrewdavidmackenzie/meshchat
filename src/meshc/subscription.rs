@@ -1,7 +1,8 @@
 use crate::conversation_id::ConversationId::{Channel, Node};
 use crate::conversation_id::{ChannelIndex, ConversationId, MessageId, NodeId};
 use crate::device::DeviceCommand::{
-    Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition, SendSelfInfo, SendText,
+    BatteryTick, Connect, Disconnect, MeshCoreRadioPacket, SendEmojiReply, SendPosition,
+    SendSelfInfo, SendText,
 };
 use crate::device::DeviceEvent::{
     ConnectedEvent, ConnectingEvent, ConnectionError, DeviceBatteryLevel, DisconnectedEvent,
@@ -26,12 +27,15 @@ use tokio_stream::StreamExt;
 use crate::meshchat::{MCPosition, MCUser};
 use crate::message::MCContent;
 use crate::timestamp::TimeStamp;
-use tokio::time::{Duration, timeout};
+use tokio::time::{Duration, interval, timeout};
+use tokio_stream::wrappers::IntervalStream;
 
 enum DeviceState {
     Disconnected,
     Connected(DeviceIdentifier, MeshCore),
 }
+
+const BATTERY_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Debug, Default)]
 struct RadioCache {
@@ -117,14 +121,24 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                             Ok(_) => {
                                 let from_radio_stream =
                                     meshcore.event_stream().map(|from_radio_packet| {
-                                        MeshCoreRadioPacket(Box::new(from_radio_packet))
+                                        Ok::<_, Error>(MeshCoreRadioPacket(Box::new(
+                                            from_radio_packet,
+                                        )))
                                     });
 
-                                let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
+                                // Battery polling every 30 minutes
+                                let battery_interval = interval(BATTERY_INTERVAL);
+                                let battery_stream = IntervalStream::new(battery_interval)
+                                    .map(|_| Ok::<_, Error>(BatteryTick));
+
+                                let gui_result_stream = (&mut gui_stream).map(Ok::<_, Error>);
+                                let mut merged_stream = from_radio_stream
+                                    .merge(gui_result_stream)
+                                    .merge(battery_stream);
 
                                 loop {
-                                    match StreamExt::next(&mut merged_stream).await {
-                                        Some(message) => {
+                                    match merged_stream.try_next().await {
+                                        Ok(Some(message)) => {
                                             let result = match message {
                                                 Disconnect => break,
                                                 SendText(
@@ -187,7 +201,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                                     )
                                                     .await
                                                 }
-                                                #[allow(unreachable_patterns)]
+                                                BatteryTick => request_battery(&meshcore).await,
                                                 _ => Ok(()),
                                             };
 
@@ -205,7 +219,11 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                                     });
                                             }
                                         }
-                                        None => break,
+                                        Ok(None) => break,
+                                        Err(e) => {
+                                            eprintln!("Stream error: {e}");
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -213,7 +231,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                 gui_sender
                                     .send(ConnectionError(
                                         ble_device.clone(),
-                                        "Subscription Could not get SelfInfo".to_string(),
+                                        "Could not initiate comms with the radio".to_string(),
                                         e.to_string(),
                                     ))
                                     .await
@@ -281,11 +299,6 @@ async fn initiate(
     get_channels(meshcore, gui_sender).await?;
 
     get_pending_messages(radio_cache, meshcore, gui_sender).await;
-
-    // Get battery info
-    if let Ok(battery) = meshcore.commands().lock().await.get_bat().await {
-        handle_battery_info(&battery, gui_sender).await;
-    }
 
     send_advert(meshcore).await?;
 
@@ -559,12 +572,18 @@ async fn handle_new_contact(
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
 
-/// Handle reception of Battery Info and send it to the GUI
+/// Request battery level from the device.
+/// The response comes through the event stream and is handled by handle_radio_event.
+async fn request_battery(meshcore: &MeshCore) -> meshcore_rs::Result<()> {
+    meshcore.commands().lock().await.get_bat().await?;
+    Ok(())
+}
+
 async fn handle_battery_info(
     battery_info: &BatteryInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
-    println!("Battery Info: {:?}", battery_info);
+    println!("Battery level: {}", battery_info.percentage());
     gui_sender
         .send(DeviceBatteryLevel(Some(battery_info.percentage())))
         .await
