@@ -1,10 +1,9 @@
-use crate::Message;
 use crate::Message::{CopyToClipBoard, DeviceViewEvent, OpenUrl, ShowLocation};
 use crate::conversation::ChannelViewMessage;
 use crate::conversation::ChannelViewMessage::{MessageSeen, ReplyWithEmoji};
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::DeviceMessage::{ChannelMsg, ShowChannel, StartForwardingMessage};
-use crate::device::{long_name, short_name};
+use crate::device::{is_favourite_node, long_name, short_name};
 use crate::meshchat::{MCNodeInfo, MCPosition, MCUser};
 use crate::message::MCContent::{
     AlertMessage, EmojiReply, NewTextMessage, PositionMessage, TextMessageReply, UserMessage,
@@ -16,6 +15,7 @@ use crate::styles::{
 };
 use crate::timestamp::TimeStamp;
 use crate::widgets::emoji_picker::EmojiPicker;
+use crate::{Message, icons};
 use chrono::{DateTime, Local, Utc};
 use iced::Length::Fixed;
 use iced::advanced::text::Span;
@@ -28,7 +28,7 @@ use iced_aw::menu::Menu;
 use iced_aw::{MenuBar, menu_bar, menu_items};
 use ringmap::RingMap;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::default::Default;
 use std::fmt;
 use std::fmt::Formatter;
@@ -262,6 +262,7 @@ impl MCMessage {
         &'a self,
         entries: &'a RingMap<MessageId, MCMessage>,
         nodes: &'a HashMap<NodeId, MCNodeInfo>,
+        fav_nodes: &'a HashSet<NodeId>,
         conversation_id: &'a ConversationId,
         mine: bool,
         emoji_picker: &'a EmojiPicker,
@@ -274,6 +275,7 @@ impl MCMessage {
                 message_content_column,
                 short_name(nodes, self.from),
                 long_name(nodes, self.from),
+                is_favourite_node(fav_nodes, self.from),
                 message_text.clone(),
                 emoji_picker,
                 conversation_id,
@@ -373,6 +375,7 @@ impl MCMessage {
         message_content_column: Column<'a, Message>,
         short_name: &'a str,
         long_name: &'a str,
+        favorite: bool,
         message: String,
         emoji_picker: &'a EmojiPicker,
         conversation_id: &'a ConversationId,
@@ -393,8 +396,12 @@ impl MCMessage {
 
         top_row = top_row
             .push(self.menu_bar(short_name, message, emoji_picker, conversation_id))
-            .push(Space::new().width(2.0))
+            .push(Space::new().width(4.0))
             .push(short_name_tooltip);
+
+        if favorite {
+            top_row = top_row.push(Space::new().width(4.0)).push(icons::star());
+        }
 
         message_content_column.push(top_row)
     }
@@ -1291,6 +1298,7 @@ mod tests {
             column,
             "TN",
             "Test Node",
+            true,
             "Hello".to_string(),
             &emoji_picker,
             &conversation_id,
@@ -1318,6 +1326,7 @@ mod tests {
             column,
             "DN",
             "DM Node",
+            false,
             "DM message".to_string(),
             &emoji_picker,
             &conversation_id,
@@ -1345,6 +1354,7 @@ mod tests {
             column,
             "",
             "",
+            false,
             "test".to_string(),
             &emoji_picker,
             &conversation_id,
@@ -1372,6 +1382,7 @@ mod tests {
             column,
             "日本",
             "日本語ノード",
+            false,
             "こんにちは".to_string(),
             &emoji_picker,
             &conversation_id,
@@ -1601,8 +1612,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
-
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let mut fav_nodes = HashSet::default();
+        fav_nodes.insert(NodeId::from(100u64));
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1641,8 +1660,16 @@ mod tests {
         );
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, false, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1661,8 +1688,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1691,8 +1726,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = reply.view(&entries, &nodes, &conversation_id, false, &emoji_picker);
+        let element = reply.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1736,8 +1779,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1756,8 +1807,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1788,8 +1847,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1811,8 +1878,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1833,8 +1908,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1853,8 +1936,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Node(NodeId::from(200u64)); // DM channel
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 
@@ -1873,8 +1964,16 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
 
-        let element = entry.view(&entries, &nodes, &conversation_id, true, &emoji_picker);
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+        );
         let _ = element;
     }
 }

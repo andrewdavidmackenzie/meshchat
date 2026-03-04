@@ -34,7 +34,7 @@ use iced::widget::{
 use iced::widget::{Id, operation};
 use iced::{Center, Element, Fill, Font, Padding, Task};
 use ringmap::RingMap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub const MESSAGE_INPUT_ID: Id = Id::new("message_input");
 const CHANNEL_VIEW_SCROLLABLE_ID: Id = Id::new("channel_view_scrollable");
@@ -240,6 +240,7 @@ impl Conversation {
     pub fn view<'a>(
         &'a self,
         nodes: &'a HashMap<NodeId, MCNodeInfo>,
+        fav_nodes: &'a HashSet<NodeId>,
         enable_position: bool,
         enable_my_user: bool,
         device_view: &'a Device,
@@ -249,6 +250,7 @@ impl Conversation {
     ) -> Element<'a, Message> {
         let channel_view_content = self.channel_view(
             nodes,
+            fav_nodes,
             enable_position,
             enable_my_user,
             show_position_updates,
@@ -281,6 +283,7 @@ impl Conversation {
     fn channel_view<'a>(
         &'a self,
         nodes: &'a HashMap<NodeId, MCNodeInfo>,
+        fav_nodes: &'a HashSet<NodeId>,
         enable_position: bool,
         enable_my_info: bool,
         show_position_updates: bool,
@@ -319,6 +322,7 @@ impl Conversation {
                 channel_view_content = channel_view_content.push(message.view(
                     &self.messages,
                     nodes,
+                    fav_nodes,
                     &self.conversation_id,
                     message.from() == self.my_node_num,
                     &self.emoji_picker,

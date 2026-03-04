@@ -49,7 +49,7 @@ use iced::{Bottom, Center, Element, Fill, Padding, Task};
 use meshcore_rs::MeshCoreEvent;
 #[cfg(feature = "meshtastic")]
 use meshtastic::protobufs::FromRadio;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -800,6 +800,7 @@ impl Device {
         {
             return channel_view.view(
                 &self.nodes,
+                &config.fav_nodes,
                 self.my_position.is_some(),
                 self.my_user.is_some(),
                 self,
@@ -1266,6 +1267,11 @@ pub fn text_input_clear_button(enable: bool) -> Button<'static, Message> {
     }
 
     clear_button
+}
+
+/// Return if the node is a favourite node
+pub fn is_favourite_node(fav_nodes: &HashSet<NodeId>, node_id: NodeId) -> bool {
+    fav_nodes.contains(&node_id)
 }
 
 /// Return a short name to display in the message box as the source of a message.
