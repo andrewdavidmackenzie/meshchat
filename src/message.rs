@@ -370,6 +370,7 @@ impl MCMessage {
     }
 
     /// Add a row to the content column with the name of the source node
+    #[allow(clippy::too_many_arguments)]
     fn top_row<'a>(
         &'a self,
         message_content_column: Column<'a, Message>,
