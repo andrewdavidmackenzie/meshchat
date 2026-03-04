@@ -583,7 +583,6 @@ async fn handle_battery_info(
     battery_info: &BatteryInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
-    println!("Battery level: {}", battery_info.percentage());
     gui_sender
         .send(DeviceBatteryLevel(Some(battery_info.percentage())))
         .await
