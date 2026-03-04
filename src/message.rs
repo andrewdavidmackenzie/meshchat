@@ -1298,7 +1298,7 @@ mod tests {
             column,
             "TN",
             "Test Node",
-            false,
+            true,
             "Hello".to_string(),
             &emoji_picker,
             &conversation_id,
@@ -1612,7 +1612,8 @@ mod tests {
         let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
         let conversation_id = ConversationId::Channel(0.into());
         let emoji_picker = EmojiPicker::new();
-        let fav_nodes = HashSet::default();
+        let mut fav_nodes = HashSet::default();
+        fav_nodes.insert(NodeId::from(100u64));
         let element = entry.view(
             &entries,
             &nodes,
