@@ -152,9 +152,16 @@ impl DeviceList {
             .push(button("Devices").style(button_chip_style));
 
         header_row = match connection_state {
-            Disconnected(_, _) => header_row
-                .push(Space::new().width(Fill))
-                .push(iced::widget::button("Disconnected").style(button_chip_style)),
+            Disconnected(_, _) => {
+                let state_message = if self.scanning {
+                    "Scanning"
+                } else {
+                    "Disconnected"
+                };
+                header_row
+                    .push(Space::new().width(Fill))
+                    .push(iced::widget::button(state_message).style(button_chip_style))
+            }
             Connecting(device) => {
                 let name_button = iced::widget::button(text(format!(
                     "Connecting to {}",
@@ -196,7 +203,7 @@ impl DeviceList {
 
         header_row = header_row.push(Device::settings_button());
 
-        // If busy of connecting or disconnecting, add a busy bar to the header
+        // If busy or connecting or disconnecting, add a busy bar to the header
         if self.scanning || matches!(connection_state, Connecting(_) | Disconnecting(_)) {
             Column::new()
                 .push(header_row)
