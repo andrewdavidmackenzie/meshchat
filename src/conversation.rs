@@ -1458,7 +1458,7 @@ mod test {
         let mut channel_view =
             Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
 
-        // Add first message with older timestamp
+        // Add the first message with an older timestamp
         let older_timestamp = TimeStamp::from(1000u64);
         let message1 = MCMessage::new(
             MessageId::from(1),
@@ -1468,7 +1468,7 @@ mod test {
         );
         let _ = channel_view.new_message(message1, &HistoryLength::All);
 
-        // Add second message with newer timestamp
+        // Add the second message with a newer timestamp
         let newer_timestamp = TimeStamp::from(2000u64);
         let message2 = MCMessage::new(
             MessageId::from(2),
@@ -1478,11 +1478,11 @@ mod test {
         );
         let _ = channel_view.new_message(message2, &HistoryLength::All);
 
-        // Mark older message as seen first
+        // Mark the older message as seen first
         let _ = channel_view.update(MessageSeen(MessageId::from(1), older_timestamp));
         assert_eq!(channel_view.last_seen_message, older_timestamp);
 
-        // Mark newer message as seen - should update last_seen_message
+        // Mark the newer message as seen - should update last_seen_message
         let _ = channel_view.update(MessageSeen(MessageId::from(2), newer_timestamp));
         assert_eq!(channel_view.last_seen_message, newer_timestamp);
 
