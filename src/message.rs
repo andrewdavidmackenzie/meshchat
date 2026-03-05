@@ -316,10 +316,10 @@ impl MCMessage {
         // Create the row with message text and time and maybe an ACK tick mark
         let mut text_and_time_row = Row::new();
 
-        // Show a menu bar alongside the content when it's NOT a new source node, as when it is a
-        // new source node, the menu bar will be added to the top_row above. We don't want two menus,
-        // but we do want one if no top_row was added
-        if !new_source_node {
+        // Show a menu bar alongside the other's content when it's NOT a new source node,
+        // as when it is a new source node, the menu bar will be added to the top_row above.
+        // We don't want two menus, but we do want one if no top_row was added
+        if !mine && !new_source_node {
             text_and_time_row = text_and_time_row.push(self.menu_bar(
                 short_name(nodes, self.from),
                 mtc,
