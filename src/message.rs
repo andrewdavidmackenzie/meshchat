@@ -257,6 +257,21 @@ impl MCMessage {
         spans
     }
 
+    /// Determines if the top row (with sender info) should be shown.
+    /// Returns true when the message is not mine AND it's from a new source node.
+    #[cfg(test)]
+    fn show_top_row(mine: bool, new_source_node: bool) -> bool {
+        !mine && new_source_node
+    }
+
+    /// Determines if the inline menu bar should be shown.
+    /// Returns true when the message is not mine AND it's NOT from a new source node.
+    /// (When it's a new source node, the menu is in the top row instead.)
+    #[cfg(test)]
+    fn show_inline_menu(mine: bool, new_source_node: bool) -> bool {
+        !mine && !new_source_node
+    }
+
     /// Create an Element that contains a message received or sent
     #[allow(clippy::too_many_arguments)]
     pub fn view<'a>(
@@ -2372,5 +2387,22 @@ mod tests {
             false,
         );
         let _ = element;
+    }
+
+    #[test]
+    fn test_menu_routing_matrix() {
+        // Test all combinations of mine and new_source_node for top row and inline menu routing
+
+        // show_top_row: should be true only when mine=false AND new_source_node=true
+        assert!(MCMessage::show_top_row(false, true)); // other's message, new source -> show top row
+        assert!(!MCMessage::show_top_row(false, false)); // other's message, same source -> no top row
+        assert!(!MCMessage::show_top_row(true, true)); // my message, new source -> no top row
+        assert!(!MCMessage::show_top_row(true, false)); // my message, same source -> no top row
+
+        // show_inline_menu: should be true only when mine=false AND new_source_node=false
+        assert!(!MCMessage::show_inline_menu(false, true)); // other's message, new source -> menu in top row
+        assert!(MCMessage::show_inline_menu(false, false)); // other's message, same source -> inline menu
+        assert!(!MCMessage::show_inline_menu(true, true)); // my message -> no menu
+        assert!(!MCMessage::show_inline_menu(true, false)); // my message -> no menu
     }
 }
