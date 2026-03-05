@@ -205,7 +205,7 @@ impl MCMessage {
 
     /// Format a time as seconds in epoc (u64) into a String of hour and minutes during the day
     /// it occurs in. These will be separated by Day specifiers, so day is not needed.
-    fn time_to_text(timestamp: TimeStamp) -> Text<'static> {
+    fn time_to_text<'a>(timestamp: TimeStamp) -> Text<'a> {
         let datetime_local = Self::datetime_local(timestamp);
         let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
         text(time_str)
@@ -266,11 +266,13 @@ impl MCMessage {
         conversation_id: &'a ConversationId,
         mine: bool,
         emoji_picker: &'a EmojiPicker,
+        new_source_node: bool,
     ) -> Element<'a, Message> {
         let message_text = self.message().to_string();
+        let mtc = message_text.clone();
         let mut message_content_column = Column::new();
 
-        if !mine {
+        if !mine && new_source_node {
             message_content_column = self.top_row(
                 message_content_column,
                 short_name(nodes, self.from),
@@ -282,7 +284,7 @@ impl MCMessage {
             );
         }
 
-        let content: Element<'static, Message> = match self.message() {
+        let content: Element<'a, Message> = match self.message() {
             AlertMessage(_) => rich_text(Self::tokenize(message_text))
                 .style(alert_message_style)
                 .size(18)
@@ -311,7 +313,18 @@ impl MCMessage {
         };
 
         // Create the row with message text and time and maybe an ACK tick mark
-        let mut text_and_time_row = Row::new()
+        let mut text_and_time_row = Row::new();
+
+        if !new_source_node {
+            text_and_time_row = text_and_time_row.push(self.menu_bar(
+                short_name(nodes, self.from),
+                mtc,
+                emoji_picker,
+                conversation_id,
+            ));
+        }
+
+        text_and_time_row = text_and_time_row
             .push(content)
             .push(Space::new().width(10.0))
             .push(Self::time_to_text(self.time()))
@@ -324,11 +337,20 @@ impl MCMessage {
         // Add the message text and time row
         message_content_column = message_content_column.push(text_and_time_row);
 
-        let mut message_row = Row::new().padding([6, 6]);
-        if !self.emojis().is_empty() {
+        let top_padding = if new_source_node { 6.0 } else { 0.0 };
+
+        let mut message_row = Row::new();
+        if self.emojis().is_empty() {
+            message_row = message_row.padding(Padding {
+                top: top_padding,
+                right: 6.0,
+                bottom: 6.0,
+                left: 6.0,
+            });
+        } else {
             // Butt the emoji_row up against the bubble
             message_row = message_row.padding(Padding {
-                top: 6.0,
+                top: top_padding,
                 right: 6.0,
                 bottom: 0.0,
                 left: 6.0,
@@ -358,13 +380,17 @@ impl MCMessage {
             message_column = message_column.align_x(Left).push(message_row);
         };
 
-        // Add the emoji row outside the bubble, below it
+        // Add the emoji row outside the bubble, below it if there are any
         message_column = self.emoji_row(nodes, message_column);
 
         let message_id = self.message_id;
+        let message_timestamp = self.timestamp;
         sensor(message_column)
             .on_show(move |_| {
-                DeviceViewEvent(ChannelMsg(*conversation_id, MessageSeen(message_id)))
+                DeviceViewEvent(ChannelMsg(
+                    *conversation_id,
+                    MessageSeen(message_id, message_timestamp),
+                ))
             })
             .into()
     }
@@ -1622,6 +1648,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1670,6 +1697,7 @@ mod tests {
             &conversation_id,
             false,
             &emoji_picker,
+            true,
         );
         let _ = element;
     }
@@ -1698,6 +1726,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1736,6 +1765,7 @@ mod tests {
             &conversation_id,
             false,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1789,6 +1819,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1817,6 +1848,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1857,6 +1889,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1888,6 +1921,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1918,6 +1952,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1946,6 +1981,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }
@@ -1974,6 +2010,7 @@ mod tests {
             &conversation_id,
             true,
             &emoji_picker,
+            false,
         );
         let _ = element;
     }

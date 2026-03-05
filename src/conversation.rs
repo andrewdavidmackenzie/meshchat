@@ -46,7 +46,7 @@ pub enum ChannelViewMessage {
     SendMessage(Option<MessageId>), // optional message id if we are replying to that message
     PrepareReply(MessageId),        // entry_id
     CancelPrepareReply,
-    MessageSeen(MessageId),
+    MessageSeen(MessageId, TimeStamp),
     PickChannel(Option<ConversationId>),
     ReplyWithEmoji(MessageId, String, ConversationId), // Send an emoji reply
     EmojiPickerMsg(Box<PickerMessage<ChannelViewMessage>>),
@@ -63,6 +63,7 @@ pub struct Conversation {
     my_node_num: NodeId,
     preparing_reply_to: Option<MessageId>,
     emoji_picker: EmojiPicker,
+    last_seen_message: TimeStamp,
 }
 
 async fn empty() {}
@@ -194,9 +195,12 @@ impl Conversation {
                 self.cancel_interactive();
                 Task::none()
             }
-            MessageSeen(message_id) => {
+            MessageSeen(message_id, timestamp) => {
                 if let Some(message) = self.messages.get_mut(&message_id) {
                     message.mark_seen();
+                    if timestamp > self.last_seen_message {
+                        self.last_seen_message = timestamp
+                    }
                 } else {
                     eprintln!("Message {} not found in ChannelView", message_id);
                 }
@@ -296,6 +300,8 @@ impl Conversation {
         } else {
             let mut previous_day = u32::MIN;
 
+            let mut previous_from = NodeId::from(0u64);
+
             // Add a view to the column for each of the entries in this Channel
             for message in self.messages.values() {
                 // Hide any previously received position updates in the view if config is set to do so
@@ -326,7 +332,10 @@ impl Conversation {
                     &self.conversation_id,
                     message.from() == self.my_node_num,
                     &self.emoji_picker,
+                    message.from() != previous_from,
                 ));
+
+                previous_from = message.from();
             }
 
             // Wrap the list of messages in a scrollable container, with a scrollbar
@@ -867,6 +876,7 @@ mod test {
             NewTextMessage("test".into()),
             TimeStamp::now(),
         );
+        let timestamp = message.time();
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
         assert!(
@@ -878,7 +888,7 @@ mod test {
         );
         assert_eq!(channel_view.unread_count(true, true), 1);
 
-        let _ = channel_view.update(MessageSeen(MessageId::from(42)));
+        let _ = channel_view.update(MessageSeen(MessageId::from(42), timestamp));
         assert!(
             channel_view
                 .messages
@@ -1201,7 +1211,7 @@ mod test {
         let mut channel_view =
             Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
         // Should not panic when marking a nonexistent message as seen
-        let _ = channel_view.update(MessageSeen(MessageId::from(999)));
+        let _ = channel_view.update(MessageSeen(MessageId::from(999), TimeStamp::now()));
     }
 
     #[test]
