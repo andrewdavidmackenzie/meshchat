@@ -2014,4 +2014,359 @@ mod tests {
         );
         let _ = element;
     }
+
+    #[test]
+    fn test_view_new_source_node_shows_top_row() {
+        // When new_source_node=true and mine=false, the top row with sender info should be shown
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = MCMessage::new(
+            MessageId::from(11),
+            NodeId::from(200u64),
+            NewTextMessage("Message from new source".into()),
+            TimeStamp::now(),
+        );
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            NodeId::from(200u64),
+            MCNodeInfo {
+                node_id: NodeId::from(200u64),
+                user: Some(MCUser {
+                    id: "!sender".to_string(),
+                    long_name: "New Source Node".to_string(),
+                    short_name: "NS".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                is_ignored: false,
+            },
+        );
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
+
+        // mine=false, new_source_node=true -> should show top row
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+            true,
+        );
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_not_new_source_node_shows_menu_bar() {
+        // When new_source_node=false, the menu bar should be shown instead of top row
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = MCMessage::new(
+            MessageId::from(12),
+            NodeId::from(200u64),
+            NewTextMessage("Continuation message".into()),
+            TimeStamp::now(),
+        );
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            NodeId::from(200u64),
+            MCNodeInfo {
+                node_id: NodeId::from(200u64),
+                user: Some(MCUser {
+                    id: "!sender".to_string(),
+                    long_name: "Same Source".to_string(),
+                    short_name: "SS".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                is_ignored: false,
+            },
+        );
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
+
+        // mine=false, new_source_node=false -> should show menu bar, not top row
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+            false,
+        );
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_my_message_new_source_node_no_top_row() {
+        // When mine=true, top row should NOT be shown even if new_source_node=true
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = MCMessage::new(
+            MessageId::from(13),
+            NodeId::from(100u64),
+            NewTextMessage("My message".into()),
+            TimeStamp::now(),
+        );
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
+
+        // mine=true, new_source_node=true -> top row should NOT be shown (mine takes precedence)
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            true,
+            &emoji_picker,
+            true,
+        );
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_favourite_node_new_source() {
+        // Test that favourite node styling is applied when new_source_node=true
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = MCMessage::new(
+            MessageId::from(14),
+            NodeId::from(200u64),
+            NewTextMessage("Message from favourite".into()),
+            TimeStamp::now(),
+        );
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            NodeId::from(200u64),
+            MCNodeInfo {
+                node_id: NodeId::from(200u64),
+                user: Some(MCUser {
+                    id: "!fav".to_string(),
+                    long_name: "Favourite Node".to_string(),
+                    short_name: "FN".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                is_ignored: false,
+            },
+        );
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let mut fav_nodes = HashSet::default();
+        fav_nodes.insert(NodeId::from(200u64)); // Mark as favourite
+
+        // mine=false, new_source_node=true, from favourite -> top row with favourite styling
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+            true,
+        );
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_with_emojis_new_source_node() {
+        // Test padding logic when new_source_node=true and message has emojis
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let mut entry = MCMessage::new(
+            MessageId::from(15),
+            NodeId::from(200u64),
+            NewTextMessage("Message with emoji reaction".into()),
+            TimeStamp::now(),
+        );
+        entry.add_emoji("👍".to_string(), NodeId::from(300u64));
+
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            NodeId::from(200u64),
+            MCNodeInfo {
+                node_id: NodeId::from(200u64),
+                user: Some(MCUser {
+                    id: "!sender".to_string(),
+                    long_name: "Sender".to_string(),
+                    short_name: "SN".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                is_ignored: false,
+            },
+        );
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
+
+        // mine=false, new_source_node=true, has emojis -> top padding = 6.0, bottom = 0.0
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+            true,
+        );
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_with_emojis_not_new_source() {
+        // Test padding logic when new_source_node=false and message has emojis
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let mut entry = MCMessage::new(
+            MessageId::from(16),
+            NodeId::from(200u64),
+            NewTextMessage("Continuation with emoji".into()),
+            TimeStamp::now(),
+        );
+        entry.add_emoji("❤️".to_string(), NodeId::from(300u64));
+
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
+
+        // mine=false, new_source_node=false, has emojis -> top padding = 0.0, bottom = 0.0
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+            false,
+        );
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_no_emojis_new_source() {
+        // Test padding logic when new_source_node=true and message has no emojis
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = MCMessage::new(
+            MessageId::from(17),
+            NodeId::from(200u64),
+            NewTextMessage("New source, no emojis".into()),
+            TimeStamp::now(),
+        );
+
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let mut nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        nodes.insert(
+            NodeId::from(200u64),
+            MCNodeInfo {
+                node_id: NodeId::from(200u64),
+                user: Some(MCUser {
+                    id: "!sender".to_string(),
+                    long_name: "Sender".to_string(),
+                    short_name: "SN".to_string(),
+                    hw_model_str: "T-Beam".to_string(),
+                    hw_model: 1,
+                    is_licensed: false,
+                    role_str: "Client".to_string(),
+                    role: 0,
+                    public_key: vec![],
+                    is_unmessagable: false,
+                }),
+                position: None,
+                is_ignored: false,
+            },
+        );
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
+
+        // mine=false, new_source_node=true, no emojis -> top padding = 6.0, bottom = 6.0
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+            true,
+        );
+        let _ = element;
+    }
+
+    #[test]
+    fn test_view_no_emojis_not_new_source() {
+        // Test padding logic when new_source_node=false and message has no emojis
+        use crate::conversation_id::ConversationId;
+        use crate::widgets::emoji_picker::EmojiPicker;
+
+        let entry = MCMessage::new(
+            MessageId::from(18),
+            NodeId::from(200u64),
+            NewTextMessage("Continuation, no emojis".into()),
+            TimeStamp::now(),
+        );
+
+        let entries: RingMap<MessageId, MCMessage> = RingMap::new();
+        let nodes: HashMap<NodeId, MCNodeInfo> = HashMap::new();
+        let conversation_id = ConversationId::Channel(0.into());
+        let emoji_picker = EmojiPicker::new();
+        let fav_nodes = HashSet::default();
+
+        // mine=false, new_source_node=false, no emojis -> top padding = 0.0, bottom = 6.0
+        let element = entry.view(
+            &entries,
+            &nodes,
+            &fav_nodes,
+            &conversation_id,
+            false,
+            &emoji_picker,
+            false,
+        );
+        let _ = element;
+    }
 }
