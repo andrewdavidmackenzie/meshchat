@@ -2402,7 +2402,7 @@ mod tests {
         assert!(!MCMessage::show_top_row(true, false)); // my message, same source -> no top row
 
         // show_inline_menu: should be true only when mine=false AND new_source_node=false
-        assert!(!MCMessage::show_inline_menu(false, true)); // other's message, new source -> menu in top row
+        assert!(!MCMessage::show_inline_menu(false, true)); // other's message, new source -> menu in the top row
         assert!(MCMessage::show_inline_menu(false, false)); // other's message, same source -> inline menu
         assert!(!MCMessage::show_inline_menu(true, true)); // my message -> no menu
         assert!(!MCMessage::show_inline_menu(true, false)); // my message -> no menu
