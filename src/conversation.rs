@@ -46,7 +46,7 @@ pub enum ChannelViewMessage {
     SendMessage(Option<MessageId>), // optional message id if we are replying to that message
     PrepareReply(MessageId),        // entry_id
     CancelPrepareReply,
-    MessageSeen(MessageId),
+    MessageSeen(MessageId, TimeStamp),
     PickChannel(Option<ConversationId>),
     ReplyWithEmoji(MessageId, String, ConversationId), // Send an emoji reply
     EmojiPickerMsg(Box<PickerMessage<ChannelViewMessage>>),
@@ -63,6 +63,7 @@ pub struct Conversation {
     my_node_num: NodeId,
     preparing_reply_to: Option<MessageId>,
     emoji_picker: EmojiPicker,
+    last_seen_message: TimeStamp,
 }
 
 async fn empty() {}
@@ -194,9 +195,15 @@ impl Conversation {
                 self.cancel_interactive();
                 Task::none()
             }
-            MessageSeen(message_id) => {
+            MessageSeen(message_id, timestamp) => {
                 if let Some(message) = self.messages.get_mut(&message_id) {
                     message.mark_seen();
+                    // Persist the timestamp of the last seen message in the ChannelView
+                    // Since the resolution is millisecond, and we don't care which message is
+                    // shown as long as it's the last one, no need to track more closely
+                    if timestamp > self.last_seen_message {
+                        self.last_seen_message = timestamp
+                    }
                 } else {
                     eprintln!("Message {} not found in ChannelView", message_id);
                 }
@@ -296,6 +303,8 @@ impl Conversation {
         } else {
             let mut previous_day = u32::MIN;
 
+            let mut previous_from: Option<NodeId> = None;
+
             // Add a view to the column for each of the entries in this Channel
             for message in self.messages.values() {
                 // Hide any previously received position updates in the view if config is set to do so
@@ -326,7 +335,10 @@ impl Conversation {
                     &self.conversation_id,
                     message.from() == self.my_node_num,
                     &self.emoji_picker,
+                    previous_from != Some(message.from()),
                 ));
+
+                previous_from = Some(message.from());
             }
 
             // Wrap the list of messages in a scrollable container, with a scrollbar
@@ -867,6 +879,7 @@ mod test {
             NewTextMessage("test".into()),
             TimeStamp::now(),
         );
+        let timestamp = message.time();
         let _ = channel_view.new_message(message, &HistoryLength::All);
 
         assert!(
@@ -878,7 +891,7 @@ mod test {
         );
         assert_eq!(channel_view.unread_count(true, true), 1);
 
-        let _ = channel_view.update(MessageSeen(MessageId::from(42)));
+        let _ = channel_view.update(MessageSeen(MessageId::from(42), timestamp));
         assert!(
             channel_view
                 .messages
@@ -1201,7 +1214,7 @@ mod test {
         let mut channel_view =
             Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
         // Should not panic when marking a nonexistent message as seen
-        let _ = channel_view.update(MessageSeen(MessageId::from(999)));
+        let _ = channel_view.update(MessageSeen(MessageId::from(999), TimeStamp::now()));
     }
 
     #[test]
@@ -1440,5 +1453,53 @@ mod test {
         let column: Column<crate::Message> = Column::new();
         let _result_column = channel_view.replying_to(column, &MessageId::from(999));
         // Should return column unchanged
+    }
+
+    #[test]
+    fn test_message_seen_updates_last_seen_timestamp() {
+        // Test that last_seen_message is updated only when a newer timestamp is provided
+        let mut channel_view =
+            Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
+
+        // Add the first message with an older timestamp
+        let older_timestamp = TimeStamp::from(1000u64);
+        let message1 = MCMessage::new(
+            MessageId::from(1),
+            NodeId::from(1u64),
+            NewTextMessage("older message".into()),
+            older_timestamp,
+        );
+        let _ = channel_view.new_message(message1, &HistoryLength::All);
+
+        // Add the second message with a newer timestamp
+        let newer_timestamp = TimeStamp::from(2000u64);
+        let message2 = MCMessage::new(
+            MessageId::from(2),
+            NodeId::from(1u64),
+            NewTextMessage("newer message".into()),
+            newer_timestamp,
+        );
+        let _ = channel_view.new_message(message2, &HistoryLength::All);
+
+        // Mark the older message as seen first
+        let _ = channel_view.update(MessageSeen(MessageId::from(1), older_timestamp));
+        assert_eq!(channel_view.last_seen_message, older_timestamp);
+
+        // Mark the newer message as seen - should update last_seen_message
+        let _ = channel_view.update(MessageSeen(MessageId::from(2), newer_timestamp));
+        assert_eq!(channel_view.last_seen_message, newer_timestamp);
+
+        // Try to mark with an older timestamp again - should NOT update last_seen_message
+        let even_older = TimeStamp::from(500u64);
+        let message3 = MCMessage::new(
+            MessageId::from(3),
+            NodeId::from(1u64),
+            NewTextMessage("even older".into()),
+            even_older,
+        );
+        let _ = channel_view.new_message(message3, &HistoryLength::All);
+        let _ = channel_view.update(MessageSeen(MessageId::from(3), even_older));
+        // last_seen_message should still be newer_timestamp since even_older < newer_timestamp
+        assert_eq!(channel_view.last_seen_message, newer_timestamp);
     }
 }
