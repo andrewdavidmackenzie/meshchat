@@ -335,12 +335,14 @@ impl MCMessage {
         // as when it is a new source node, the menu bar will be added to the top_row above.
         // We don't want two menus, but we do want one if no top_row was added
         if !mine && !new_source_node {
-            text_and_time_row = text_and_time_row.push(self.menu_bar(
-                short_name(nodes, self.from),
-                mtc,
-                emoji_picker,
-                conversation_id,
-            ));
+            text_and_time_row = text_and_time_row
+                .push(self.menu_bar(
+                    short_name(nodes, self.from),
+                    mtc,
+                    emoji_picker,
+                    conversation_id,
+                ))
+                .push(Space::new().width(4.0));
         }
 
         text_and_time_row = text_and_time_row
