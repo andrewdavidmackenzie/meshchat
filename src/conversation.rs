@@ -198,6 +198,9 @@ impl Conversation {
             MessageSeen(message_id, timestamp) => {
                 if let Some(message) = self.messages.get_mut(&message_id) {
                     message.mark_seen();
+                    // Persist the timestamp of the last seen message in the ChannelView
+                    // Since the resolution is millisecond, and we don't care which message is
+                    // shown as long as it's the last one, no need to track more closely
                     if timestamp > self.last_seen_message {
                         self.last_seen_message = timestamp
                     }

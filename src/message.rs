@@ -258,6 +258,7 @@ impl MCMessage {
     }
 
     /// Create an Element that contains a message received or sent
+    #[allow(clippy::too_many_arguments)]
     pub fn view<'a>(
         &'a self,
         entries: &'a RingMap<MessageId, MCMessage>,
@@ -315,6 +316,9 @@ impl MCMessage {
         // Create the row with message text and time and maybe an ACK tick mark
         let mut text_and_time_row = Row::new();
 
+        // Show a menu bar alongside the content when it's NOT a new source node, as when it is a
+        // new source node, the menu bar will be added to the top_row above. We don't want two menus,
+        // but we do want one if no top_row was added
         if !new_source_node {
             text_and_time_row = text_and_time_row.push(self.menu_bar(
                 short_name(nodes, self.from),
@@ -2053,7 +2057,7 @@ mod tests {
         let emoji_picker = EmojiPicker::new();
         let fav_nodes = HashSet::default();
 
-        // mine=false, new_source_node=true -> should show top row
+        // mine=false, new_source_node=true -> should show the top row
         let element = entry.view(
             &entries,
             &nodes,
@@ -2068,7 +2072,7 @@ mod tests {
 
     #[test]
     fn test_view_not_new_source_node_shows_menu_bar() {
-        // When new_source_node=false, the menu bar should be shown instead of top row
+        // When new_source_node=false, the menu bar should be shown instead of the top row
         use crate::conversation_id::ConversationId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
@@ -2104,7 +2108,7 @@ mod tests {
         let emoji_picker = EmojiPicker::new();
         let fav_nodes = HashSet::default();
 
-        // mine=false, new_source_node=false -> should show menu bar, not top row
+        // mine=false, new_source_node=false -> should show the menu bar, not the top row
         let element = entry.view(
             &entries,
             &nodes,
@@ -2119,7 +2123,7 @@ mod tests {
 
     #[test]
     fn test_view_my_message_new_source_node_no_top_row() {
-        // When mine=true, top row should NOT be shown even if new_source_node=true
+        // When mine=true, the top row should NOT be shown even if new_source_node=true
         use crate::conversation_id::ConversationId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
@@ -2202,7 +2206,7 @@ mod tests {
 
     #[test]
     fn test_view_with_emojis_new_source_node() {
-        // Test padding logic when new_source_node=true and message has emojis
+        // Test padding logic when new_source_node=true and the message has emojis
         use crate::conversation_id::ConversationId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
@@ -2255,7 +2259,7 @@ mod tests {
 
     #[test]
     fn test_view_with_emojis_not_new_source() {
-        // Test padding logic when new_source_node=false and message has emojis
+        // Test padding logic when new_source_node=false and the message has emojis
         use crate::conversation_id::ConversationId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
@@ -2288,7 +2292,7 @@ mod tests {
 
     #[test]
     fn test_view_no_emojis_new_source() {
-        // Test padding logic when new_source_node=true and message has no emojis
+        // Test padding logic when new_source_node=true and the message has no emojis
         use crate::conversation_id::ConversationId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
@@ -2340,7 +2344,7 @@ mod tests {
 
     #[test]
     fn test_view_no_emojis_not_new_source() {
-        // Test padding logic when new_source_node=false and message has no emojis
+        // Test padding logic when new_source_node=false and the message has no emojis
         use crate::conversation_id::ConversationId;
         use crate::widgets::emoji_picker::EmojiPicker;
 
