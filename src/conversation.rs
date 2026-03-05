@@ -300,7 +300,7 @@ impl Conversation {
         } else {
             let mut previous_day = u32::MIN;
 
-            let mut previous_from = NodeId::from(0u64);
+            let mut previous_from: Option<NodeId> = None;
 
             // Add a view to the column for each of the entries in this Channel
             for message in self.messages.values() {
@@ -332,10 +332,10 @@ impl Conversation {
                     &self.conversation_id,
                     message.from() == self.my_node_num,
                     &self.emoji_picker,
-                    message.from() != previous_from,
+                    previous_from != Some(message.from()),
                 ));
 
-                previous_from = message.from();
+                previous_from = Some(message.from());
             }
 
             // Wrap the list of messages in a scrollable container, with a scrollbar
