@@ -38,8 +38,8 @@ jobs:
       - name: run clippy
         uses: actions-rs/cargo@v1
         with:
-          command: make
-          args: clippy
+          command: clippy
+          args: --tests --no-deps --all-features --all-targets
 
   todo-check:
     runs-on: ubuntu-latest
