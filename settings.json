@@ -1,0 +1,5 @@
+{
+    "glspc.serverCommand": "jonesy",
+    "glspc.serverCommandArguments": ["lsp"],
+    "glspc.languageId": "rust"
+}

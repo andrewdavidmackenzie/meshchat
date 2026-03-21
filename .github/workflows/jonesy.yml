@@ -1,0 +1,32 @@
+# This workflow:
+# 1. Builds your Rust project in debug mode (required for DWARF debug info)
+# 2. Runs jonesy to analyze panic points
+# 3. Shows panic points as annotations on PR diffs
+
+name: Jonesy Panic Analysis
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build project (debug mode for DWARF info)
+        run: cargo build
+
+      - name: Run jonesy analysis
+        uses: andrewdavidmackenzie/jonesy@v1
+        with:
+          fail-on-panic: false  # Set to true to fail the build if panics found
+
+      # The action outputs the panic count for use in later steps
+      - name: Check panic count
+        run: echo "Found ${{ steps.jonesy.outputs.panic-count }} panic points"
