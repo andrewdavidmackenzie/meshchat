@@ -2381,7 +2381,7 @@ mod tests {
         };
         let _ = device_view.update(SubscriptionMessage(NewChannel(channel)));
 
-        // ACK a message (message doesn't need to exist for ack)
+        // ACK a message (the message doesn't need to exist for ack)
         let _ = device_view.update(SubscriptionMessage(MessageACK(
             ConversationId::Channel(0.into()),
             MessageId::from(123),

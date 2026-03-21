@@ -22,6 +22,11 @@ jobs:
       - name: Build project (debug mode for DWARF info)
         run: cargo build
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt install libdbus-1-dev pkg-config
+
       - name: Run jonesy analysis
         uses: andrewdavidmackenzie/jonesy@v1
         with:
