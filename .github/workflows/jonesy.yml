@@ -12,17 +12,12 @@ on:
 
 jobs:
   analyze:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt install libdbus-1-dev pkg-config
 
       - name: Build project (debug mode for DWARF info)
         run: cargo build
