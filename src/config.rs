@@ -145,6 +145,7 @@ impl std::fmt::Display for HistoryLength {
                 write!(
                     f,
                     "Store all messages in last {} hours",
+                    // jonesy:allow(div_zero) - as divisor is constant > 0
                     d.as_secs() / (60 * 60)
                 )
             }

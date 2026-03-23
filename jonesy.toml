@@ -1,3 +1,7 @@
 [[rules]]
 path = "**/config.rs"
 allow = ["format"]
+
+[[rules]]
+path = "**/config.rs"
+allow = ["capacity"]
