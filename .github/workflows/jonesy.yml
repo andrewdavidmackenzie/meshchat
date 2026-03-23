@@ -23,6 +23,7 @@ jobs:
         run: cargo build
 
       - name: Run jonesy analysis
+        id: jonesy  # Required to reference outputs in subsequent steps
         uses: andrewdavidmackenzie/jonesy@v1
         with:
           fail-on-panic: false  # Set to true to fail the build if panics found
