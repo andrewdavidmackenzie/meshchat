@@ -280,7 +280,7 @@ impl Conversation {
             {
                 acc
             } else if !entry.seen() {
-                acc + 1
+                acc.checked_add(1).unwrap_or_default()
             } else {
                 acc
             }
