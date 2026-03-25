@@ -5,3 +5,7 @@ allow = ["format"]
 [[rules]]
 path = "**/config.rs"
 allow = ["capacity"]
+
+[[rules]]
+path = "**/conversation_id.rs"
+allow = ["format"]
