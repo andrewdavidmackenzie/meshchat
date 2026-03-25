@@ -124,7 +124,7 @@ impl Conversation {
             | PositionMessage(_)
             | UserMessage(_)
             | TextMessageReply(_, _) => {
-                // Insert a new message, ordered by receive date/time
+                // Insert a new message, ordered by timestamp
                 self.messages.insert_sorted_by(
                     new_message.message_id(),
                     new_message,
@@ -280,7 +280,7 @@ impl Conversation {
             {
                 acc
             } else if !entry.seen() {
-                acc + 1
+                acc.checked_add(1).unwrap_or_default()
             } else {
                 acc
             }
@@ -798,7 +798,7 @@ mod test {
             Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
         // Empty message should not trigger a send task
         let _ = channel_view.update(SendMessage(None));
-        // No crash, message still empty
+        // No crash, the message should still be empty
         assert!(channel_view.message.is_empty());
     }
 

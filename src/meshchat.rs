@@ -497,7 +497,7 @@ impl MeshChat {
             View::DeviceView(_) => self.device.header(&self.config, state, &self.device_list),
         };
 
-        // Build the inner view and show busy if in DeviceList which is in discovery mode
+        // Build the inner view
         let inner_view = match &self.current_view {
             View::DeviceListView => self.device_list.view(&self.config, state),
             View::DeviceView(_) => self.device.view(&self.config),

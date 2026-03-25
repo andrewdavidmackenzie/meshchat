@@ -56,7 +56,7 @@ impl Sub for TimeStamp {
 }
 
 impl TimeStamp {
-    /// Get the current time in epoch as u32
+    /// Get the current time in the epoch in milliseconds
     pub fn now() -> Self {
         Self::from(
             SystemTime::now()

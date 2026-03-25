@@ -145,7 +145,7 @@ impl std::fmt::Display for HistoryLength {
                 write!(
                     f,
                     "Store all messages in last {} hours",
-                    d.as_secs() / (60 * 60)
+                    d.as_secs() / (60 * 60) // jonesy:allow(div_zero, overflow)
                 )
             }
         }
@@ -190,7 +190,7 @@ impl Config {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        TimeStamp::now(),
+                        TimeStamp::now(), // jonesy:allow(expect)
                     ),
                 }
             })
@@ -374,7 +374,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        TimeStamp::now(),
+                        TimeStamp::now(), // jonesy:allow(expect)
                     ),
                 }
             })
@@ -389,7 +389,7 @@ pub fn load_config() -> Task<Message> {
                             config_path.to_string_lossy()
                         ),
                         e.to_string(),
-                        TimeStamp::now(),
+                        TimeStamp::now(), // jonesy:allow(expect)
                     ),
                 }
             })
