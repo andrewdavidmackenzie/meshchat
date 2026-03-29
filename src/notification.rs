@@ -108,7 +108,7 @@ impl Notifications {
         let datetime_utc =
             DateTime::<Utc>::from_timestamp_secs(timestamp.into()).unwrap_or_default();
         let datetime_local = datetime_utc.with_timezone(&Local);
-        let time_str = datetime_local.format("%H:%M").to_string(); // Formats as HH:MM
+        let time_str = datetime_local.format("%H:%M").to_string(); // jonesy:allow(format)
         text(time_str)
             .color(TIME_TEXT_COLOR)
             .size(TIME_TEXT_SIZE)
@@ -120,7 +120,7 @@ impl Notifications {
     /// Each notification has a unique id, which is used to remove it from the list.
     pub fn add(&mut self, notification: Notification) -> Task<Message> {
         self.inner.push((self.next_id, notification));
-        self.next_id += 1;
+        self.next_id = self.next_id.checked_add(1).unwrap_or_default();
         Task::none()
     }
 

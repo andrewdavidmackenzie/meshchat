@@ -60,7 +60,7 @@ impl TimeStamp {
     pub fn now() -> Self {
         Self::from(
             SystemTime::now()
-                .duration_since(UNIX_EPOCH)
+                .duration_since(UNIX_EPOCH) // jonesy:allow(expect)
                 .unwrap_or_default()
                 .as_millis(),
         )

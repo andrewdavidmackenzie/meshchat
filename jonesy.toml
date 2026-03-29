@@ -1,11 +1,5 @@
 [[rules]]
-path = "**/config.rs"
-allow = ["format"]
-
+allow = ["expect", "capacity"]
 [[rules]]
-path = "**/config.rs"
-allow = ["capacity"]
-
-[[rules]]
-path = "**/conversation_id.rs"
+function = "alloc::fmt::format"
 allow = ["format"]

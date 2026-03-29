@@ -375,7 +375,7 @@ impl Device {
                 Err(e) => AppError(
                     "Connection Error".to_string(),
                     format!("{:?}", e),
-                    TimeStamp::now(), // jonesy:allow(expect)
+                    TimeStamp::now(),
                 ),
             })
         } else {
