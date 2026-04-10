@@ -1657,6 +1657,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4054,12 +4060,12 @@ dependencies = [
 
 [[package]]
 name = "ringmap"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a1feedbdc46249f3fc6e862a020e7152bd1616984954ddbee0f4406d2b4c2a"
+checksum = "219d417c84282f92a4af7c9cf3586debefa76b82b618664772ff11732b8cd03c"
 dependencies = [
  "equivalent",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.0",
 ]
 
 [[package]]
