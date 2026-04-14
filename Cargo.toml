@@ -44,7 +44,7 @@ chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
 webbrowser = { version = "1.2", default-features = false }
 iced_aw = { version = "0.13", default-features = false, features = ["menu"] }
 btleplug = { version = "0.11.8", default-features = false }
-emojis = { version = "0.8.0", default-features = false }
+emojis = { version = "0.8.1", default-features = false }
 uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
 
 # Optional dependencies
