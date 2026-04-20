@@ -49,7 +49,7 @@ uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
-meshcore-rs = { version = "0.1.9", git = "https://github.com/andrewdavidmackenzie/meshcore-rs.git", branch = "fix/binary-response-tag-offset", default-features = false, features = ["ble"], optional = true }
+meshcore-rs = { version = "0.1.9", git = "https://github.com/andrewdavidmackenzie/meshcore-rs.git", branch = "fix/request-neighbours-wire-format", default-features = false, features = ["ble"], optional = true }
 # Self-update requiers us to chose the http backend to use
 self_update = { version = "0.44.0", default-features = false, features = ["reqwest"], optional = true }
 tracing = { version = "0.1", optional = true }
