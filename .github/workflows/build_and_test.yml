@@ -53,8 +53,9 @@ jobs:
       - name: debug build
         run: cargo build
 
-      - name: Publish dry-run
-        run: cargo build --release && cargo publish --dry-run --allow-dirty --no-verify
+      # Publish dry-run skipped: meshcore-rs uses a git dep for PR validation
+      # - name: Publish dry-run
+      #   run: cargo build --release && cargo publish --dry-run --allow-dirty --no-verify
 
       - name: test - non-Linux
         if: runner.os != 'Linux'
