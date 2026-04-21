@@ -34,7 +34,7 @@ tokio-stream = { version = "0.1.17", default-features = false }
 # For receiving messages from UI in subscription
 async-stream = { version = "0.3.6", default-features = false }
 # For mpsc sender/receiver and async file IO
-tokio = { version = "1.51.1", default-features = false, features = ["fs", "io-util"] }
+tokio = { version = "1.52.1", default-features = false, features = ["fs", "io-util"] }
 # For ordering messages in ChannelView
 ringmap = { version = "0.2" }
 # For horizontal busy bar in easing.rs
