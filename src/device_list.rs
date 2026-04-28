@@ -7,7 +7,7 @@ use crate::device::ConnectionState::{Connected, Connecting, Disconnected, Discon
 use crate::device::DeviceMessage::{ConnectRequest, DisconnectRequest};
 use crate::device::{ConnectionState, Device, DeviceIdentifier};
 use crate::device_list::DeviceListEvent::{
-    AliasInput, BLEMeshRadioFound, BLERadioLost, CriticalError, Error, Scanning, StartEditingAlias,
+    AliasInput, CriticalError, Error, MeshRadioFound, MeshRadioLost, Scanning, StartEditingAlias,
 };
 use crate::meshchat::View;
 use crate::styles::{button_chip_style, menu_button_style, text_input_style, tooltip_style};
@@ -48,8 +48,8 @@ pub enum RadioType {
 
 #[derive(Debug, Clone)]
 pub enum DeviceListEvent {
-    BLEMeshRadioFound(DeviceIdentifier, RadioType),
-    BLERadioLost(DeviceIdentifier),
+    MeshRadioFound(DeviceIdentifier, RadioType),
+    MeshRadioLost(DeviceIdentifier),
     CriticalError(String),
     Error(String),
     StartEditingAlias(String),
@@ -79,7 +79,7 @@ const ALIAS_INPUT_TEXT_ID: &str = "alias_input_text";
 impl DeviceList {
     pub fn update(&mut self, device_list_event: DeviceListEvent) -> Task<Message> {
         match device_list_event {
-            BLEMeshRadioFound(device, radio_type) => {
+            MeshRadioFound(device, radio_type) => {
                 if let std::collections::hash_map::Entry::Vacant(vacant_entry) =
                     self.devices.entry(device.clone())
                 {
@@ -89,7 +89,7 @@ impl DeviceList {
                     });
                 }
             }
-            BLERadioLost(device) => {
+            MeshRadioLost(device) => {
                 let _ = self.devices.remove(&device);
             }
             Error(e) => {
@@ -244,6 +244,23 @@ impl DeviceList {
             };
             let icon = image(icon_handle).width(24).height(24);
             device_row = device_row.push(icon);
+            device_row = device_row.push(Space::new().width(8));
+
+            // Transport badge so the user can tell BLE devices apart from LAN/TCP devices.
+            let (transport_label, transport_tip) = match device_identifier {
+                DeviceIdentifier::Ble { .. } => ("BT", "Connected via Bluetooth LE".to_string()),
+                DeviceIdentifier::Tcp { host, port, .. } => {
+                    ("TCP", format!("Reachable over TCP at {host}:{port}"))
+                }
+            };
+            device_row = device_row.push(
+                tooltip(
+                    text(transport_label).size(11),
+                    text(transport_tip),
+                    tooltip::Position::Right,
+                )
+                .style(tooltip_style),
+            );
             device_row = device_row.push(Space::new().width(8));
 
             let name_element: Element<'a, Message> =
@@ -419,7 +436,7 @@ mod tests {
         let mut view = DeviceList::default();
         assert!(view.devices.is_empty());
 
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::Meshtastic,
         ));
@@ -436,11 +453,11 @@ mod tests {
     fn test_ble_radio_found_duplicate() {
         let mut view = DeviceList::default();
 
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::Meshtastic,
         ));
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::Meshtastic,
         ));
@@ -454,11 +471,11 @@ mod tests {
     fn test_ble_radio_found_multiple() {
         let mut view = DeviceList::default();
 
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::Meshtastic,
         ));
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("11:22:33:44:55:66"),
             RadioType::Meshtastic,
         ));
@@ -470,13 +487,13 @@ mod tests {
     fn test_ble_radio_lost() {
         let mut view = DeviceList::default();
 
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::Meshtastic,
         ));
         assert_eq!(view.devices.len(), 1);
 
-        let _ = view.update(BLERadioLost(DeviceIdentifier::from("AA:BB:CC:DD:EE:FF")));
+        let _ = view.update(MeshRadioLost(DeviceIdentifier::from("AA:BB:CC:DD:EE:FF")));
         assert!(view.devices.is_empty());
     }
 
@@ -485,7 +502,7 @@ mod tests {
         let mut view = DeviceList::default();
 
         // Losing a device that was never found should not panic
-        let _ = view.update(BLERadioLost(DeviceIdentifier::from("AA:BB:CC:DD:EE:FF")));
+        let _ = view.update(MeshRadioLost(DeviceIdentifier::from("AA:BB:CC:DD:EE:FF")));
         assert!(view.devices.is_empty());
     }
 
@@ -583,7 +600,7 @@ mod tests {
         let mut config = Config::default();
 
         // Find a device
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::Meshtastic,
         ));
@@ -610,7 +627,7 @@ mod tests {
         );
 
         // Lose the device
-        let _ = view.update(BLERadioLost(DeviceIdentifier::from("AA:BB:CC:DD:EE:FF")));
+        let _ = view.update(MeshRadioLost(DeviceIdentifier::from("AA:BB:CC:DD:EE:FF")));
         assert!(view.devices.is_empty());
     }
 
@@ -618,17 +635,17 @@ mod tests {
     // Test DeviceListEvent enum
     #[test]
     fn test_device_list_event_debug() {
-        let event = BLEMeshRadioFound("device1".into(), RadioType::Meshtastic);
+        let event = MeshRadioFound("device1".into(), RadioType::Meshtastic);
         let debug_str = format!("{:?}", event);
-        assert!(debug_str.contains("BLEMeshRadioFound"));
+        assert!(debug_str.contains("MeshRadioFound"));
         assert!(debug_str.contains("device1"));
     }
 
     #[test]
     fn test_device_list_event_clone() {
-        let event = BLERadioLost("device1".into());
+        let event = MeshRadioLost("device1".into());
         let cloned = event.clone();
-        assert!(matches!(cloned, BLERadioLost(name) if name == DeviceIdentifier::from("device1")));
+        assert!(matches!(cloned, MeshRadioLost(name) if name == DeviceIdentifier::from("device1")));
     }
 
     #[test]
@@ -678,13 +695,13 @@ mod tests {
         let mut view = DeviceList::default();
 
         // Add multiple devices
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
-        let _ = view.update(BLEMeshRadioFound("device2".into(), RadioType::Meshtastic));
-        let _ = view.update(BLEMeshRadioFound("device3".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device2".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device3".into(), RadioType::Meshtastic));
         assert_eq!(view.devices.len(), 3);
 
         // Remove one
-        let _ = view.update(BLERadioLost("device2".into()));
+        let _ = view.update(MeshRadioLost("device2".into()));
         assert_eq!(view.devices.len(), 2);
         assert!(
             view.devices
@@ -701,11 +718,11 @@ mod tests {
         );
 
         // Remove another
-        let _ = view.update(BLERadioLost("device1".into()));
+        let _ = view.update(MeshRadioLost("device1".into()));
         assert_eq!(view.devices.len(), 1);
 
         // Remove last
-        let _ = view.update(BLERadioLost("device3".into()));
+        let _ = view.update(MeshRadioLost("device3".into()));
         assert!(view.devices.is_empty());
     }
 
@@ -759,7 +776,7 @@ mod tests {
         let mut view = DeviceList::default();
 
         // Find device
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         // Start editing alias
         let _ = view.update(StartEditingAlias("device1".into()));
@@ -767,7 +784,7 @@ mod tests {
         assert_eq!(view.editing_alias, Some("device1".into()));
 
         // Device is lost while editing
-        let _ = view.update(BLERadioLost("device1".into()));
+        let _ = view.update(MeshRadioLost("device1".into()));
         assert!(view.devices.is_empty());
 
         // Editing state is still preserved (caller needs to handle this)
@@ -807,7 +824,7 @@ mod tests {
         let mut view = DeviceList::default();
         let long_name = DeviceIdentifier::from("B".repeat(100).as_str());
 
-        let _ = view.update(BLEMeshRadioFound(long_name.clone(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound(long_name.clone(), RadioType::Meshtastic));
         assert!(view.devices.contains_key(&long_name));
     }
 
@@ -825,7 +842,7 @@ mod tests {
         let mut view = DeviceList::default();
         assert!(view.devices.is_empty());
 
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::MeshCore,
         ));
@@ -849,11 +866,11 @@ mod tests {
     fn test_ble_meshcore_radio_found_duplicate() {
         let mut view = DeviceList::default();
 
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::MeshCore,
         ));
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::MeshCore,
         ));
@@ -903,11 +920,11 @@ mod tests {
 
     #[test]
     fn test_device_list_event_ble_radio_lost_clone() {
-        let event = BLERadioLost("device1".into());
+        let event = MeshRadioLost("device1".into());
         let cloned = event.clone();
         assert!(
-            matches!(cloned, BLERadioLost(ref name) if name == &DeviceIdentifier::from("device1")),
-            "Clone of BLERadioLost should preserve device name, got {:?}",
+            matches!(cloned, MeshRadioLost(ref name) if name == &DeviceIdentifier::from("device1")),
+            "Clone of MeshRadioLost should preserve device name, got {:?}",
             cloned
         );
     }
@@ -949,7 +966,7 @@ mod tests {
     #[test]
     fn test_radio_type_meshtastic() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"),
             RadioType::Meshtastic,
         ));
@@ -957,7 +974,7 @@ mod tests {
         let device_info = view
             .devices
             .get(&DeviceIdentifier::from("AA:BB:CC:DD:EE:FF"))
-            .expect("Device should exist after BLEMeshRadioFound event");
+            .expect("Device should exist after MeshRadioFound event");
         assert_eq!(device_info.radio_type, RadioType::Meshtastic);
     }
 
@@ -974,13 +991,13 @@ mod tests {
         let mut view = DeviceList::default();
 
         // Add some devices
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
-        let _ = view.update(BLEMeshRadioFound("device2".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device2".into(), RadioType::Meshtastic));
         assert_eq!(view.devices.len(), 2);
 
         // Remove all
-        let _ = view.update(BLERadioLost("device1".into()));
-        let _ = view.update(BLERadioLost("device2".into()));
+        let _ = view.update(MeshRadioLost("device1".into()));
+        let _ = view.update(MeshRadioLost("device2".into()));
         assert!(view.devices.is_empty());
     }
 
@@ -999,8 +1016,8 @@ mod tests {
     #[test]
     fn test_view_with_devices_disconnected() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
-        let _ = view.update(BLEMeshRadioFound("device2".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device2".into(), RadioType::Meshtastic));
 
         let config = Config::default();
         let connection_state = Disconnected(None, None);
@@ -1012,7 +1029,7 @@ mod tests {
     #[test]
     fn test_view_with_device_connecting() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
         let connection_state = Connecting("device1".into());
@@ -1024,7 +1041,7 @@ mod tests {
     #[test]
     fn test_view_with_device_connected() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
         let connection_state = Connected("device1".into(), RadioType::Meshtastic);
@@ -1036,7 +1053,7 @@ mod tests {
     #[test]
     fn test_view_with_device_disconnecting() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
         let connection_state = Disconnecting("device1".into());
@@ -1048,7 +1065,7 @@ mod tests {
     #[test]
     fn test_view_with_alias() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let mut config = Config::default();
         config
@@ -1064,7 +1081,7 @@ mod tests {
     #[test]
     fn test_view_while_editing_alias() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
         let _ = view.update(StartEditingAlias("device1".into()));
         let _ = view.update(AliasInput("New Alias".into()));
 
@@ -1129,7 +1146,7 @@ mod tests {
     fn test_view_many_devices() {
         let mut view = DeviceList::default();
         for i in 0..20 {
-            let _ = view.update(BLEMeshRadioFound(
+            let _ = view.update(MeshRadioFound(
                 DeviceIdentifier::from(format!("device{}", i)),
                 RadioType::Meshtastic,
             ));
@@ -1157,7 +1174,7 @@ mod tests {
     #[test]
     fn test_view_shows_connect_button_when_disconnected() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
 
@@ -1171,7 +1188,7 @@ mod tests {
     #[test]
     fn test_view_shows_disconnect_button_when_connected_to_this_device() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
 
@@ -1185,7 +1202,7 @@ mod tests {
     #[test]
     fn test_view_shows_nothing_when_connected_to_different_device() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
 
@@ -1199,7 +1216,7 @@ mod tests {
     #[test]
     fn test_view_shows_connecting_when_connecting_to_this_device() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
 
@@ -1213,7 +1230,7 @@ mod tests {
     #[test]
     fn test_view_shows_nothing_when_connecting_to_different_device() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
 
@@ -1227,7 +1244,7 @@ mod tests {
     #[test]
     fn test_view_shows_disconnecting_when_disconnecting_this_device() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
 
@@ -1240,7 +1257,7 @@ mod tests {
     #[test]
     fn test_view_shows_nothing_when_disconnecting_different_device() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
 
         let config = Config::default();
 
@@ -1253,8 +1270,8 @@ mod tests {
     #[test]
     fn test_view_alias_vs_original_name() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
-        let _ = view.update(BLEMeshRadioFound("device2".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device2".into(), RadioType::Meshtastic));
 
         let mut config = Config::default();
         // device1 has an alias, device2 does not
@@ -1271,8 +1288,8 @@ mod tests {
     #[test]
     fn test_view_editing_alias_shows_text_input() {
         let mut view = DeviceList::default();
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
-        let _ = view.update(BLEMeshRadioFound("device2".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device2".into(), RadioType::Meshtastic));
 
         // Start editing alias for device1
         let _ = view.update(StartEditingAlias("device1".into()));
@@ -1305,13 +1322,13 @@ mod tests {
 
         // Add devices of different types
         #[cfg(feature = "meshtastic")]
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             "meshtastic_device".into(),
             RadioType::Meshtastic,
         ));
 
         #[cfg(feature = "meshcore")]
-        let _ = view.update(BLEMeshRadioFound(
+        let _ = view.update(MeshRadioFound(
             "meshcore_device".into(),
             RadioType::Meshtastic,
         ));
@@ -1374,11 +1391,11 @@ mod tests {
 
         // Start scanning and find a device
         let _ = view.update(Scanning(true));
-        let _ = view.update(BLEMeshRadioFound("device1".into(), RadioType::Meshtastic));
+        let _ = view.update(MeshRadioFound("device1".into(), RadioType::Meshtastic));
         assert_eq!(view.devices.len(), 1);
 
         // Lose the device while still scanning
-        let _ = view.update(BLERadioLost("device1".into()));
+        let _ = view.update(MeshRadioLost("device1".into()));
         assert!(view.devices.is_empty());
         assert!(view.scanning);
 

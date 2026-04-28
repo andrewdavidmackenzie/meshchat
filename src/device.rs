@@ -66,36 +66,76 @@ impl Default for ConnectionState {
     }
 }
 
-/// Due to cross-platform differences, one cannot reliably be used. But one of the two must exist
-/// so that we can connect to it later. Discovery will try to get both (depending on the platform).
-/// But subscription will try to connect using the one it knows that works by platform
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct DeviceIdentifier {
-    pub(crate) name: Option<String>,
-    pub(crate) mac: Option<BDAddr>,
+/// How a device is reached. BLE keeps its existing fields; TCP records the resolved
+/// host/port and any human-readable name from mDNS.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum DeviceIdentifier {
+    Ble {
+        name: Option<String>,
+        mac: Option<BDAddr>,
+    },
+    Tcp {
+        name: Option<String>,
+        host: String,
+        port: u16,
+    },
+}
+
+impl Default for DeviceIdentifier {
+    fn default() -> Self {
+        DeviceIdentifier::Ble {
+            name: None,
+            mac: None,
+        }
+    }
 }
 
 impl DeviceIdentifier {
     pub fn name(&self) -> String {
-        self.name.clone().unwrap_or("Unknown".to_string())
+        match self {
+            DeviceIdentifier::Ble { name, .. } | DeviceIdentifier::Tcp { name, .. } => {
+                name.clone().unwrap_or_else(|| "Unknown".to_string())
+            }
+        }
     }
 
     pub fn mac(&self) -> String {
-        self.mac
-            .map(|mac| mac.to_string())
-            .unwrap_or("Unknown".to_string())
+        match self {
+            DeviceIdentifier::Ble { mac, .. } => mac
+                .map(|mac| mac.to_string())
+                .unwrap_or_else(|| "Unknown".to_string()),
+            DeviceIdentifier::Tcp { .. } => "Unknown".to_string(),
+        }
     }
 }
 
+const TCP_SCHEME: &str = "tcp://";
+
 impl From<&str> for DeviceIdentifier {
     fn from(value: &str) -> Self {
+        // Recognize a serialized TCP device: tcp://host:port[#name]
+        if let Some(rest) = value.strip_prefix(TCP_SCHEME) {
+            let (addr, name) = match rest.split_once('#') {
+                Some((addr, name)) => (addr, Some(name.to_string())),
+                None => (rest, None),
+            };
+            if let Some((host, port)) = addr.rsplit_once(':')
+                && let Ok(port) = port.parse::<u16>()
+            {
+                return DeviceIdentifier::Tcp {
+                    name,
+                    host: host.to_string(),
+                    port,
+                };
+            }
+        }
         if let Ok(mac) = BDAddr::from_str_delim(value) {
-            DeviceIdentifier {
+            DeviceIdentifier::Ble {
                 name: None,
                 mac: Some(mac),
             }
         } else {
-            DeviceIdentifier {
+            DeviceIdentifier::Ble {
                 name: Some(value.to_string()),
                 mac: None,
             }
@@ -105,40 +145,32 @@ impl From<&str> for DeviceIdentifier {
 
 impl From<String> for DeviceIdentifier {
     fn from(value: String) -> Self {
-        if let Ok(mac) = BDAddr::from_str_delim(&value) {
-            DeviceIdentifier {
-                name: None,
-                mac: Some(mac),
-            }
-        } else {
-            DeviceIdentifier {
-                name: Some(value),
-                mac: None,
-            }
-        }
+        DeviceIdentifier::from(value.as_str())
     }
 }
 
 impl From<DeviceIdentifier> for String {
     fn from(value: DeviceIdentifier) -> Self {
-        if let Some(name) = value.name {
-            name
-        } else if let Some(mac) = value.mac {
-            mac.to_string()
-        } else {
-            "Unknown".to_string()
-        }
+        String::from(&value)
     }
 }
 
 impl From<&DeviceIdentifier> for String {
     fn from(value: &DeviceIdentifier) -> Self {
-        if let Some(name) = &value.name {
-            name.to_string()
-        } else if let Some(mac) = value.mac {
-            mac.to_string()
-        } else {
-            "Unknown".to_string()
+        match value {
+            DeviceIdentifier::Ble { name, mac } => {
+                if let Some(name) = name {
+                    name.clone()
+                } else if let Some(mac) = mac {
+                    mac.to_string()
+                } else {
+                    "Unknown".to_string()
+                }
+            }
+            DeviceIdentifier::Tcp { name, host, port } => match name {
+                Some(name) => format!("{TCP_SCHEME}{host}:{port}#{name}"),
+                None => format!("{TCP_SCHEME}{host}:{port}"),
+            },
         }
     }
 }

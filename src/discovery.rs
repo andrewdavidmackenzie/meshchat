@@ -1,7 +1,7 @@
 use crate::device::DeviceIdentifier;
 use crate::device_list::DeviceListEvent;
 use crate::device_list::DeviceListEvent::{
-    BLEMeshRadioFound, BLERadioLost, CriticalError, Error, Scanning,
+    CriticalError, Error, MeshRadioFound, MeshRadioLost, Scanning,
 };
 use crate::device_list::RadioType;
 #[cfg(feature = "meshcore")]
@@ -14,9 +14,17 @@ use futures::SinkExt;
 use futures_channel::mpsc::Sender;
 use iced::futures::Stream;
 use iced::stream;
+#[cfg(feature = "meshtastic")]
+use mdns_sd::{ServiceDaemon, ServiceEvent};
 use std::collections::HashMap;
+#[cfg(feature = "meshtastic")]
+use std::net::IpAddr;
 use std::time::Duration;
 use uuid::Uuid;
+
+/// mDNS service type advertised by Meshtastic devices for their TCP API (port 4403 by default).
+#[cfg(feature = "meshtastic")]
+const MESHTASTIC_MDNS_SERVICE: &str = "_meshtastic._tcp.local.";
 
 /// A stream of [DeviceListEvent] announcing the discovery or loss of devices via BLE
 pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
@@ -117,7 +125,7 @@ async fn announce_device_changes(
     for peripheral in peripherals {
         #[allow(clippy::collapsible_if)]
         if let Ok(Some(properties)) = peripheral.properties().await {
-            let identifier = DeviceIdentifier {
+            let identifier = DeviceIdentifier::Ble {
                 name: properties.local_name,
                 mac: match properties.address.into_inner() {
                     DEFAULT_MAC => None,
@@ -137,16 +145,16 @@ async fn announce_device_changes(
     // Send lost events
     for device in lost {
         gui_sender
-            .send(BLERadioLost(device))
+            .send(MeshRadioLost(device))
             .await
-            .unwrap_or_else(|e| eprintln!("Discovery could not send BLERadioLost: {e}"));
+            .unwrap_or_else(|e| eprintln!("Discovery could not send MeshRadioLost: {e}"));
     }
 
     // Send found events with the appropriate radio type
     #[allow(unused_variables)]
     for (device, radio_type) in found {
         gui_sender
-            .send(BLEMeshRadioFound(device, radio_type))
+            .send(MeshRadioFound(device, radio_type))
             .await
             .unwrap_or_else(|e| eprintln!("Discovery could not send BLEMeshtasticRadioFound: {e}"));
     }
@@ -204,6 +212,87 @@ fn process_device_changes(
     }
 
     (found, lost)
+}
+
+/// A stream of [DeviceListEvent] announcing the discovery or loss of Meshtastic devices reachable
+/// over TCP on the local network. Devices advertise themselves via mDNS-SD as
+/// `_meshtastic._tcp.local.`.
+#[cfg(feature = "meshtastic")]
+pub fn mdns_discovery() -> impl Stream<Item = DeviceListEvent> {
+    stream::channel(
+        100,
+        move |mut gui_sender: Sender<DeviceListEvent>| async move {
+            let daemon = match ServiceDaemon::new() {
+                Ok(d) => d,
+                Err(e) => {
+                    let _ = gui_sender
+                        .send(Error(format!("mDNS daemon could not start: {e}")))
+                        .await;
+                    return;
+                }
+            };
+
+            let receiver = match daemon.browse(MESHTASTIC_MDNS_SERVICE) {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = gui_sender
+                        .send(Error(format!("mDNS browse failed: {e}")))
+                        .await;
+                    return;
+                }
+            };
+
+            // Track fullname → identifier so that ServiceRemoved events can be mapped back to
+            // the same identifier that was emitted on ServiceResolved.
+            let mut resolved: HashMap<String, DeviceIdentifier> = HashMap::new();
+
+            while let Ok(event) = receiver.recv_async().await {
+                match event {
+                    ServiceEvent::ServiceResolved(info) => {
+                        let Some(host) = info
+                            .get_addresses()
+                            .iter()
+                            .find_map(|addr| match addr {
+                                IpAddr::V4(v4) => Some(v4.to_string()),
+                                _ => None,
+                            })
+                            .or_else(|| {
+                                info.get_addresses()
+                                    .iter()
+                                    .next()
+                                    .map(|addr| addr.to_string())
+                            })
+                        else {
+                            continue;
+                        };
+                        let port = info.get_port();
+                        // Friendly name = the service instance label, e.g. "MyMeshy" from
+                        // "MyMeshy._meshtastic._tcp.local."
+                        let fullname = info.get_fullname().to_string();
+                        let name = fullname
+                            .strip_suffix(MESHTASTIC_MDNS_SERVICE)
+                            .and_then(|s| s.strip_suffix('.'))
+                            .map(|s| s.to_string());
+
+                        let identifier = DeviceIdentifier::Tcp { name, host, port };
+                        if resolved.insert(fullname, identifier.clone()).as_ref()
+                            != Some(&identifier)
+                        {
+                            let _ = gui_sender
+                                .send(MeshRadioFound(identifier, RadioType::Meshtastic))
+                                .await;
+                        }
+                    }
+                    ServiceEvent::ServiceRemoved(_, fullname) => {
+                        if let Some(identifier) = resolved.remove(&fullname) {
+                            let _ = gui_sender.send(MeshRadioLost(identifier)).await;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        },
+    )
 }
 
 #[cfg(test)]
@@ -782,10 +871,10 @@ mod tests {
 
         sender.close_channel();
 
-        // Should receive BLERadioLost event
-        let event = receiver.try_recv().expect("Expected BLERadioLost event");
+        // Should receive MeshRadioLost event
+        let event = receiver.try_recv().expect("Expected MeshRadioLost event");
         assert!(
-            matches!(event, BLERadioLost(device_id) if device_id == DeviceIdentifier::from("Device1"))
+            matches!(event, MeshRadioLost(device_id) if device_id == DeviceIdentifier::from("Device1"))
         );
 
         // No more events
@@ -816,10 +905,10 @@ mod tests {
 
         sender.close_channel();
 
-        // Should receive 2 BLERadioLost events
+        // Should receive 2 MeshRadioLost events
         let mut lost_devices = Vec::new();
         while let Ok(event) = receiver.try_recv() {
-            if let BLERadioLost(name) = event {
+            if let MeshRadioLost(name) = event {
                 lost_devices.push(name);
             }
         }
@@ -852,9 +941,9 @@ mod tests {
 
         sender.close_channel();
 
-        // Should receive only 1 BLERadioLost event for Device3
-        let event = receiver.try_recv().expect("Expected BLERadioLost event");
-        assert!(matches!(event, BLERadioLost(name) if name == DeviceIdentifier::from("Device3")));
+        // Should receive only 1 MeshRadioLost event for Device3
+        let event = receiver.try_recv().expect("Expected MeshRadioLost event");
+        assert!(matches!(event, MeshRadioLost(name) if name == DeviceIdentifier::from("Device3")));
 
         // No more events
         assert!(

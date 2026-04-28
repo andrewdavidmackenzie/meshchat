@@ -46,6 +46,8 @@ iced_aw = { version = "0.14", default-features = false, features = ["menu"] }
 btleplug = { version = "0.11.8", default-features = false }
 emojis = { version = "0.8.1", default-features = false }
 uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
+# mDNS-SD discovery of Meshtastic TCP devices on the LAN (`_meshtastic._tcp.local.`)
+mdns-sd = { version = "0.13", default-features = false, features = ["async"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
