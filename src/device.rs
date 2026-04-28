@@ -637,9 +637,9 @@ impl Device {
     pub fn add_channel(&mut self, channel: MCChannel) {
         {
             if let Some(my_node_num) = self.my_node_id {
+                let last_index = self.channels.len();
                 self.channels.push(channel);
-                let conversation_id =
-                    ConversationId::Channel(ChannelIndex::from(self.channels.len() - 1));
+                let conversation_id = ConversationId::Channel(ChannelIndex::from(last_index));
                 self.conversations.insert(
                     conversation_id,
                     Conversation::new(conversation_id, my_node_num),

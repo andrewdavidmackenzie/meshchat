@@ -1,5 +1,4 @@
-[[rules]]
-allow = ["expect", "capacity"]
+allow = ["expect", "capacity", "format", "async_resumed"]
 [[rules]]
 function = "alloc::fmt::format"
 allow = ["format"]
