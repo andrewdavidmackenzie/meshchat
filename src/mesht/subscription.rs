@@ -20,6 +20,7 @@ use crate::timestamp::TimeStamp;
 use futures::SinkExt;
 use futures::executor::block_on;
 use iced::stream;
+use meshtastic::Message;
 use meshtastic::api::{ConnectedStreamApi, StreamApi};
 use meshtastic::errors::Error;
 use meshtastic::packet::{PacketReceiver, PacketRouter};
@@ -31,8 +32,8 @@ use meshtastic::protobufs::mesh_packet::PayloadVariant::Decoded;
 use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{FromRadio, MeshPacket, PortNum, Position, Telemetry, User};
 use meshtastic::types::NodeId;
+use meshtastic::utils;
 use meshtastic::utils::stream::BleId;
-use meshtastic::{Message, utils};
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::sync::mpsc::channel;
@@ -583,55 +584,72 @@ async fn send_user(
         .await
 }
 
-/// Connect to a specific [BleDevice] and return a [PacketReceiver] that receives messages from the
-/// radio and a [ConnectedStreamApi] that can be used to send messages to the radio.
+/// Connect to a specific [DeviceIdentifier] and return a [PacketReceiver] that receives messages
+/// from the radio and a [ConnectedStreamApi] that can be used to send messages to the radio.
 async fn do_connect(
-    ble_device: &DeviceIdentifier,
+    device: &DeviceIdentifier,
 ) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
-    // On windows try and connect using MAC Address, on other platforms use the name
-    #[cfg(windows)]
-    let ble_id = BleId::from_mac_address(
-        ble_device
-            .mac
-            .ok_or_else(|| Error::StreamBuildError {
-                source: Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Meshtastic subscription",
-                )),
-                description: "MAC address required on Windows".to_string(),
-            })?
-            .to_string()
-            .as_str(),
-    )?;
-    #[cfg(not(windows))]
-    let ble_id = if let Some(name) = &ble_device.name {
-        BleId::from_name(name)
-    } else if let Some(mac) = &ble_device.mac {
-        BleId::from_mac_address(mac.to_string().as_str())?
-    } else {
-        return Err(Error::StreamBuildError {
-            source: Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Meshtastic subscription",
-            )),
-            description: "No name or MAC address".to_string(),
-        });
-    };
-
-    let ble_stream = timeout(
-        Duration::from_secs(30),
-        utils::stream::build_ble_stream::<BleId>(ble_id, Duration::from_secs(10)),
-    )
-    .await
-    .map_err(|_| Error::StreamBuildError {
-        source: Box::new(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            "Connect timed out",
-        )),
-        description: "Connect".to_string(),
-    })??;
     let stream_api = StreamApi::new();
-    let (packet_receiver, stream_api) = stream_api.connect(ble_stream).await;
+    let (packet_receiver, stream_api) = match device {
+        DeviceIdentifier::Tcp { host, port, .. } => {
+            let tcp_stream = timeout(
+                Duration::from_secs(30),
+                utils::stream::build_tcp_stream(format!("{host}:{port}")),
+            )
+            .await
+            .map_err(|_| Error::StreamBuildError {
+                source: Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Connect timed out",
+                )),
+                description: "Connect".to_string(),
+            })??;
+            stream_api.connect(tcp_stream).await
+        }
+        DeviceIdentifier::Ble { name, mac } => {
+            // On windows try and connect using MAC Address, on other platforms use the name
+            #[cfg(windows)]
+            let ble_id = BleId::from_mac_address(
+                mac.ok_or_else(|| Error::StreamBuildError {
+                    source: Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Meshtastic subscription",
+                    )),
+                    description: "MAC address required on Windows".to_string(),
+                })?
+                .to_string()
+                .as_str(),
+            )?;
+            #[cfg(not(windows))]
+            let ble_id = if let Some(name) = name {
+                BleId::from_name(name)
+            } else if let Some(mac) = mac {
+                BleId::from_mac_address(mac.to_string().as_str())?
+            } else {
+                return Err(Error::StreamBuildError {
+                    source: Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "Meshtastic subscription",
+                    )),
+                    description: "No name or MAC address".to_string(),
+                });
+            };
+
+            let ble_stream = timeout(
+                Duration::from_secs(30),
+                utils::stream::build_ble_stream::<BleId>(ble_id, Duration::from_secs(10)),
+            )
+            .await
+            .map_err(|_| Error::StreamBuildError {
+                source: Box::new(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Connect timed out",
+                )),
+                description: "Connect".to_string(),
+            })??;
+            stream_api.connect(ble_stream).await
+        }
+    };
     let config_id = utils::generate_rand_id();
     let stream_api = stream_api.configure(config_id).await?;
     Ok((packet_receiver, stream_api))

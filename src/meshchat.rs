@@ -19,6 +19,8 @@ use crate::device::DeviceMessage::SubscriptionMessage;
 use crate::device::{Device, DeviceIdentifier};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
 use crate::discovery::ble_discovery;
+#[cfg(feature = "meshtastic")]
+use crate::discovery::mdns_discovery;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
 use crate::timestamp::TimeStamp;
@@ -584,6 +586,8 @@ impl MeshChat {
     pub(crate) fn subscription(&self) -> Subscription<Message> {
         let subscriptions = vec![
             Subscription::run(ble_discovery).map(DeviceListViewEvent),
+            #[cfg(feature = "meshtastic")]
+            Subscription::run(mdns_discovery).map(DeviceListViewEvent),
             #[cfg(feature = "meshtastic")]
             Subscription::run(mesht::subscription::subscribe)
                 .map(|m| DeviceViewEvent(SubscriptionMessage(m))),
