@@ -1,8 +1,8 @@
 use crate::Message::DeviceViewEvent;
 use crate::config::{Config, HistoryLength};
 use crate::conversation::ChannelViewMessage::{
-    CancelPrepareReply, ClearMessage, EmojiPickerMsg, MessageInput, MessageSeen, PickChannel,
-    PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
+    CancelPrepareReply, ClearMessage, EmojiPickerMsg, FocusMessageInput, MessageInput, MessageSeen,
+    PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::DeviceMessage::{
@@ -51,6 +51,11 @@ pub enum ChannelViewMessage {
     ReplyWithEmoji(MessageId, String, ConversationId), // Send an emoji reply
     EmojiPickerMsg(Box<PickerMessage<ChannelViewMessage>>),
     ShareMeshChat,
+    /// Move keyboard focus to the message input. Sent as a deferred follow-up to events
+    /// triggered from inside a menu overlay (Reply), so iced has a chance to dispose of the
+    /// MenuBar overlay before the focus operation traverses the widget tree,
+    /// see https://github.com/iced-rs/iced_aw/issues/408.
+    FocusMessageInput,
 }
 
 /// [Conversation] implements view and update methods for Iced for a set of
@@ -186,11 +191,18 @@ impl Conversation {
             PrepareReply(message_id) => {
                 if self.messages.contains_key(&message_id) {
                     self.preparing_reply_to = Some(message_id);
-                    operation::focus(MESSAGE_INPUT_ID)
+                    // Defer the focus operation by hopping through the message queue. Reply is
+                    // dispatched from inside a MenuBar overlay and a same-cycle focus traversal
+                    // panics in iced_aw, see iced-rs/iced_aw#408.
+                    let conversation_id = self.conversation_id;
+                    Task::perform(empty(), move |_| {
+                        DeviceViewEvent(ChannelMsg(conversation_id, FocusMessageInput))
+                    })
                 } else {
                     Task::none()
                 }
             }
+            FocusMessageInput => operation::focus(MESSAGE_INPUT_ID),
             CancelPrepareReply => {
                 self.cancel_interactive();
                 Task::none()
