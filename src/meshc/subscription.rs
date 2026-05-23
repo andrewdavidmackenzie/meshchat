@@ -324,7 +324,11 @@ async fn get_channels(
                 .await
                 .unwrap_or_else(|e| eprintln!("Send error: {e}"));
         }
-        index = index.saturating_add(1);
+        if let Some(next) = index.checked_add(1) {
+            index = next;
+        } else {
+            break;
+        }
     }
 
     Ok(())
