@@ -30,6 +30,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
     stream::channel(
         100,
         move |mut gui_sender: Sender<DeviceListEvent>| async move {
+            // jonesy:allow(unknown) async state machine artifact
             match Manager::new().await {
                 Ok(manager) => {
                     // get the first bluetooth adapter
@@ -82,6 +83,7 @@ async fn scan_for_devices(gui_sender: &mut Sender<DeviceListEvent>, adapter: &Ad
     // Device name -> (unseen count, radio type)
     let mut mesh_radio_devices: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
 
+    // jonesy:allow(unknown) async state machine artifact
     gui_sender
         .send(Scanning(true))
         .await
@@ -115,6 +117,7 @@ async fn announce_device_changes(
     let mut ble_devices_now: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
 
     for peripheral in peripherals {
+        // jonesy:allow(unknown) async state machine artifact
         #[allow(clippy::collapsible_if)]
         if let Ok(Some(properties)) = peripheral.properties().await {
             let identifier = DeviceIdentifier {
@@ -182,7 +185,7 @@ fn process_device_changes(
             // Reset count if the device is seen again
             *unseen_count = 0;
         } else {
-            *unseen_count += 1;
+            *unseen_count = unseen_count.saturating_add(1);
         }
 
         // if unseen 3 times, then consider lost

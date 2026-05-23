@@ -96,6 +96,7 @@ impl MyRouter {
 
     /// Handle [FromRadio] packets received from the radio, filter down to packets we know the App/Gui
     /// is interested in and forward those to the Gui using the provided `gui_sender`
+    // jonesy:allow(misaligned_ptr) via meshtastic FromRadio protobuf Box deref (misaligned_ptr)
     async fn handle_a_packet_from_radio(&mut self, packet: Box<FromRadio>) {
         match packet.payload_variant.as_ref() {
             Some(Packet(mesh_packet)) => {
@@ -175,6 +176,7 @@ impl MyRouter {
                     };
 
                     self.gui_sender
+                        // jonesy:allow(unknown) async state machine artifact
                         .send(MessageACK(conversation_id, data.request_id.into()))
                         .await
                         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -302,6 +304,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
             let (subscriber_sender, mut subscriber_receiver) = channel::<DeviceCommand>(100);
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
+            // jonesy:allow(unknown) async state machine artifact
             let _ = gui_sender
                 .send(DeviceEvent::Ready(subscriber_sender, RadioType::Meshtastic))
                 .await;
@@ -355,6 +358,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
 
                         let mut merged_stream = from_radio_stream.merge(&mut gui_stream);
 
+                        // jonesy:allow(unknown) via async poll
                         while let Some(message) = StreamExt::next(&mut merged_stream).await {
                             let result = match message {
                                 Connect(_, _) => {
@@ -448,6 +452,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                         })
                                     }
                                 }
+                                // jonesy:allow(misaligned_ptr) via meshtastic handle_a_packet_from_radio (misaligned_ptr)
                                 MeshTasticRadioPacket(packet) => {
                                     my_router.handle_a_packet_from_radio(packet).await;
                                     Ok(())
@@ -468,10 +473,10 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                         }
 
                         // Disconnect
-                        #[allow(clippy::unwrap_used)]
-                        let api = stream_api.take().unwrap();
+                        if let Some(api) = stream_api.take() {
+                            let _ = do_disconnect(api).await;
+                        }
                         device_state = Disconnected;
-                        let _ = do_disconnect(api).await;
                         gui_sender
                             .send(DisconnectedEvent(ble_device))
                             .await
@@ -505,6 +510,7 @@ async fn send_text_message(
             reply_to_id,
             None, // Used for emoji reply! https://github.com/andrewdavidmackenzie/meshchat/issues/91
         )
+        // jonesy:allow(unknown) async state machine artifact
         .await
 }
 
@@ -531,6 +537,7 @@ async fn send_emoji_reply(
             Some(reply_to_id),
             Some(reply_to_id),
         )
+        // jonesy:allow(unknown) async state machine artifact
         .await
 }
 
@@ -555,6 +562,7 @@ async fn send_position(
             None,
             None,
         )
+        // jonesy:allow(unknown) async state machine artifact
         .await
 }
 
@@ -580,6 +588,7 @@ async fn send_user(
             None,
             None,
         )
+        // jonesy:allow(unknown) async state machine artifact
         .await
 }
 
@@ -621,6 +630,7 @@ async fn do_connect(
     let ble_stream = timeout(
         Duration::from_secs(30),
         utils::stream::build_ble_stream::<BleId>(ble_id, Duration::from_secs(10)),
+        // jonesy:allow(unknown) async state machine artifact
     )
     .await
     .map_err(|_| Error::StreamBuildError {

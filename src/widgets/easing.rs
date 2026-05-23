@@ -87,13 +87,15 @@ impl Builder {
         self.0.end(false);
 
         let path = self.0.build();
-        let measurements = PathMeasurements::from_path(&path, 0.0);
+        // jonesy:allow(div_zero) tolerance is 1e-4, not 0.0
+        let measurements = PathMeasurements::from_path(&path, 1e-4);
 
         Easing { path, measurements }
     }
 
     fn point(p: impl Into<Point>) -> lyon_algorithms::geom::Point<f32> {
         let p: Point = p.into();
+        // jonesy:allow(unknown) via core::f32::clamp
         lyon_algorithms::geom::point(p.x.clamp(0.0, 1.0), p.y.clamp(0.0, 1.0))
     }
 }

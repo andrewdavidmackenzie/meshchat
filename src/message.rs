@@ -123,6 +123,7 @@ impl MCMessage {
     }
 
     /// Add an emoji reply to this entry
+    // jonesy:allow(misaligned_ptr) via alloc::slice::into_vec (misaligned_ptr)
     pub fn add_emoji(&mut self, emoji_string: String, from: NodeId) {
         self.emoji_reply
             .entry(emoji_string)
@@ -165,12 +166,13 @@ impl MCMessage {
         entries: &RingMap<MessageId, MCMessage>,
         message_id: &MessageId,
     ) -> Option<String> {
+        // jonesy:allow(bounds) via ringmap::RingMap::get
         entries
             .get(message_id)
             .map(|entry| format!("Re: {}", entry.message))
             .map(|mut text| {
                 if text.len() > 20 {
-                    text = Self::truncate(&text, 20).to_string();
+                    text = Self::truncate(&text, 20).to_string(); // jonesy:allow(str_slice)
                     format!("{} ...", text)
                 } else {
                     text
@@ -182,7 +184,7 @@ impl MCMessage {
     fn truncate(s: &str, max_chars: usize) -> &str {
         match s.char_indices().nth(max_chars) {
             None => s,
-            Some((idx, _)) => &s[..idx],
+            Some((idx, _)) => s.get(..idx).unwrap_or(s),
         }
     }
 
@@ -194,10 +196,11 @@ impl MCMessage {
         let hash = hasher.finish();
 
         let index = (hash % COLOR_DICTIONARY.len() as u64) as usize;
-        COLOR_DICTIONARY[index]
+        COLOR_DICTIONARY.get(index).copied().unwrap_or(Color::WHITE)
     }
 
     pub fn datetime_local(timestamp: TimeStamp) -> DateTime<Local> {
+        // jonesy:allow(div_zero,overflow) false positive on unwrap_or_default() https://github.com/andrewdavidmackenzie/jonesy/issues/254
         let datetime_utc =
             DateTime::<Utc>::from_timestamp_millis(timestamp.into()).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
@@ -334,6 +337,7 @@ impl MCMessage {
         // Show a menu bar alongside the other's content when it's NOT a new source node,
         // as when it is a new source node, the menu bar will be added to the top_row above.
         // We don't want two menus, but we do want one if no top_row was added
+        // jonesy:allow(misaligned_ptr) via iced_widget Row::push / menu_bar (misaligned_ptr)
         if !mine && !new_source_node {
             text_and_time_row = text_and_time_row
                 .push(self.menu_bar(
@@ -442,6 +446,7 @@ impl MCMessage {
             tooltip(short_name_text, text(long_name), tooltip::Position::Right)
                 .style(tooltip_style);
 
+        // jonesy:allow(misaligned_ptr) via iced_widget Row::push / menu_bar (misaligned_ptr)
         top_row = top_row
             .push(self.menu_bar(short_name, message, emoji_picker, conversation_id))
             .push(Space::new().width(4.0))
@@ -506,6 +511,7 @@ impl MCMessage {
                 ))
             });
 
+        // jonesy:allow(misaligned_ptr) via iced_aw menu_items!/menu_bar! macros (misaligned_ptr)
         #[rustfmt::skip]
         let menu_items = if matches!(conversation_id, ConversationId::Channel(_)) {
             menu_items!(
@@ -655,6 +661,24 @@ mod tests {
         // Emoji are multi-byte
         let result = MCMessage::truncate("👋🌍hello", 2);
         assert_eq!(result, "👋🌍");
+    }
+
+    #[test]
+    fn test_truncate_zero_chars() {
+        let result = MCMessage::truncate("hello", 0);
+        assert_eq!(
+            result, "",
+            "truncating to 0 chars should return empty string"
+        );
+    }
+
+    #[test]
+    fn test_truncate_empty_string() {
+        let result = MCMessage::truncate("", 5);
+        assert_eq!(
+            result, "",
+            "truncating empty string should return empty string"
+        );
     }
 
     #[test]

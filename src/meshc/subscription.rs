@@ -51,6 +51,7 @@ struct RadioCache {
 
 impl RadioCache {
     fn user(&self) -> MCUser {
+        // jonesy:allow(bounds) via meshcore_rs public_key .into()
         let node_id: NodeId = (&self.self_info.public_key).into();
         MCUser {
             id: node_id.to_string(),
@@ -71,6 +72,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
             let (subscriber_sender, mut subscriber_receiver) = channel::<DeviceCommand>(100);
 
             //Inform the GUI the subscription is ready to receive messages, so it can send messages
+            // jonesy:allow(unknown) async state machine artifact
             let _ = gui_sender
                 .send(DeviceEvent::Ready(subscriber_sender, RadioType::MeshCore))
                 .await;
@@ -137,6 +139,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                     .merge(battery_stream);
 
                                 loop {
+                                    // jonesy:allow(unknown) via async poll
                                     match merged_stream.try_next().await {
                                         Ok(Some(message)) => {
                                             let result = match message {
@@ -199,6 +202,7 @@ pub fn subscribe() -> impl Stream<Item = DeviceEvent> {
                                                         meshcore_event,
                                                         &mut gui_sender,
                                                     )
+                                                    // jonesy:allow(misaligned_ptr) via meshcore-rs async poll (misaligned_ptr)
                                                     .await
                                                 }
                                                 BatteryTick => request_battery(&meshcore).await,
@@ -268,6 +272,7 @@ async fn do_connect(ble_device: &DeviceIdentifier) -> meshcore_rs::Result<MeshCo
         #[cfg(windows)]
         MeshCore::ble_connect(&ble_device.mac()),
     )
+    // jonesy:allow(unknown) async state machine artifact
     .await
     .map_err(|_| Error::Timeout("Connect".to_string()))?
 }
@@ -286,7 +291,7 @@ async fn initiate(
     meshcore: &MeshCore,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
-    // Send APPSTART to initialise connection and get device info
+    // jonesy:allow(bounds) via handle_self_info -> meshcore_rs .into() (bounds)
     let self_info = meshcore.commands().lock().await.send_appstart().await?;
     handle_self_info(radio_cache, self_info, gui_sender).await;
 
@@ -310,6 +315,7 @@ async fn get_channels(
     meshcore: &MeshCore,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
+    // jonesy:allow(unknown) async state machine artifact
     let mut index = 0;
     while let Ok(channel) = meshcore.commands().lock().await.get_channel(index).await {
         if !channel.name.is_empty() {
@@ -318,7 +324,11 @@ async fn get_channels(
                 .await
                 .unwrap_or_else(|e| eprintln!("Send error: {e}"));
         }
-        index += 1;
+        if let Some(next) = index.checked_add(1) {
+            index = next;
+        } else {
+            break;
+        }
     }
 
     Ok(())
@@ -330,13 +340,16 @@ async fn get_contacts(
     radio_cache: &mut RadioCache,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
+    // jonesy:allow(misaligned_ptr) via meshcore_rs::get_contacts_with_timeout (misaligned_ptr)
     let contacts = meshcore
         .commands()
+        // jonesy:allow(unknown) async state machine artifact
         .lock()
         .await
         .get_contacts_with_timeout(0, Duration::from_secs(30))
         .await?;
 
+    // jonesy:allow(bounds) via handle_new_contact -> Contact::prefix() (bounds)
     for contact in contacts {
         handle_new_contact(radio_cache, contact, gui_sender).await;
     }
@@ -395,8 +408,10 @@ async fn send_text_message(
             // No message sent info returned for a channel message
             meshcore
                 .commands()
+                // jonesy:allow(unknown) async state machine artifact
                 .lock()
                 .await
+                // jonesy:allow(misaligned_ptr) via meshcore_rs::send_channel_msg (misaligned_ptr)
                 .send_channel_msg(channel_index.into(), &text, None)
                 .await?;
 
@@ -418,6 +433,7 @@ async fn send_text_message(
                 .commands()
                 .lock()
                 .await
+                // jonesy:allow(misaligned_ptr) via meshcore_rs::send_msg (misaligned_ptr)
                 .send_msg(<NodeId as Into<Destination>>::into(node_id), &text, None)
                 .await?;
 
@@ -462,6 +478,7 @@ async fn send_emoji_reply(
         Some(reply_to_message_id),
         gui_sender,
     )
+    // jonesy:allow(unknown) async state machine artifact
     .await
 }
 
@@ -486,6 +503,7 @@ async fn send_position(
         None,
         gui_sender,
     )
+    // jonesy:allow(unknown) async state machine artifact
     .await
 }
 
@@ -506,31 +524,35 @@ async fn send_self_info(
         None,
         gui_sender,
     )
+    // jonesy:allow(unknown) async state machine artifact
     .await
 }
 
 /// Advertise my presence on the network to other nodes
 async fn send_advert(meshcore: &MeshCore) -> meshcore_rs::Result<MeshCoreEvent> {
+    // jonesy:allow(misaligned_ptr) via meshcore_rs::send_advert (misaligned_ptr)
     meshcore.commands().lock().await.send_advert(true).await
 }
 
-/// Handle reception of SelfInfo, combine with existing info and send it to the GUI
 async fn handle_self_info(
     radio_cache: &mut RadioCache,
     self_info: SelfInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
+    // jonesy:allow(bounds) via meshcore_rs public_key .into()
     radio_cache.self_id = (&self_info.public_key).into();
 
     // update the info stored in radio_cache
     radio_cache.self_info = self_info.clone();
 
     gui_sender
+        // jonesy:allow(bounds) via meshcore_rs public_key .into() (bounds)
         .send(MyNodeNum((&self_info.public_key).into()))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 
     gui_sender
+        // jonesy:allow(bounds) via RadioCache::user() -> public_key .into() (bounds)
         .send(MyUserInfo(radio_cache.user()))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -541,7 +563,6 @@ async fn handle_self_info(
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
 
-/// Handle reception of DeviceInfo, combine with existing info and send it to the GUI
 async fn handle_device_info(
     radio_cache: &mut RadioCache,
     device_info: DeviceInfoData,
@@ -551,17 +572,18 @@ async fn handle_device_info(
     radio_cache.device_info = device_info.clone();
 
     gui_sender
+        // jonesy:allow(bounds) via RadioCache::user() -> public_key .into() (bounds)
         .send(MyUserInfo(radio_cache.user()))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
 }
 
-/// Handle the reception of a new Contact and send to the GUI
 async fn handle_new_contact(
     radio_cache: &mut RadioCache,
     contact: Contact,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
+    // jonesy:allow(bounds) via meshcore_rs Contact::prefix()
     let node_id = (&contact.prefix()).into();
     radio_cache
         .known_contacts
@@ -583,6 +605,7 @@ async fn handle_battery_info(
     battery_info: &BatteryInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
+    // jonesy:allow(overflow) via meshcore_rs BatteryInfo::percentage()
     gui_sender
         .send(DeviceBatteryLevel(Some(battery_info.percentage())))
         .await
@@ -596,6 +619,7 @@ async fn handle_new_channel(
 ) {
     radio_cache.known_channels.insert(channel_info.channel_idx);
     gui_sender
+        // jonesy:allow(unknown) async state machine artifact
         .send(channel_info.into())
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
@@ -618,7 +642,7 @@ async fn handle_new_channel_message(
     channel_message: ChannelMessage,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
-    // extract the node name, look it up and get the node ID or else default to a node id of 0
+    // jonesy:allow(bounds) via core::str::split_once
     let (node_id, text) = if let Some((node_name, text)) = channel_message.text.split_once(": ") {
         (
             match radio_cache.known_contacts.get(node_name) {
@@ -662,6 +686,7 @@ async fn handle_radio_event(
     meshcore_event: Box<MeshCoreEvent>,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
+    // jonesy:allow(misaligned_ptr) via meshcore_rs EventPayload enum matching (misaligned_ptr)
     match meshcore_event.event_type {
         EventType::NeighboursResponse => {
             if let EventPayload::Neighbours(neighbours) = meshcore_event.payload {
@@ -683,6 +708,7 @@ async fn handle_radio_event(
         }
         EventType::SelfInfo => {
             if let EventPayload::SelfInfo(self_info) = meshcore_event.payload {
+                // jonesy:allow(bounds) via handle_self_info -> public_key .into() (bounds)
                 handle_self_info(radio_cache, self_info, gui_sender).await;
             }
         }
@@ -693,6 +719,7 @@ async fn handle_radio_event(
         }
         EventType::Battery => {
             if let EventPayload::Battery(battery_info) = meshcore_event.payload {
+                // jonesy:allow(overflow) via handle_battery_info -> meshcore_rs percentage()
                 handle_battery_info(&battery_info, gui_sender).await;
             }
         }

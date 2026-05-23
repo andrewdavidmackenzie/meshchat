@@ -72,6 +72,7 @@ pub struct DeviceList {
     scanning: bool,
 }
 
+// jonesy:allow(unknown) async state machine artifact
 async fn empty() {}
 
 const ALIAS_INPUT_TEXT_ID: &str = "alias_input_text";
@@ -275,6 +276,7 @@ impl DeviceList {
             device_row = device_row.push(name_element);
             device_row = device_row.push(Space::new().width(6));
 
+            // jonesy:allow(misaligned_ptr) via iced_widget::row::Row::push (misaligned_ptr)
             device_row = device_row.push(Self::menu_bar(
                 ble_device,
                 config
@@ -338,6 +340,7 @@ impl DeviceList {
     fn menu_bar<'a>(ble_device: &str, alias_exists: bool) -> MenuBar<'a, Message, Theme, Renderer> {
         let menu_tpl_1 = |items| Menu::new(items).spacing(3);
 
+        // jonesy:allow(misaligned_ptr) via iced_aw menu_items!/menu_bar! macros (misaligned_ptr)
         let menu_items = if alias_exists {
             menu_items!(
                 (menu_button(

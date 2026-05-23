@@ -66,6 +66,7 @@ pub struct Conversation {
     last_seen_message: TimeStamp,
 }
 
+// jonesy:allow(unknown) async state machine artifact
 async fn empty() {}
 
 // A view of a single channel and its messages, which maybe a Channel or a Node
@@ -81,6 +82,7 @@ impl Conversation {
 
     /// Acknowledge the receipt of a message.
     pub fn ack(&mut self, message_id: MessageId) {
+        // jonesy:allow(bounds) via ringmap::RingMap::get_mut
         if let Some(entry) = self.messages.get_mut(&message_id) {
             entry.ack();
         }
@@ -92,12 +94,13 @@ impl Conversation {
         // the list of entries
         match history_length {
             HistoryLength::NumberOfMessages(number) => {
+                // jonesy:allow(assert) via ringmap::RingMap::len
                 while self.messages.len() > *number {
                     self.messages.pop_front();
                 }
             }
             HistoryLength::Duration(duration) => {
-                let oldest = u128::from(TimeStamp::now()) - duration.as_millis();
+                let oldest = u128::from(TimeStamp::now()).saturating_sub(duration.as_millis());
                 while self
                     .messages
                     .pop_front_if(|_k, message| u128::from(message.time()) < oldest)
@@ -131,9 +134,11 @@ impl Conversation {
                     MCMessage::sort_by_timestamp,
                 );
 
+                // jonesy:allow(assert) via trim_history -> ringmap::RingMap::len
                 self.trim_history(history_length);
             }
             EmojiReply(reply_to_id, emoji_string) => {
+                // jonesy:allow(bounds) via ringmap::RingMap::get_mut
                 if let Some(entry) = self.messages.get_mut(reply_to_id) {
                     entry.add_emoji(emoji_string.to_string(), new_message.from());
                 }
@@ -196,6 +201,7 @@ impl Conversation {
                 Task::none()
             }
             MessageSeen(message_id, timestamp) => {
+                // jonesy:allow(bounds) via ringmap::RingMap::get_mut
                 if let Some(message) = self.messages.get_mut(&message_id) {
                     message.mark_seen();
                     // Persist the timestamp of the last seen message in the ChannelView
@@ -221,6 +227,7 @@ impl Conversation {
                     ))
                 })
             }
+            // jonesy:allow(misaligned_ptr) via iced emoji picker update (misaligned_ptr)
             EmojiPickerMsg(picker_msg) => {
                 if let Some(msg) = self.emoji_picker.update(*picker_msg) {
                     // Forward the wrapped message
@@ -255,6 +262,7 @@ impl Conversation {
         show_position_updates: bool,
         show_user_updates: bool,
     ) -> Element<'a, Message> {
+        // jonesy:allow(assert) via channel_view -> ringmap::RingMap::is_empty
         let channel_view_content = self.channel_view(
             nodes,
             fav_nodes,
@@ -298,6 +306,7 @@ impl Conversation {
     ) -> Element<'a, Message> {
         let mut channel_view_content = Column::new().padding(right(10));
 
+        // jonesy:allow(assert) via ringmap::RingMap::is_empty
         let message_area: Element<'a, Message> = if self.messages.is_empty() {
             Self::empty_view()
         } else {
@@ -306,6 +315,7 @@ impl Conversation {
             let mut previous_from: Option<NodeId> = None;
 
             // Add a view to the column for each of the entries in this Channel
+            // jonesy:allow(unknown) via ringmap::RingMap::values
             for message in self.messages.values() {
                 // Hide any previously received position updates in the view if config is set to do so
                 if matches!(message.message(), PositionMessage(..)) && !show_position_updates {
@@ -319,6 +329,7 @@ impl Conversation {
 
                 let datetime_local = MCMessage::datetime_local(message.time());
 
+                // jonesy:allow(bounds) via chrono day()
                 let message_day = datetime_local.day();
 
                 // Add a day separator when the day of an entry changes
@@ -492,8 +503,10 @@ impl Conversation {
     /// "%A" - day name e.g. "Friday"
     fn day_separator(datetime_local: &DateTime<Local>) -> Element<'static, Message> {
         let now_local = Local::now();
+        // jonesy:allow(bounds) via chrono day()
         let today = now_local.day();
 
+        // jonesy:allow(bounds) via chrono iso_week()
         let format_string = if datetime_local.iso_week() < now_local.iso_week() {
             if datetime_local.year() != now_local.year() {
                 // before the beginning of year week, so how the day name, month name and date
@@ -502,6 +515,7 @@ impl Conversation {
                 // before the beginning of this week, so how the day name, month name and date
                 "%A, %b %e"
             }
+        // jonesy:allow(bounds) via chrono day()
         } else if datetime_local.day() == today {
             "Today"
         } else {
