@@ -294,6 +294,7 @@ impl MeshChat {
                     ));
                 }
 
+                // jonesy:allow(overflow) via iced_runtime::task::Task::batch
                 Task::batch(tasks)
             }
             DeviceAndChannelConfigChange(ble_device, conversation_id) => {
@@ -582,6 +583,7 @@ impl MeshChat {
 
     /// Subscribe to events from Discover and from Windows and from Devices (Radios)
     pub(crate) fn subscription(&self) -> Subscription<Message> {
+        // jonesy:allow(misaligned_ptr) via alloc in subscription vec (misaligned_ptr)
         let subscriptions = vec![
             Subscription::run(ble_discovery).map(DeviceListViewEvent),
             #[cfg(feature = "meshtastic")]

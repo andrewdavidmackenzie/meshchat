@@ -26,7 +26,7 @@ jobs:
         id: jonesy  # Required to reference outputs in subsequent steps
         uses: andrewdavidmackenzie/jonesy@v1
         with:
-          fail-on-panic: false  # Set to true to fail the build if panics found
+          fail-on-panic: false  # Blocked by https://github.com/andrewdavidmackenzie/jonesy/issues/255
 
       # The action outputs the panic count for use in later steps
       - name: Check panic count

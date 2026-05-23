@@ -131,7 +131,7 @@ impl EmojiPicker {
         button(text(emoji))
             .on_press(PickerMessage::GroupSelected(group))
             .style(move |theme: &Theme, status: Status| {
-                emoji_tab_style(theme, status, self.group == group)
+                emoji_tab_style(theme, status, self.group == group) // jonesy:allow(unknown) via emoji_tab_style -> iced Color::from_rgba
             })
     }
 }

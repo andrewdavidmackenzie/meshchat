@@ -236,6 +236,7 @@ where
                 // Draw charging icon (lightning bolt)
                 use iced::advanced::graphics::mesh::{self, Mesh, SolidVertex2D};
 
+                // jonesy:allow(misaligned_ptr) via iced mesh vec allocation (misaligned_ptr)
                 let triangle1 = Mesh::Solid {
                     buffers: mesh::Indexed {
                         vertices: vec![
@@ -376,13 +377,19 @@ pub struct Style {
 impl Default for Style {
     fn default() -> Self {
         Self {
+            // jonesy:allow(unknown) via battery::Style::default
             background_color: Color::from_rgba(0.1, 0.1, 0.1, 1.0),
             border_color: Color::WHITE,
+            // jonesy:allow(unknown) via battery::Style::default
             charging_color: Color::from_rgb(0.2, 0.8, 0.2), // Green
+            // jonesy:allow(unknown) via battery::Style::default
             charge_high_color: Color::from_rgb(0.2, 0.8, 0.2), // Green
+            // jonesy:allow(unknown) via battery::Style::default
             charge_medium_color: Color::from_rgb(0.95, 0.9, 0.2), // Yellow
+            // jonesy:allow(unknown) via battery::Style::default
             charge_low_color: Color::from_rgb(0.9, 0.2, 0.2), // Red
-            unknown_color: Color::from_rgb(0.7, 0.7, 0.7),  // Gray
+            // jonesy:allow(unknown) via battery::Style::default
+            unknown_color: Color::from_rgb(0.7, 0.7, 0.7), // Gray
         }
     }
 }
@@ -453,13 +460,20 @@ impl Catalog for Theme {
 /// The default battery style.
 pub fn default(_theme: &Theme, _state: BatteryState) -> Style {
     Style {
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb
         background_color: Color::from_rgb(0.05, 0.05, 0.05), // Very dark background
-        border_color: Color::from_rgb(0.4, 0.4, 0.4),        // Light gray border
-        charging_color: Color::from_rgb(0.0, 0.7, 0.0),      // Green for charging
-        charge_high_color: Color::from_rgb(0.0, 0.7, 0.0),   // Green for high charge (>50%)
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb
+        border_color: Color::from_rgb(0.4, 0.4, 0.4), // Light gray border
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb
+        charging_color: Color::from_rgb(0.0, 0.7, 0.0), // Green for charging
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb
+        charge_high_color: Color::from_rgb(0.0, 0.7, 0.0), // Green for high charge (>50%)
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb
         charge_medium_color: Color::from_rgb(0.8, 0.7, 0.0), // Yellow for medium charge (20-50%)
-        charge_low_color: Color::from_rgb(0.8, 0.0, 0.0),    // Red for low charge (<20%)
-        unknown_color: Color::from_rgb(0.5, 0.5, 0.5),       // Gray for unknown state
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb
+        charge_low_color: Color::from_rgb(0.8, 0.0, 0.0), // Red for low charge (<20%)
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb
+        unknown_color: Color::from_rgb(0.5, 0.5, 0.5), // Gray for unknown state
     }
 }
 

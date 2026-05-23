@@ -257,6 +257,7 @@ pub fn fav_button_style(theme: &Theme, status: Status) -> button::Style {
             snap: false,
         },
         Status::Pressed => button::Style {
+            // jonesy:allow(unknown) via iced_core::color::Color::from_rgba
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: palette.text,
             border: BUTTON_BORDER_ACTIVE,
@@ -276,6 +277,7 @@ pub fn fav_button_style(theme: &Theme, status: Status) -> button::Style {
 pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
     match status {
         Status::Active => button::Style {
+            // jonesy:allow(unknown) via iced_core::color::Color::from_rgba
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
@@ -290,6 +292,7 @@ pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
             snap: false,
         },
         Status::Pressed => button::Style {
+            // jonesy:allow(unknown) via iced_core::color::Color::from_rgba
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_ACTIVE,
@@ -297,6 +300,7 @@ pub fn button_chip_style(_theme: &Theme, status: Status) -> button::Style {
             snap: false,
         },
         Status::Disabled => button::Style {
+            // jonesy:allow(unknown) via iced_core::color::Color::from_rgba
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: BUTTON_BORDER_DISABLED,
@@ -403,6 +407,7 @@ pub fn emoji_tab_style(_theme: &Theme, status: Status, selected: bool) -> button
             background: if selected {
                 Some(Background::Color(CYAN))
             } else {
+                // jonesy:allow(unknown) via iced_core::color::Color::from_rgba
                 Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0)))
             },
             text_color: Color::WHITE,
@@ -418,6 +423,7 @@ pub fn emoji_tab_style(_theme: &Theme, status: Status, selected: bool) -> button
             snap: false,
         },
         Status::Pressed => button::Style {
+            // jonesy:allow(unknown) via iced_core::color::Color::from_rgba
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: TAB_BUTTON_BORDER,
@@ -425,6 +431,7 @@ pub fn emoji_tab_style(_theme: &Theme, status: Status, selected: bool) -> button
             snap: false,
         },
         Status::Disabled => button::Style {
+            // jonesy:allow(unknown) via iced_core::color::Color::from_rgba
             background: Some(Background::Color(Color::from_rgba(0.0, 0.0, 0.8, 1.0))),
             text_color: Color::WHITE,
             border: TAB_BUTTON_BORDER,
@@ -572,6 +579,7 @@ pub fn error_notification_style(_theme: &Theme) -> Style {
 pub fn info_notification_style(_theme: &Theme) -> Style {
     Style {
         text_color: Some(Color::WHITE),
+        // jonesy:allow(unknown) via iced_core::color::Color::from_rgb8
         background: Some(Background::Color(Color::from_rgb8(0x00, 0x00, 0x00))), // black
         border: Border {
             radius: Radius::from(12.0), // rounded corners
@@ -702,7 +710,7 @@ pub fn emoji_scrollbar_style(_theme: &Theme, status: scrollable::Status) -> scro
 pub fn battery_style(_theme: &Theme, _state: BatteryState) -> battery::Style {
     battery::Style {
         border_color: COLOR_CYAN,
-        ..Default::default()
+        ..Default::default() // jonesy:allow via battery::Style::default -> iced Color::from_rgb
     }
 }
 

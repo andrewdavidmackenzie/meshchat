@@ -1,4 +1,11 @@
-allow = ["expect", "capacity", "format", "async_resumed"]
+allow = ["expect", "capacity", "format", "misaligned_ptr", "oom", "unknown"]
+
 [[rules]]
-function = "alloc::fmt::format"
-allow = ["format"]
+function = "metal::device::*"
+allow = ["panic"]
+
+[[rules]]
+function = "prost::*"
+allow = ["bounds", "overflow"]
+
+

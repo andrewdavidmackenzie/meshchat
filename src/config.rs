@@ -23,6 +23,7 @@ use tokio::io::AsyncWriteExt;
 const EIGHT_HOURS_IN_SECONDS: u64 = 60 * 60 * 8;
 const ONE_DAY_IN_SECONDS: u64 = 60 * 60 * 24;
 
+// jonesy:allow(overflow) derived Deserialize traces into serde internals
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     #[serde(default, rename = "device", skip_serializing_if = "Option::is_none")]
@@ -349,9 +350,9 @@ async fn save(config_path: PathBuf, config: Config) -> io::Result<()> {
 }
 
 async fn create(config_dir: PathBuf, filename: &str) -> io::Result<()> {
-    // Create any directories required for the config file
     DirBuilder::new()
         .recursive(true)
+        // jonesy:allow(unknown) async state machine artifact
         .create(&config_dir)
         .await?;
     // Create the config file itself

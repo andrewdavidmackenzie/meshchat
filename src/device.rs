@@ -198,6 +198,7 @@ pub enum DeviceMessage {
     ChannelMsg(ConversationId, ChannelViewMessage),
     SendTextMessage(String, ConversationId, Option<MessageId>), // optional reply to message id
     SendEmojiReplyMessage(MessageId, String, ConversationId),   // optional reply to message id
+    // jonesy:allow(unknown) via metal::device register_sel
     SendPositionMessage(ConversationId),
     SendSelfInfoMessage(ConversationId),
     SearchInput(String),
@@ -209,6 +210,7 @@ pub enum DeviceMessage {
     ClearFilter,
 }
 
+// jonesy:allow(panic) derived Default traces into std HashMap/Option internals
 #[derive(Default)]
 pub struct Device {
     connection_state: ConnectionState,
@@ -235,6 +237,7 @@ pub struct Device {
     show_user_updates: bool,
 }
 
+// jonesy:allow(unknown) async state machine artifact
 async fn empty() {}
 
 impl Device {
@@ -328,6 +331,7 @@ impl Device {
             SubscriptionMessage(subscription_event) => {
                 return self.process_device_event(subscription_event);
             }
+            // jonesy:allow(overflow) via iced_runtime::task::Task::chain
             ChannelMsg(conversation_id, msg) => {
                 if let Some(channel_view) = self.conversations.get_mut(&conversation_id) {
                     return channel_view.update(msg);
@@ -398,6 +402,7 @@ impl Device {
                 };
 
                 // Focus on the correct input text and then save the config change
+                // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                 return operation::focus(input_to_focus).chain(Task::perform(empty(), move |_| {
                     Message::DeviceAndChannelConfigChange(Some((device, radio)), conversation_id)
                 }));
@@ -441,7 +446,7 @@ impl Device {
             ConnectingEvent(mac_address) => {
                 self.connection_state = Connecting(mac_address);
                 Task::none()
-            },
+            }
             ConnectedEvent(ble_device, radio_type) => {
                 self.connection_state = Connected(ble_device.clone(), radio_type);
                 match self.viewing_conversation {
@@ -455,11 +460,9 @@ impl Device {
                             )
                         })
                     }
-                    Some(conversation_id) => {
-                        Task::perform(empty(), move |_| {
-                            DeviceViewEvent(ShowChannel(Some(conversation_id)))
-                        })
-                    }
+                    Some(conversation_id) => Task::perform(empty(), move |_| {
+                        DeviceViewEvent(ShowChannel(Some(conversation_id)))
+                    }),
                 }
             }
             DisconnectingEvent(mac_address) => {
@@ -490,18 +493,21 @@ impl Device {
             }
             ConnectionError(id, summary, detail) => {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
+                // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
                         AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             SendError(summary, detail) => {
+                // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
                         AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             NotReady => {
+                // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                 Task::perform(empty(), |_| Navigation(DeviceListView))
                     .chain(Task::perform(empty(), move |_| {
                         AppError("Subscription not ready".to_string(),
@@ -512,7 +518,7 @@ impl Device {
             MyNodeNum(my_node_num) => {
                 self.my_node_id = Some(my_node_num);
                 Task::none()
-            },
+            }
             MyUserInfo(my_user_info) => {
                 self.set_my_user(my_user_info);
                 Task::none()
@@ -529,19 +535,13 @@ impl Device {
                 self.add_node(node_info);
                 Task::none()
             }
-            RadioNotification(message, timestamp) => {
-                Task::perform(empty(), move |_| {
-                    Message::AppNotification(
-                        "Radio Notification".to_string(),
-                        message,
-                        timestamp
-                    )
-                })
-            }
+            RadioNotification(message, timestamp) => Task::perform(empty(), move |_| {
+                Message::AppNotification("Radio Notification".to_string(), message, timestamp)
+            }),
             MCMessageReceived(conversation_id, id, from, mc_content, timestamp) => {
                 let new_message = MCMessage::new(id, from, mc_content, timestamp);
                 self.new_message(&conversation_id, new_message)
-                }
+            }
             DeviceBatteryLevel(level) => {
                 self.battery_level = level;
                 Task::none()
@@ -563,13 +563,9 @@ impl Device {
                 self.update_node_position(from, &position);
                 if self.show_position_updates {
                     if let Some(channel_view) = &mut self.conversations.get_mut(&conversation_id) {
-                            let new_message = MCMessage::new(
-                                id,
-                                from,
-                                PositionMessage(position),
-                                timestamp,
-                            );
-                            return channel_view.new_message(new_message, &self.history_length);
+                        let new_message =
+                            MCMessage::new(id, from, PositionMessage(position), timestamp);
+                        return channel_view.new_message(new_message, &self.history_length);
                     } else {
                         eprintln!("No channel for: {}", conversation_id);
                     }
@@ -789,7 +785,7 @@ impl Device {
     /// Count all the unread messages available to this device across channels and nodes
     pub fn unread_count(&self, show_position_updates: bool, show_user_updates: bool) -> usize {
         self.conversations.values().fold(0, |acc, channel| {
-            acc + channel.unread_count(show_position_updates, show_user_updates)
+            acc.saturating_add(channel.unread_count(show_position_updates, show_user_updates))
         })
     }
 
@@ -855,7 +851,7 @@ impl Device {
         add_buttons: bool,
         select: fn(ConversationId) -> Message,
     ) -> Element<'a, Message> {
-        // If not viewing a channel/user, show the list of channels and users
+        // jonesy:allow(overflow) via channel_list -> iterator next()
         let mut conversation_list = self.channel_list(select);
 
         // Add the favourite nodes to the list if there are any
@@ -881,6 +877,7 @@ impl Device {
         let mut channels_list = Column::new();
 
         let mut filtered_channels: Vec<(usize, String)> = vec![];
+        // jonesy:allow(overflow) via iterator next()
         for (index, channel) in self.channels.iter().enumerate() {
             let channel_name = format!("🛜  {}", channel.name);
 
@@ -1536,9 +1533,11 @@ mod tests {
         assert!(device_view.show_user_updates);
     }
 
+    // jonesy:allow(unknown) via metal::device::Device::all
     #[test]
     fn test_start_forwarding_message() {
         let mut device_view = Device::default();
+        // jonesy:allow(unknown) via metal::device::Device::all register_sel
         assert!(device_view.forwarding_message.is_none());
 
         let entry = MCMessage::new(
@@ -1555,9 +1554,11 @@ mod tests {
     #[test]
     fn test_stop_forwarding_message() {
         let mut device_view = Device::default();
+        // jonesy:allow(unknown) via metal::device::DeviceRef::name register_sel
         let entry = MCMessage::new(
             MessageId::from(1),
             NodeId::from(100u64),
+            // jonesy:allow(unwrap) via metal::device::DeviceRef::name
             MCContent::NewTextMessage("test".into()),
             TimeStamp::from(0u64),
         );
@@ -1683,10 +1684,12 @@ mod tests {
             }),
             position: None,
             is_ignored: false,
+            // jonesy:allow(unknown) via metal::device::DeviceRef::new_library_with_source
         };
 
         let _ = device_view.update(SubscriptionMessage(NewNode(node_info)));
 
+        // jonesy:allow(unknown) via metal::device::DeviceRef::new_library_with_source
         assert!(device_view.nodes.contains_key(&NodeId::from(12345u64)));
         assert!(
             device_view
@@ -1695,9 +1698,11 @@ mod tests {
         );
     }
 
+    // jonesy:allow(unknown) via metal::device::DeviceRef::new_library_with_source
     #[test]
     fn test_subscription_new_node_ignored() {
         let mut device_view = Device::default();
+        // jonesy:allow(unknown) via metal::device::DeviceRef::new_library_with_source
         device_view.my_node_id = Some(NodeId::from(999u64));
 
         let node_info = MCNodeInfo {
@@ -1968,6 +1973,7 @@ mod tests {
         assert!(device_view.viewing_conversation.is_none());
     }
 
+    // jonesy:allow(unknown) via metal::device::DeviceRef::new_counter_sample_buffer_with_descriptor
     #[test]
     fn test_subscription_connection_error() {
         let mut device_view = Device::default();
@@ -2123,6 +2129,7 @@ mod tests {
         let _task = device_view.channel_change(None);
         assert_eq!(device_view.viewing_conversation, None);
     }
+    // jonesy:allow(unknown) via metal::device::DeviceRef::counter_sets
 
     #[test]
     fn test_channel_change_from_none() {

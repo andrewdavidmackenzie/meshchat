@@ -31,6 +31,7 @@ impl From<&SelfInfo> for MCPosition {
 
 impl From<&AdvertisementData> for MCNodeInfo {
     fn from(advert: &AdvertisementData) -> Self {
+        // jonesy:allow(bounds) via meshcore_rs prefix .into()
         let node_id: NodeId = (&advert.prefix).into();
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
@@ -54,6 +55,7 @@ impl From<&AdvertisementData> for MCNodeInfo {
 
 impl From<Contact> for MCNodeInfo {
     fn from(contact: Contact) -> Self {
+        // jonesy:allow(bounds) via meshcore_rs Contact::prefix()
         let node_id = (&contact.prefix()).into();
         MCNodeInfo {
             #[allow(clippy::unwrap_used)]
@@ -105,6 +107,7 @@ impl From<Neighbour> for MCNodeInfo {
 
 impl From<AdvertResponseData> for MCNodeInfo {
     fn from(advert: AdvertResponseData) -> Self {
+        // jonesy:allow(bounds) via meshcore_rs pubkey .into()
         let node_id = (&advert.pubkey).into();
         let position = if let Some(lat) = advert.lat
             && let Some(long) = advert.lon
@@ -153,9 +156,9 @@ impl From<DiscoverEntry> for MCNodeInfo {
     }
 }
 
-/// Convert from a ContactMessage to a SubscriptionEvent::MCMessageReceived
 impl From<ContactMessage> for DeviceEvent {
     fn from(contact_message: ContactMessage) -> Self {
+        // jonesy:allow(bounds) via meshcore_rs sender_prefix .into()
         let node_id = (&contact_message.sender_prefix).into();
         MCMessageReceived(
             Node(node_id),
@@ -185,7 +188,8 @@ impl From<TimeStamp> for MessageId {
 impl From<&[u8; 6]> for NodeId {
     fn from(value: &[u8; 6]) -> Self {
         let mut bytes = [0u8; 8];
-        bytes[0..6].copy_from_slice(value);
+        // jonesy:allow(bounds) copy_from_slice - sizes guaranteed by types
+        bytes[..value.len()].copy_from_slice(value);
         NodeId::from(u64::from_be_bytes(bytes))
     }
 }
@@ -200,7 +204,8 @@ impl From<NodeId> for Destination {
 impl From<&[u8; 32]> for NodeId {
     fn from(value: &[u8; 32]) -> Self {
         let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&value[0..8]);
+        // jonesy:allow(bounds) copy_from_slice - sizes guaranteed by types
+        bytes.copy_from_slice(&value[..8]);
         NodeId::from(u64::from_be_bytes(bytes))
     }
 }
@@ -208,7 +213,9 @@ impl From<&[u8; 32]> for NodeId {
 impl From<Vec<u8>> for NodeId {
     fn from(value: Vec<u8>) -> Self {
         let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&value[0..8]);
+        let len = value.len().min(8);
+        // jonesy:allow(bounds) copy_from_slice - length clamped to min(len, 8)
+        bytes[..len].copy_from_slice(&value[..len]);
         NodeId::from(u64::from_be_bytes(bytes))
     }
 }
