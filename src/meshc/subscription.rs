@@ -270,7 +270,7 @@ async fn do_connect(ble_device: &DeviceIdentifier) -> meshcore_rs::Result<MeshCo
         #[cfg(not(windows))]
         MeshCore::ble_connect(&ble_device.name()),
         #[cfg(windows)]
-        MeshCore::ble_connect(&ble_device.mac()),
+        MeshCore::ble_connect(&ble_device.mac().unwrap_or_else(|| ble_device.name())),
     )
     // jonesy:allow(unknown) async state machine artifact
     .await

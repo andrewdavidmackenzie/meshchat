@@ -41,6 +41,20 @@ jobs:
           command: clippy
           args: --tests --no-deps --all-features --all-targets
 
+  all-feature-combinations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt install libdbus-1-dev pkg-config
+      - name: Install cargo-all-features
+        run: cargo install cargo-all-features
+      - name: Check all feature combinations
+        run: cargo check-all-features
+
   todo-check:
     runs-on: ubuntu-latest
     steps:

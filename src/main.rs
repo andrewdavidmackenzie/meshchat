@@ -4,6 +4,9 @@
 #[cfg(not(any(feature = "meshtastic", feature = "meshcore")))]
 compile_error!("At least one of 'meshtastic' or 'meshcore' features must be enabled");
 
+#[cfg(not(any(feature = "bluetooth", feature = "tcp")))]
+compile_error!("At least one of 'bluetooth' or 'tcp' features must be enabled");
+
 use crate::meshchat::MeshChat;
 use iced::window;
 

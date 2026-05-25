@@ -10,9 +10,11 @@ license = "GPL-3.0"
 include = ["src", "assets", "build.rs", "README.md", "LICENSE", "!**/.DS_Store"]
 
 [features]
-default = ["meshtastic", "meshcore"]
+default = ["meshtastic", "meshcore", "bluetooth", "tcp"]
 meshcore = ["dep:meshcore-rs"]
 meshtastic = ["dep:meshtastic"]
+bluetooth = ["dep:btleplug"]
+tcp = ["dep:mdns-sd"]
 debug = ["iced/debug", "dep:tracing", "dep:tracing-subscriber"] # use "... --features "debug" to enable this for Iced
 hot = ["iced/hot"]
 # Allow the feature to check for app updates to be disabled by people building for distribution channels that take care of updates themselves
@@ -43,13 +45,15 @@ futures-channel = { version = "0.3.32", default-features = false }
 chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
 webbrowser = { version = "1.2", default-features = false }
 iced_aw = { version = "0.14", default-features = false, features = ["menu"] }
-btleplug = { version = "0.11.8", default-features = false }
 emojis = { version = "0.8.2", default-features = false }
 uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
 meshcore-rs = { version = "0.1.9", default-features = false, features = ["ble"], optional = true }
+btleplug = { version = "0.11.8", default-features = false, optional = true }
+# mDNS-SD discovery of Meshtastic TCP devices on the LAN (`_meshtastic._tcp.local.`)
+mdns-sd = { version = "0.13", default-features = false, features = ["async"], optional = true }
 # Self-update requiers us to chose the http backend to use
 self_update = { version = "0.44.0", default-features = false, features = ["reqwest"], optional = true }
 tracing = { version = "0.1", optional = true }
@@ -89,10 +93,13 @@ panic = "deny"
 [package.metadata.cargo-all-features]
 # Exclude certain features from the build matrix
 denylist = ["hot", "debug"]
-# Skip combinations that don't include at least one radio protocol
+# Skip combinations that don't include at least one radio protocol or one transport
 skip_feature_sets = [
     [], # no features
     ["auto-update"], # only auto-update without radio support
+    ["bluetooth"], # transport without radio
+    ["tcp"], # transport without radio
+    ["bluetooth", "tcp"], # transports without radio
 ]
 
 # For cargo packager tool

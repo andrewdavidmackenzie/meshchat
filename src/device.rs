@@ -38,6 +38,7 @@ use crate::styles::{
 };
 use crate::timestamp::TimeStamp;
 use crate::widgets::battery::{Battery, BatteryState};
+#[cfg(feature = "bluetooth")]
 use btleplug::api::BDAddr;
 use iced::widget::scrollable::Scrollbar;
 use iced::widget::{
@@ -66,38 +67,112 @@ impl Default for ConnectionState {
     }
 }
 
-/// Due to cross-platform differences, one cannot reliably be used. But one of the two must exist
-/// so that we can connect to it later. Discovery will try to get both (depending on the platform).
-/// But subscription will try to connect using the one it knows that works by platform
-#[derive(Default, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct DeviceIdentifier {
-    pub(crate) name: Option<String>,
-    pub(crate) mac: Option<BDAddr>,
+/// How a device is reached. BLE keeps its existing fields; TCP records the resolved
+/// host/port and any human-readable name from mDNS.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum DeviceIdentifier {
+    #[cfg(feature = "bluetooth")]
+    Ble {
+        name: Option<String>,
+        mac: Option<BDAddr>,
+    },
+    #[cfg(feature = "tcp")]
+    Tcp {
+        name: Option<String>,
+        host: String,
+        port: u16,
+    },
+}
+
+impl Default for DeviceIdentifier {
+    fn default() -> Self {
+        #[cfg(feature = "bluetooth")]
+        {
+            return DeviceIdentifier::Ble {
+                name: None,
+                mac: None,
+            };
+        }
+        #[cfg(all(feature = "tcp", not(feature = "bluetooth")))]
+        {
+            DeviceIdentifier::Tcp {
+                name: None,
+                host: String::new(),
+                port: 0,
+            }
+        }
+    }
 }
 
 impl DeviceIdentifier {
     pub fn name(&self) -> String {
-        self.name.clone().unwrap_or("Unknown".to_string())
+        match self {
+            #[cfg(feature = "bluetooth")]
+            DeviceIdentifier::Ble { name, .. } => {
+                name.clone().unwrap_or_else(|| "Unknown".to_string())
+            }
+            #[cfg(feature = "tcp")]
+            DeviceIdentifier::Tcp { name, host, port } => {
+                name.clone().unwrap_or_else(|| format!("{host}:{port}"))
+            }
+        }
     }
 
-    pub fn mac(&self) -> String {
-        self.mac
-            .map(|mac| mac.to_string())
-            .unwrap_or("Unknown".to_string())
+    #[cfg(feature = "bluetooth")]
+    pub fn mac(&self) -> Option<String> {
+        match self {
+            DeviceIdentifier::Ble { mac, .. } => mac.map(|mac| mac.to_string()),
+            #[cfg(feature = "tcp")]
+            DeviceIdentifier::Tcp { .. } => None,
+        }
     }
 }
 
+#[cfg(feature = "tcp")]
+const TCP_SCHEME: &str = "tcp://";
+
 impl From<&str> for DeviceIdentifier {
     fn from(value: &str) -> Self {
-        if let Ok(mac) = BDAddr::from_str_delim(value) {
-            DeviceIdentifier {
-                name: None,
-                mac: Some(mac),
+        #[cfg(feature = "tcp")]
+        {
+            if let Some(rest) = value.strip_prefix(TCP_SCHEME) {
+                let (addr, name) = match rest.split_once('#') {
+                    Some((addr, name)) => (addr, Some(name.to_string())),
+                    None => (rest, None),
+                };
+                if let Some((host, port_str)) = addr.rsplit_once(':') {
+                    if let Ok(port) = port_str.parse::<u16>() {
+                        let host = host.trim_start_matches('[').trim_end_matches(']');
+                        if !host.is_empty() && port > 0 {
+                            return DeviceIdentifier::Tcp {
+                                name,
+                                host: host.to_string(),
+                                port,
+                            };
+                        }
+                    }
+                }
             }
-        } else {
-            DeviceIdentifier {
+        }
+        #[cfg(feature = "bluetooth")]
+        {
+            if let Ok(mac) = BDAddr::from_str_delim(value) {
+                return DeviceIdentifier::Ble {
+                    name: None,
+                    mac: Some(mac),
+                };
+            }
+            return DeviceIdentifier::Ble {
                 name: Some(value.to_string()),
                 mac: None,
+            };
+        }
+        #[cfg(all(feature = "tcp", not(feature = "bluetooth")))]
+        {
+            DeviceIdentifier::Tcp {
+                name: Some(value.to_string()),
+                host: String::new(),
+                port: 0,
             }
         }
     }
@@ -105,40 +180,41 @@ impl From<&str> for DeviceIdentifier {
 
 impl From<String> for DeviceIdentifier {
     fn from(value: String) -> Self {
-        if let Ok(mac) = BDAddr::from_str_delim(&value) {
-            DeviceIdentifier {
-                name: None,
-                mac: Some(mac),
-            }
-        } else {
-            DeviceIdentifier {
-                name: Some(value),
-                mac: None,
-            }
-        }
+        DeviceIdentifier::from(value.as_str())
     }
 }
 
 impl From<DeviceIdentifier> for String {
     fn from(value: DeviceIdentifier) -> Self {
-        if let Some(name) = value.name {
-            name
-        } else if let Some(mac) = value.mac {
-            mac.to_string()
-        } else {
-            "Unknown".to_string()
-        }
+        String::from(&value)
     }
 }
 
 impl From<&DeviceIdentifier> for String {
     fn from(value: &DeviceIdentifier) -> Self {
-        if let Some(name) = &value.name {
-            name.to_string()
-        } else if let Some(mac) = value.mac {
-            mac.to_string()
-        } else {
-            "Unknown".to_string()
+        match value {
+            #[cfg(feature = "bluetooth")]
+            DeviceIdentifier::Ble { name, mac } => {
+                if let Some(name) = name {
+                    name.clone()
+                } else if let Some(mac) = mac {
+                    mac.to_string()
+                } else {
+                    "Unknown".to_string()
+                }
+            }
+            #[cfg(feature = "tcp")]
+            DeviceIdentifier::Tcp { name, host, port } => {
+                let endpoint = if host.contains(':') {
+                    format!("{TCP_SCHEME}[{host}]:{port}")
+                } else {
+                    format!("{TCP_SCHEME}{host}:{port}")
+                };
+                match name {
+                    Some(name) => format!("{endpoint}#{name}"),
+                    None => endpoint,
+                }
+            }
         }
     }
 }
@@ -2961,5 +3037,120 @@ mod tests {
         let _element = device_view.section_header("Test Section".into());
         let _element = device_view.section_header("Channels (5)".into());
         let _element = device_view.section_header("".into());
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_identifier_parse() {
+        let id = DeviceIdentifier::from("tcp://192.168.1.100:4403");
+        assert!(
+            matches!(id, DeviceIdentifier::Tcp { name: None, ref host, port } if host == "192.168.1.100" && port == 4403)
+        );
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_identifier_parse_with_name() {
+        let id = DeviceIdentifier::from("tcp://192.168.1.100:4403#MyMeshy");
+        assert!(
+            matches!(id, DeviceIdentifier::Tcp { ref name, ref host, port }
+            if name.as_deref() == Some("MyMeshy") && host == "192.168.1.100" && port == 4403)
+        );
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_identifier_roundtrip() {
+        let original = "tcp://192.168.1.100:4403#MyMeshy";
+        let id = DeviceIdentifier::from(original);
+        let serialized: String = (&id).into();
+        assert_eq!(serialized, original);
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_identifier_roundtrip_no_name() {
+        let original = "tcp://10.0.0.1:4403";
+        let id = DeviceIdentifier::from(original);
+        let serialized: String = (&id).into();
+        assert_eq!(serialized, original);
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_name_fallback_shows_endpoint() {
+        let id = DeviceIdentifier::Tcp {
+            name: None,
+            host: "192.168.1.100".to_string(),
+            port: 4403,
+        };
+        assert_eq!(id.name(), "192.168.1.100:4403");
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_name_shows_name_when_present() {
+        let id = DeviceIdentifier::Tcp {
+            name: Some("MyMeshy".to_string()),
+            host: "192.168.1.100".to_string(),
+            port: 4403,
+        };
+        assert_eq!(id.name(), "MyMeshy");
+    }
+
+    #[cfg(all(feature = "tcp", feature = "bluetooth"))]
+    #[test]
+    fn test_tcp_mac_returns_none() {
+        let id = DeviceIdentifier::Tcp {
+            name: None,
+            host: "192.168.1.100".to_string(),
+            port: 4403,
+        };
+        assert!(id.mac().is_none());
+    }
+
+    #[cfg(all(feature = "tcp", feature = "bluetooth"))]
+    #[test]
+    fn test_tcp_rejects_empty_host() {
+        let id = DeviceIdentifier::from("tcp://:4403");
+        assert!(matches!(id, DeviceIdentifier::Ble { .. }));
+    }
+
+    #[cfg(all(feature = "tcp", feature = "bluetooth"))]
+    #[test]
+    fn test_tcp_rejects_port_zero() {
+        let id = DeviceIdentifier::from("tcp://192.168.1.100:0");
+        assert!(matches!(id, DeviceIdentifier::Ble { .. }));
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_ipv6_serialization() {
+        let id = DeviceIdentifier::Tcp {
+            name: None,
+            host: "fe80::1".to_string(),
+            port: 4403,
+        };
+        let serialized: String = (&id).into();
+        assert_eq!(serialized, "tcp://[fe80::1]:4403");
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_ipv6_parse_roundtrip() {
+        let original = "tcp://[fe80::1]:4403";
+        let id = DeviceIdentifier::from(original);
+        let serialized: String = (&id).into();
+        assert_eq!(
+            serialized, original,
+            "IPv6 address should roundtrip correctly"
+        );
+    }
+
+    #[cfg(all(feature = "bluetooth", feature = "tcp"))]
+    #[test]
+    fn test_ble_name_not_misidentified_as_tcp() {
+        let id = DeviceIdentifier::from("MyDevice");
+        assert!(matches!(id, DeviceIdentifier::Ble { .. }));
     }
 }
