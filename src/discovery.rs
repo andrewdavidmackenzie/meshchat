@@ -27,11 +27,11 @@ use iced::futures::Stream;
 #[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use iced::stream;
 #[cfg(feature = "tcp")]
+use mdns_sd::ScopedIp;
+#[cfg(feature = "tcp")]
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 #[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use std::collections::HashMap;
-#[cfg(feature = "tcp")]
-use std::net::IpAddr;
 #[cfg(feature = "bluetooth")]
 use std::time::Duration;
 #[cfg(feature = "bluetooth")]
@@ -290,14 +290,14 @@ async fn mdns_browse(gui_sender: &mut Sender<DeviceListEvent>) -> Result<(), Str
                     .get_addresses()
                     .iter()
                     .find_map(|addr| match addr {
-                        IpAddr::V4(v4) => Some(v4.to_string()),
+                        ScopedIp::V4(v4) => Some(v4.addr().to_string()),
                         _ => None,
                     })
                     .or_else(|| {
                         info.get_addresses()
                             .iter()
                             .next()
-                            .map(|addr| addr.to_string())
+                            .map(|addr| addr.to_ip_addr().to_string())
                     })
                 else {
                     continue;
