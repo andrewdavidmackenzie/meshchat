@@ -612,7 +612,8 @@ impl Conversation {
 mod test {
     use crate::config::HistoryLength;
     use crate::conversation::ChannelViewMessage::{
-        CancelPrepareReply, ClearMessage, MessageInput, MessageSeen, PrepareReply, SendMessage,
+        CancelPrepareReply, ClearMessage, FocusMessageInput, MessageInput, MessageSeen,
+        PrepareReply, SendMessage,
     };
     use crate::conversation::{Conversation, ConversationId};
     use crate::conversation_id::{MessageId, NodeId};
@@ -762,6 +763,40 @@ mod test {
 
         let _ = channel_view.update(CancelPrepareReply);
         assert!(channel_view.preparing_reply_to.is_none());
+    }
+
+    #[test]
+    fn test_focus_message_input() {
+        let mut channel_view =
+            Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
+        let _ = channel_view.update(FocusMessageInput);
+    }
+
+    #[test]
+    fn test_prepare_reply_defers_focus_via_focus_message_input() {
+        let mut channel_view =
+            Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
+        let message = MCMessage::new(
+            MessageId::from(1),
+            NodeId::from(1u64),
+            NewTextMessage("Hello".to_string()),
+            TimeStamp::now(),
+        );
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+
+        let _ = channel_view.update(PrepareReply(MessageId::from(1)));
+        assert_eq!(
+            channel_view.preparing_reply_to,
+            Some(MessageId::from(1)),
+            "PrepareReply should set preparing_reply_to"
+        );
+
+        let _ = channel_view.update(FocusMessageInput);
+        assert_eq!(
+            channel_view.preparing_reply_to,
+            Some(MessageId::from(1)),
+            "FocusMessageInput should not clear preparing_reply_to"
+        );
     }
 
     #[test]
