@@ -142,7 +142,8 @@ impl From<&str> for DeviceIdentifier {
                 };
                 if let Some((host, port_str)) = addr.rsplit_once(':') {
                     if let Ok(port) = port_str.parse::<u16>() {
-                        if !host.trim().is_empty() && port > 0 {
+                        let host = host.trim_start_matches('[').trim_end_matches(']');
+                        if !host.is_empty() && port > 0 {
                             return DeviceIdentifier::Tcp {
                                 name,
                                 host: host.to_string(),
@@ -3124,7 +3125,7 @@ mod tests {
 
     #[cfg(feature = "tcp")]
     #[test]
-    fn test_tcp_ipv6_roundtrip() {
+    fn test_tcp_ipv6_serialization() {
         let id = DeviceIdentifier::Tcp {
             name: None,
             host: "fe80::1".to_string(),
@@ -3132,6 +3133,18 @@ mod tests {
         };
         let serialized: String = (&id).into();
         assert_eq!(serialized, "tcp://[fe80::1]:4403");
+    }
+
+    #[cfg(feature = "tcp")]
+    #[test]
+    fn test_tcp_ipv6_parse_roundtrip() {
+        let original = "tcp://[fe80::1]:4403";
+        let id = DeviceIdentifier::from(original);
+        let serialized: String = (&id).into();
+        assert_eq!(
+            serialized, original,
+            "IPv6 address should roundtrip correctly"
+        );
     }
 
     #[cfg(all(feature = "bluetooth", feature = "tcp"))]

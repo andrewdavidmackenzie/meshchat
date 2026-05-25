@@ -338,7 +338,7 @@ mod tests {
         )
     }
 
-    #[cfg(feature = "bluetooth")]
+    #[cfg(all(feature = "bluetooth", feature = "meshtastic"))]
     mod ble_tests {
         use super::*;
 
