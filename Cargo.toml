@@ -50,8 +50,8 @@ uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
 
 # Optional dependencies
 meshtastic = { version = "0.1.9", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
-meshcore-rs = { version = "0.1.9", default-features = false, features = ["ble"], optional = true }
-btleplug = { version = "0.11.8", default-features = false, optional = true }
+meshcore-rs = { version = "0.1.10", default-features = false, features = ["ble"], optional = true }
+btleplug = { version = "0.12.0", default-features = false, optional = true }
 # mDNS-SD discovery of Meshtastic TCP devices on the LAN (`_meshtastic._tcp.local.`)
 mdns-sd = { version = "0.20", default-features = false, features = ["async"], optional = true }
 # Self-update requiers us to chose the http backend to use
