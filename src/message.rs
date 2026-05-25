@@ -166,8 +166,8 @@ impl MCMessage {
         entries: &RingMap<MessageId, MCMessage>,
         message_id: &MessageId,
     ) -> Option<String> {
-        // jonesy:allow(bounds) via ringmap::RingMap::get
         entries
+            // jonesy:allow(bounds) via ringmap::RingMap::get
             .get(message_id)
             .map(|entry| format!("Re: {}", entry.message))
             .map(|mut text| {
@@ -200,8 +200,8 @@ impl MCMessage {
     }
 
     pub fn datetime_local(timestamp: TimeStamp) -> DateTime<Local> {
-        // jonesy:allow(div_zero,overflow) false positive on unwrap_or_default() https://github.com/andrewdavidmackenzie/jonesy/issues/254
         let datetime_utc =
+            // jonesy:allow(div_zero,overflow) false positive on unwrap_or_default() https://github.com/andrewdavidmackenzie/jonesy/issues/254
             DateTime::<Utc>::from_timestamp_millis(timestamp.into()).unwrap_or_default();
         datetime_utc.with_timezone(&Local)
     }

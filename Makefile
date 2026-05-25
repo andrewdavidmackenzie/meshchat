@@ -1,4 +1,4 @@
-all: clippy udeps test features build
+all: checks test features build
 
 clean:
 	cargo clean
@@ -8,7 +8,7 @@ dependencies:
 
 pr: checks tests
 
-checks: format clippy publish udeps todos
+checks: format clippy publish udeps todos jonesy
 
 tests: debug release publish test
 
@@ -32,6 +32,9 @@ udeps:
 
 todos:
 	find . -name "*.rs" -exec grep "TODO" {} \; -print
+
+jonesy: build
+	jonesy --quiet
 
 build:
 	cargo build

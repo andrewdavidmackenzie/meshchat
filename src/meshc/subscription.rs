@@ -291,8 +291,8 @@ async fn initiate(
     meshcore: &MeshCore,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) -> meshcore_rs::Result<()> {
-    // jonesy:allow(bounds) via handle_self_info -> meshcore_rs .into() (bounds)
     let self_info = meshcore.commands().lock().await.send_appstart().await?;
+    // jonesy:allow(bounds) via handle_self_info -> meshcore_rs .into()
     handle_self_info(radio_cache, self_info, gui_sender).await;
 
     let device_info = meshcore.commands().lock().await.send_device_query().await?;
@@ -349,8 +349,8 @@ async fn get_contacts(
         .get_contacts_with_timeout(0, Duration::from_secs(30))
         .await?;
 
-    // jonesy:allow(bounds) via handle_new_contact -> Contact::prefix() (bounds)
     for contact in contacts {
+        // jonesy:allow(bounds) via handle_new_contact -> Contact::prefix()
         handle_new_contact(radio_cache, contact, gui_sender).await;
     }
 
@@ -605,8 +605,8 @@ async fn handle_battery_info(
     battery_info: &BatteryInfo,
     gui_sender: &mut futures_channel::mpsc::Sender<DeviceEvent>,
 ) {
-    // jonesy:allow(overflow) via meshcore_rs BatteryInfo::percentage()
     gui_sender
+        // jonesy:allow(overflow) via meshcore_rs BatteryInfo::percentage()
         .send(DeviceBatteryLevel(Some(battery_info.percentage())))
         .await
         .unwrap_or_else(|e| eprintln!("Send error: {e}"));
