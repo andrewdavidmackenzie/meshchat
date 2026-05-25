@@ -266,7 +266,7 @@ pub fn mdns_discovery() -> impl Stream<Item = DeviceListEvent> {
                             )))
                             .await;
                         tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
-                        backoff_secs = (backoff_secs * 2).min(60);
+                        backoff_secs = backoff_secs.saturating_mul(2).min(60);
                     }
                 }
             }
