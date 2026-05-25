@@ -1,32 +1,48 @@
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use crate::device::DeviceIdentifier;
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use crate::device_list::DeviceListEvent;
-use crate::device_list::DeviceListEvent::{
-    CriticalError, Error, MeshRadioFound, MeshRadioLost, Scanning,
-};
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
+use crate::device_list::DeviceListEvent::Error;
+#[cfg(feature = "bluetooth")]
+use crate::device_list::DeviceListEvent::{CriticalError, Scanning};
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
+use crate::device_list::DeviceListEvent::{MeshRadioFound, MeshRadioLost};
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use crate::device_list::RadioType;
 #[cfg(feature = "meshcore")]
 use crate::meshc::MESHCORE_SERVICE_UUID;
-#[cfg(feature = "meshtastic")]
+#[cfg(all(feature = "meshtastic", feature = "bluetooth"))]
 use crate::mesht::MESHTASTIC_SERVICE_UUID;
+#[cfg(feature = "bluetooth")]
 use btleplug::api::{Central, Manager as _, Peripheral, ScanFilter};
+#[cfg(feature = "bluetooth")]
 use btleplug::platform::{Adapter, Manager};
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use futures::SinkExt;
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use futures_channel::mpsc::Sender;
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use iced::futures::Stream;
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use iced::stream;
-#[cfg(feature = "meshtastic")]
+#[cfg(feature = "tcp")]
 use mdns_sd::{ServiceDaemon, ServiceEvent};
+#[cfg(any(feature = "bluetooth", feature = "tcp"))]
 use std::collections::HashMap;
-#[cfg(feature = "meshtastic")]
+#[cfg(feature = "tcp")]
 use std::net::IpAddr;
+#[cfg(feature = "bluetooth")]
 use std::time::Duration;
+#[cfg(feature = "bluetooth")]
 use uuid::Uuid;
 
 /// mDNS service type advertised by Meshtastic devices for their TCP API (port 4403 by default).
-#[cfg(feature = "meshtastic")]
+#[cfg(feature = "tcp")]
 const MESHTASTIC_MDNS_SERVICE: &str = "_meshtastic._tcp.local.";
 
 /// A stream of [DeviceListEvent] announcing the discovery or loss of devices via BLE
+#[cfg(feature = "bluetooth")]
 pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
     #[allow(unused_mut)]
     let mut service_filter: Vec<Uuid> = vec![];
@@ -87,6 +103,7 @@ pub fn ble_discovery() -> impl Stream<Item = DeviceListEvent> {
     )
 }
 
+#[cfg(feature = "bluetooth")]
 async fn scan_for_devices(gui_sender: &mut Sender<DeviceListEvent>, adapter: &Adapter) {
     // Device name -> (unseen count, radio type)
     let mut mesh_radio_devices: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
@@ -114,8 +131,10 @@ async fn scan_for_devices(gui_sender: &mut Sender<DeviceListEvent>, adapter: &Ad
     }
 }
 
+#[cfg(feature = "bluetooth")]
 const DEFAULT_MAC: [u8; 6] = [0x00; 6];
 
+#[cfg(feature = "bluetooth")]
 async fn announce_device_changes(
     gui_sender: &mut Sender<DeviceListEvent>,
     peripherals: &Vec<impl Peripheral>,
@@ -163,7 +182,7 @@ async fn announce_device_changes(
     }
 }
 
-/// Detect the radio type from the service UUIDs advertised by the peripheral
+#[cfg(feature = "bluetooth")]
 #[allow(unused_variables)]
 fn detect_radio_type(services: &[Uuid]) -> Option<RadioType> {
     #[cfg(feature = "meshtastic")]
@@ -178,8 +197,7 @@ fn detect_radio_type(services: &[Uuid]) -> Option<RadioType> {
     None
 }
 
-/// Process device changes and return events to send.
-/// Returns (devices_found with radio type, devices_lost)
+#[cfg(feature = "bluetooth")]
 fn process_device_changes(
     current_devices: &HashMap<DeviceIdentifier, RadioType>,
     tracked_devices: &mut HashMap<DeviceIdentifier, (i32, RadioType)>,
@@ -220,7 +238,7 @@ fn process_device_changes(
 /// A stream of [DeviceListEvent] announcing the discovery or loss of Meshtastic devices reachable
 /// over TCP on the local network. Devices advertise themselves via mDNS-SD as
 /// `_meshtastic._tcp.local.`.
-#[cfg(feature = "meshtastic")]
+#[cfg(feature = "tcp")]
 pub fn mdns_discovery() -> impl Stream<Item = DeviceListEvent> {
     stream::channel(
         100,
@@ -278,9 +296,11 @@ pub fn mdns_discovery() -> impl Stream<Item = DeviceListEvent> {
                             .map(|s| s.to_string());
 
                         let identifier = DeviceIdentifier::Tcp { name, host, port };
-                        if resolved.insert(fullname, identifier.clone()).as_ref()
-                            != Some(&identifier)
-                        {
+                        let previous = resolved.insert(fullname, identifier.clone());
+                        if previous.as_ref() != Some(&identifier) {
+                            if let Some(old) = previous {
+                                let _ = gui_sender.send(MeshRadioLost(old)).await;
+                            }
                             let _ = gui_sender
                                 .send(MeshRadioFound(identifier, RadioType::Meshtastic))
                                 .await;
@@ -302,8 +322,7 @@ pub fn mdns_discovery() -> impl Stream<Item = DeviceListEvent> {
 mod tests {
     use super::*;
 
-    #[cfg(feature = "meshtastic")]
-    /// Helper to create a HashMap of device names with default RadioType
+    #[cfg(all(feature = "meshtastic", feature = "bluetooth"))]
     fn devices(items: &[&str]) -> HashMap<DeviceIdentifier, RadioType> {
         items
             .iter()
@@ -311,8 +330,7 @@ mod tests {
             .collect()
     }
 
-    #[cfg(feature = "meshtastic")]
-    /// Helper to create a tracked device's HashMap entry
+    #[cfg(all(feature = "meshtastic", feature = "bluetooth"))]
     fn tracked_device(name: &str, unseen_count: i32) -> (DeviceIdentifier, (i32, RadioType)) {
         (
             DeviceIdentifier::from(name),
@@ -320,969 +338,975 @@ mod tests {
         )
     }
 
-    // Test discovering new devices
-    #[test]
-    fn test_new_device_found() {
-        let current = devices(&["Device1"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
-        assert!(lost.is_empty());
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-    }
-
-    #[test]
-    fn test_multiple_new_devices_found() {
-        let current = devices(&["Device1", "Device2", "Device3"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert_eq!(found.len(), 3);
-        let found_names: Vec<_> = found.iter().map(|(name, _)| String::from(name)).collect();
-        assert!(found_names.contains(&"Device1".to_string()));
-        assert!(found_names.contains(&"Device2".to_string()));
-        assert!(found_names.contains(&"Device3".to_string()));
-        assert!(lost.is_empty());
-        assert_eq!(tracked.len(), 3);
-    }
-
-    #[test]
-    fn test_no_devices() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert!(lost.is_empty());
-        assert!(tracked.is_empty());
-    }
-
-    // Test device still present
-    #[test]
-    fn test_device_still_present() {
-        let current = devices(&["Device1"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 0).0,
-            tracked_device("Device1", 0).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert!(lost.is_empty());
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-    }
-
-    #[test]
-    fn test_device_reappears_resets_count() {
-        let current = devices(&["Device1"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert!(lost.is_empty());
-        // Count should be reset to 0
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-    }
-
-    // Test device disappearing
-    #[test]
-    fn test_device_unseen_once() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 0).0,
-            tracked_device("Device1", 0).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert!(lost.is_empty()); // Not lost yet, only unseen once
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn test_device_unseen_twice() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 1).0,
-            tracked_device("Device1", 1).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert!(lost.is_empty()); // Not lost yet, only unseen twice
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn test_device_lost_after_three_unseen() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
-        // Device should be removed from tracking
-        assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
-    }
-
-    #[test]
-    fn test_device_removed_from_tracking_after_lost() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-
-        process_device_changes(&current, &mut tracked);
-
-        assert!(tracked.is_empty());
-    }
-
-    // Test mixed scenarios
-    #[test]
-    fn test_one_found_one_still_present() {
-        let current = devices(&["Device1", "Device2"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 0).0,
-            tracked_device("Device1", 0).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device2"));
-        assert!(lost.is_empty());
-        assert_eq!(tracked.len(), 2);
-    }
-
-    #[test]
-    fn test_one_found_one_disappearing() {
-        let current = devices(&["Device2"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 0).0,
-            tracked_device("Device1", 0).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device2"));
-        assert!(lost.is_empty()); // Device1 not lost yet
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(1)
-        );
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device2"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-    }
-
-    #[test]
-    fn test_one_found_one_lost() {
-        let current = devices(&["Device2"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device2"));
-        assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
-        assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device2"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-    }
-
-    #[test]
-    fn test_multiple_devices_different_states() {
-        let current = devices(&["Device1", "Device4"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 1).0,
-            tracked_device("Device1", 1).1,
-        );
-        tracked.insert(
-            tracked_device("Device2", 0).0,
-            tracked_device("Device2", 0).1,
-        );
-        tracked.insert(
-            tracked_device("Device3", 2).0,
-            tracked_device("Device3", 2).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device4"));
-        assert_eq!(lost, vec![DeviceIdentifier::from("Device3")]);
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        ); // Reset
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device2"))
-                .map(|(c, _)| *c),
-            Some(1)
-        ); // Incremented
-        assert!(!tracked.contains_key(&DeviceIdentifier::from("Device3"))); // Removed
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device4"))
-                .map(|(c, _)| *c),
-            Some(0)
-        ); // New
-    }
-
-    // Test the full lifecycle
-    #[test]
-    fn test_device_full_lifecycle() {
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-
-        // Cycle 1: Device appears
-        let current = devices(&["Device1"]);
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
-        assert!(lost.is_empty());
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-
-        // Cycle 2: Device still present
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-        assert!(found.is_empty());
-        assert!(lost.is_empty());
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-
-        // Cycle 3: Device disappears (unseen 1)
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-        assert!(found.is_empty());
-        assert!(lost.is_empty());
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(1)
-        );
-
-        // Cycle 4: Device still gone (unseen 2)
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-        assert!(found.is_empty());
-        assert!(lost.is_empty());
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(2)
-        );
-
-        // Cycle 5: Device still gone (unseen 3 - lost)
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-        assert!(found.is_empty());
-        assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
-        assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
-    }
-
-    #[test]
-    fn test_device_reappears_during_disappearing() {
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-
-        // Device reappears just in time
-        let current = devices(&["Device1"]);
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty()); // Not new, was tracked
-        assert!(lost.is_empty()); // Not lost, reappeared
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        ); // Count reset
-    }
-
-    #[test]
-    fn test_lost_device_can_be_found_again() {
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-
-        // Device appears
-        let current = devices(&["Device1"]);
-        process_device_changes(&current, &mut tracked);
-        assert!(tracked.contains_key(&DeviceIdentifier::from("Device1")));
-
-        // Device is lost after 3 cycles
-        let empty: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        process_device_changes(&empty, &mut tracked); // unseen 1
-        process_device_changes(&empty, &mut tracked); // unseen 2
-        let (_, lost) = process_device_changes(&empty, &mut tracked); // unseen 3, lost
-        assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
-        assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
-
-        // Device reappears - should be found as new
-        let (found, _) = process_device_changes(&current, &mut tracked);
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-    }
-
-    // Edge cases
-    #[test]
-    fn test_empty_to_empty() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert!(lost.is_empty());
-        assert!(tracked.is_empty());
-    }
-
-    #[test]
-    fn test_device_with_special_characters() {
-        let current = devices(&["Device-1_test", "Device 2", "Device\t3"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-
-        let (found, _) = process_device_changes(&current, &mut tracked);
-
-        assert_eq!(found.len(), 3);
-        assert!(tracked.contains_key(&DeviceIdentifier::from("Device-1_test")));
-        assert!(tracked.contains_key(&DeviceIdentifier::from("Device 2")));
-        assert!(tracked.contains_key(&DeviceIdentifier::from("Device\t3")));
-    }
-
-    #[test]
-    fn test_multiple_devices_lost_simultaneously() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-        tracked.insert(
-            tracked_device("Device2", 2).0,
-            tracked_device("Device2", 2).1,
-        );
-        tracked.insert(
-            tracked_device("Device3", 2).0,
-            tracked_device("Device3", 2).1,
-        );
-
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-
-        assert!(found.is_empty());
-        assert_eq!(lost.len(), 3);
-        assert!(lost.contains(&DeviceIdentifier::from("Device1")));
-        assert!(lost.contains(&DeviceIdentifier::from("Device2")));
-        assert!(lost.contains(&DeviceIdentifier::from("Device3")));
-        assert!(tracked.is_empty());
-    }
-
-    // Test MSH_SERVICE constant
-    #[cfg(feature = "meshtastic")]
-    #[test]
-    fn test_msh_service_uuid() {
-        assert_eq!(
-            MESHTASTIC_SERVICE_UUID,
-            Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd)
-        );
-    }
-
-    #[cfg(feature = "meshcore")]
-    #[test]
-    fn test_meshcore_service_uuid() {
-        assert_eq!(
-            MESHCORE_SERVICE_UUID,
-            Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e)
-        );
-    }
-
-    // Test detect_radio_type function
-    #[cfg(feature = "meshtastic")]
-    #[test]
-    fn test_detect_radio_type_meshtastic() {
-        let services = vec![MESHTASTIC_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
-    }
-
-    #[cfg(feature = "meshcore")]
-    #[test]
-    fn test_detect_radio_type_meshcore() {
-        let services = vec![MESHCORE_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), Some(RadioType::MeshCore));
-    }
-
-    #[test]
-    fn test_detect_radio_type_empty() {
-        let services: Vec<Uuid> = vec![];
-        // Should return default
-        assert_eq!(detect_radio_type(&services), None);
-    }
-
-    #[test]
-    fn test_detect_radio_type_unknown_uuid() {
-        let services = vec![Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc)];
-        // Should return default
-        assert_eq!(detect_radio_type(&services), None);
-    }
-
-    // Async tests for announce_device_changes
-    use futures_channel::mpsc;
-
-    // Mock peripheral for testing - we can't easily implement Peripheral trait,
-    // but we can test with empty vectors
-    #[tokio::test]
-    async fn test_announce_device_changes_empty_peripherals_empty_tracked() {
-        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
-
-        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
-
-        // Close the sender to signal no more messages
-        sender.close_channel();
-
-        // No events should be sent
-        assert!(
-            receiver.try_recv().is_err(),
-            "Expected no events but received one"
-        );
-        assert!(tracked.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_announce_device_changes_empty_peripherals_with_tracked_unseen_once() {
-        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 0).0,
-            tracked_device("Device1", 0).1,
-        );
-        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
-
-        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
-
-        sender.close_channel();
-
-        // No events should be sent (the device has only been unseen once)
-        assert!(
-            receiver.try_recv().is_err(),
-            "Expected no events but received one"
-        );
-        // Device should still be tracked with incremented count
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(1)
-        );
-    }
-
-    #[tokio::test]
-    async fn test_announce_device_changes_empty_peripherals_device_lost() {
-        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
-
-        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
-
-        sender.close_channel();
-
-        // Should receive MeshRadioLost event
-        let event = receiver.try_recv().expect("Expected MeshRadioLost event");
-        assert!(
-            matches!(event, MeshRadioLost(device_id) if device_id == DeviceIdentifier::from("Device1"))
-        );
-
-        // No more events
-        assert!(
-            receiver.try_recv().is_err(),
-            "Expected no more events but received one"
-        );
-
-        // Device should be removed from tracking
-        assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
-    }
-
-    #[tokio::test]
-    async fn test_announce_device_changes_multiple_devices_lost() {
-        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 2).0,
-            tracked_device("Device1", 2).1,
-        );
-        tracked.insert(
-            tracked_device("Device2", 2).0,
-            tracked_device("Device2", 2).1,
-        );
-        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
-
-        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
-
-        sender.close_channel();
-
-        // Should receive 2 MeshRadioLost events
-        let mut lost_devices = Vec::new();
-        while let Ok(event) = receiver.try_recv() {
-            if let MeshRadioLost(name) = event {
-                lost_devices.push(name);
-            }
+    #[cfg(feature = "bluetooth")]
+    mod ble_tests {
+        use super::*;
+
+        #[test]
+        fn test_new_device_found() {
+            let current = devices(&["Device1"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
+            assert!(lost.is_empty());
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
         }
 
-        assert_eq!(lost_devices.len(), 2);
-        assert!(lost_devices.contains(&DeviceIdentifier::from("Device1")));
-        assert!(lost_devices.contains(&DeviceIdentifier::from("Device2")));
-        assert!(tracked.is_empty());
-    }
+        #[test]
+        fn test_multiple_new_devices_found() {
+            let current = devices(&["Device1", "Device2", "Device3"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
 
-    #[tokio::test]
-    async fn test_announce_device_changes_mixed_tracked_states() {
-        let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            tracked_device("Device1", 0).0,
-            tracked_device("Device1", 0).1,
-        );
-        tracked.insert(
-            tracked_device("Device2", 1).0,
-            tracked_device("Device2", 1).1,
-        );
-        tracked.insert(
-            tracked_device("Device3", 2).0,
-            tracked_device("Device3", 2).1,
-        );
-        let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+            assert_eq!(found.len(), 3);
+            let found_names: Vec<_> = found.iter().map(|(name, _)| String::from(name)).collect();
+            assert!(found_names.contains(&"Device1".to_string()));
+            assert!(found_names.contains(&"Device2".to_string()));
+            assert!(found_names.contains(&"Device3".to_string()));
+            assert!(lost.is_empty());
+            assert_eq!(tracked.len(), 3);
+        }
 
-        sender.close_channel();
+        #[test]
+        fn test_no_devices() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
 
-        // Should receive only 1 MeshRadioLost event for Device3
-        let event = receiver.try_recv().expect("Expected MeshRadioLost event");
-        assert!(matches!(event, MeshRadioLost(name) if name == DeviceIdentifier::from("Device3")));
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        // No more events
-        assert!(
-            receiver.try_recv().is_err(),
-            "Expected no more events but received one"
-        );
+            assert!(found.is_empty());
+            assert!(lost.is_empty());
+            assert!(tracked.is_empty());
+        }
 
-        // Device1 and Device2 should still be tracked
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(1)
-        );
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device2"))
-                .map(|(c, _)| *c),
-            Some(2)
-        );
-        assert!(!tracked.contains_key(&DeviceIdentifier::from("Device3")));
-    }
+        // Test device still present
+        #[test]
+        fn test_device_still_present() {
+            let current = devices(&["Device1"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 0).0,
+                tracked_device("Device1", 0).1,
+            );
 
-    // Tests for radio type handling in process_device_changes
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-    #[cfg(feature = "meshtastic")]
-    fn devices_meshtastic(items: &[&str]) -> HashMap<DeviceIdentifier, RadioType> {
-        items
-            .iter()
-            .map(|s| (DeviceIdentifier::from(*s), RadioType::Meshtastic))
-            .collect()
-    }
+            assert!(found.is_empty());
+            assert!(lost.is_empty());
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
+        }
 
-    #[cfg(feature = "meshcore")]
-    fn devices_meshcore(items: &[&str]) -> HashMap<DeviceIdentifier, RadioType> {
-        items
-            .iter()
-            .map(|s| (DeviceIdentifier::from(*s), RadioType::MeshCore))
-            .collect()
-    }
+        #[test]
+        fn test_device_reappears_resets_count() {
+            let current = devices(&["Device1"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
 
-    #[cfg(feature = "meshtastic")]
-    #[test]
-    fn test_process_device_changes_preserves_meshtastic_radio_type() {
-        let current = devices_meshtastic(&["Device1"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        let (found, _) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty());
+            assert!(lost.is_empty());
+            // Count should be reset to 0
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
+        }
 
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
-        assert_eq!(found[0].1, RadioType::Meshtastic);
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(_, rt)| *rt),
-            Some(RadioType::Meshtastic)
-        );
-    }
+        // Test device disappearing
+        #[test]
+        fn test_device_unseen_once() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 0).0,
+                tracked_device("Device1", 0).1,
+            );
 
-    #[cfg(feature = "meshcore")]
-    #[test]
-    fn test_process_device_changes_preserves_meshcore_radio_type() {
-        let current = devices_meshcore(&["Device1"]);
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        let (found, _) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty());
+            assert!(lost.is_empty()); // Not lost yet, only unseen once
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(1)
+            );
+        }
 
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
-        assert_eq!(found[0].1, RadioType::MeshCore);
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(_, rt)| *rt),
-            Some(RadioType::MeshCore)
-        );
-    }
+        #[test]
+        fn test_device_unseen_twice() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 1).0,
+                tracked_device("Device1", 1).1,
+            );
 
-    #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
-    #[test]
-    fn test_process_device_changes_mixed_radio_types() {
-        let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        current.insert(
-            DeviceIdentifier::from("MeshtasticDevice"),
-            RadioType::Meshtastic,
-        );
-        current.insert(
-            DeviceIdentifier::from("MeshCoreDevice"),
-            RadioType::MeshCore,
-        );
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            assert!(found.is_empty());
+            assert!(lost.is_empty()); // Not lost yet, only unseen twice
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(2)
+            );
+        }
 
-        let (found, _) = process_device_changes(&current, &mut tracked);
+        #[test]
+        fn test_device_lost_after_three_unseen() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
 
-        assert_eq!(found.len(), 2);
-        let meshtastic_found = found
-            .iter()
-            .find(|(name, _)| name == &DeviceIdentifier::from("MeshtasticDevice"))
-            .expect("MeshtasticDevice should be found");
-        let meshcore_found = found
-            .iter()
-            .find(|(name, _)| name == &DeviceIdentifier::from("MeshCoreDevice"))
-            .expect("MeshCoreDevice should be found");
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        assert_eq!(meshtastic_found.1, RadioType::Meshtastic);
-        assert_eq!(meshcore_found.1, RadioType::MeshCore);
-    }
+            assert!(found.is_empty());
+            assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
+            // Device should be removed from tracking
+            assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
+        }
 
-    // Test detect_radio_type with multiple service UUIDs
-    #[cfg(feature = "meshtastic")]
-    #[test]
-    fn test_detect_radio_type_meshtastic_with_other_uuids() {
-        let other_uuid = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-        let services = vec![other_uuid, MESHTASTIC_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
-    }
+        #[test]
+        fn test_device_removed_from_tracking_after_lost() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
 
-    #[cfg(feature = "meshcore")]
-    #[test]
-    fn test_detect_radio_type_meshcore_with_other_uuids() {
-        let other_uuid = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
-        let services = vec![other_uuid, MESHCORE_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), Some(RadioType::MeshCore));
-    }
+            process_device_changes(&current, &mut tracked);
 
-    #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
-    #[test]
-    fn test_detect_radio_type_both_services_meshtastic_first() {
-        // When both services are present, meshtastic takes priority (checked first)
-        let services = vec![MESHTASTIC_SERVICE_UUID, MESHCORE_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
-    }
+            assert!(tracked.is_empty());
+        }
 
-    #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
-    #[test]
-    fn test_detect_radio_type_both_services_meshcore_first() {
-        // Even when meshcore UUID is first, meshtastic still wins (due to check order)
-        let services = vec![MESHCORE_SERVICE_UUID, MESHTASTIC_SERVICE_UUID];
-        assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
-    }
+        // Test mixed scenarios
+        #[test]
+        fn test_one_found_one_still_present() {
+            let current = devices(&["Device1", "Device2"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 0).0,
+                tracked_device("Device1", 0).1,
+            );
 
-    #[test]
-    fn test_detect_radio_type_many_unknown_uuids() {
-        let services: Vec<Uuid> = (0..10)
-            .map(|i| Uuid::from_u128(0x10000000_0000_0000_0000_000000000000 + i))
-            .collect();
-        assert_eq!(detect_radio_type(&services), None);
-    }
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-    #[cfg(feature = "meshtastic")]
-    // Test helper functions
-    #[test]
-    fn test_devices_helper_creates_correct_map() {
-        let result = devices(&["A", "B", "C"]);
-        assert_eq!(result.len(), 3);
-        assert!(result.contains_key(&DeviceIdentifier::from("A")));
-        assert!(result.contains_key(&DeviceIdentifier::from("B")));
-        assert!(result.contains_key(&DeviceIdentifier::from("C")));
-        assert_eq!(
-            result.get(&DeviceIdentifier::from("A")),
-            Some(&RadioType::Meshtastic)
-        );
-    }
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device2"));
+            assert!(lost.is_empty());
+            assert_eq!(tracked.len(), 2);
+        }
 
-    #[test]
-    fn test_devices_helper_empty() {
-        let result = devices(&[]);
-        assert!(result.is_empty());
-    }
+        #[test]
+        fn test_one_found_one_disappearing() {
+            let current = devices(&["Device2"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 0).0,
+                tracked_device("Device1", 0).1,
+            );
 
-    #[cfg(feature = "meshtastic")]
-    #[test]
-    fn test_tracked_device_helper() {
-        let (name, (count, radio_type)) = tracked_device("TestDevice", 5);
-        assert_eq!(name, DeviceIdentifier::from("TestDevice"));
-        assert_eq!(count, 5);
-        assert_eq!(radio_type, RadioType::Meshtastic);
-    }
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-    // Test boundary conditions for unseen count
-    #[cfg(feature = "meshtastic")]
-    #[test]
-    fn test_unseen_count_boundary_at_2() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            DeviceIdentifier::from("Device1"),
-            (2, RadioType::Meshtastic),
-        );
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device2"));
+            assert!(lost.is_empty()); // Device1 not lost yet
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(1)
+            );
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device2"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
+        }
 
-        let (_, lost) = process_device_changes(&current, &mut tracked);
+        #[test]
+        fn test_one_found_one_lost() {
+            let current = devices(&["Device2"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
 
-        // At count 2, after increment it becomes 3, which triggers loss
-        assert_eq!(lost.len(), 1);
-        assert!(lost.contains(&DeviceIdentifier::from("Device1")));
-    }
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-    #[cfg(feature = "meshtastic")]
-    #[test]
-    fn test_unseen_count_boundary_at_1() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            DeviceIdentifier::from("Device1"),
-            (1, RadioType::Meshtastic),
-        );
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device2"));
+            assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
+            assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device2"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
+        }
 
-        let (_, lost) = process_device_changes(&current, &mut tracked);
+        #[test]
+        fn test_multiple_devices_different_states() {
+            let current = devices(&["Device1", "Device4"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 1).0,
+                tracked_device("Device1", 1).1,
+            );
+            tracked.insert(
+                tracked_device("Device2", 0).0,
+                tracked_device("Device2", 0).1,
+            );
+            tracked.insert(
+                tracked_device("Device3", 2).0,
+                tracked_device("Device3", 2).1,
+            );
 
-        // At count 1, after increment it becomes 2, not yet lost
-        assert!(lost.is_empty());
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(2)
-        );
-    }
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-    #[cfg(feature = "meshtastic")]
-    // Test that lost event includes correct device names
-    #[test]
-    fn test_lost_returns_correct_device_names() {
-        let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
-        tracked.insert(
-            DeviceIdentifier::from("UniqueDeviceName123"),
-            (2, RadioType::Meshtastic),
-        );
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device4"));
+            assert_eq!(lost, vec![DeviceIdentifier::from("Device3")]);
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            ); // Reset
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device2"))
+                    .map(|(c, _)| *c),
+                Some(1)
+            ); // Incremented
+            assert!(!tracked.contains_key(&DeviceIdentifier::from("Device3"))); // Removed
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device4"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            ); // New
+        }
 
-        let (_, lost) = process_device_changes(&current, &mut tracked);
+        // Test the full lifecycle
+        #[test]
+        fn test_device_full_lifecycle() {
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
 
-        assert_eq!(lost, vec![DeviceIdentifier::from("UniqueDeviceName123")]);
-    }
+            // Cycle 1: Device appears
+            let current = devices(&["Device1"]);
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
+            assert!(lost.is_empty());
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
 
-    #[cfg(feature = "meshtastic")]
-    // Test Unicode device names
-    #[test]
-    fn test_device_with_unicode_name() {
-        let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        current.insert(
-            DeviceIdentifier::from("日本語デバイス"),
-            RadioType::Meshtastic,
-        );
-        current.insert(DeviceIdentifier::from("Устройство"), RadioType::Meshtastic);
-        current.insert(DeviceIdentifier::from("📱Device"), RadioType::Meshtastic);
+            // Cycle 2: Device still present
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty());
+            assert!(lost.is_empty());
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
 
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            // Cycle 3: Device disappears (unseen 1)
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty());
+            assert!(lost.is_empty());
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(1)
+            );
 
-        let (found, _) = process_device_changes(&current, &mut tracked);
+            // Cycle 4: Device still gone (unseen 2)
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty());
+            assert!(lost.is_empty());
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(2)
+            );
 
-        assert_eq!(found.len(), 3);
-        assert!(tracked.contains_key(&DeviceIdentifier::from("日本語デバイス")));
-        assert!(tracked.contains_key(&DeviceIdentifier::from("Устройство")));
-        assert!(tracked.contains_key(&DeviceIdentifier::from("📱Device")));
-    }
+            // Cycle 5: Device still gone (unseen 3 - lost)
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty());
+            assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
+            assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
+        }
 
-    #[cfg(feature = "meshtastic")]
-    // Test device with an empty name
-    #[test]
-    fn test_device_with_empty_name() {
-        let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        current.insert(DeviceIdentifier::from(""), RadioType::Meshtastic);
+        #[test]
+        fn test_device_reappears_during_disappearing() {
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
 
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            // Device reappears just in time
+            let current = devices(&["Device1"]);
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        let (found, _) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty()); // Not new, was tracked
+            assert!(lost.is_empty()); // Not lost, reappeared
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            ); // Count reset
+        }
 
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, DeviceIdentifier::from(""));
-        assert!(tracked.contains_key(&DeviceIdentifier::from("")));
-    }
+        #[test]
+        fn test_lost_device_can_be_found_again() {
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
 
-    #[cfg(feature = "meshtastic")]
-    // Test very long device name
-    #[test]
-    fn test_device_with_long_name() {
-        let long_name = DeviceIdentifier::from("A".repeat(1000));
-        let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        current.insert(long_name.clone(), RadioType::Meshtastic);
+            // Device appears
+            let current = devices(&["Device1"]);
+            process_device_changes(&current, &mut tracked);
+            assert!(tracked.contains_key(&DeviceIdentifier::from("Device1")));
 
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            // Device is lost after 3 cycles
+            let empty: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            process_device_changes(&empty, &mut tracked); // unseen 1
+            process_device_changes(&empty, &mut tracked); // unseen 2
+            let (_, lost) = process_device_changes(&empty, &mut tracked); // unseen 3, lost
+            assert_eq!(lost, vec![DeviceIdentifier::from("Device1")]);
+            assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
 
-        let (found, _) = process_device_changes(&current, &mut tracked);
+            // Device reappears - should be found as new
+            let (found, _) = process_device_changes(&current, &mut tracked);
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
+        }
 
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].0, long_name);
-    }
+        // Edge cases
+        #[test]
+        fn test_empty_to_empty() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
 
-    // Test rapid device cycling
-    #[test]
-    fn test_rapid_device_cycling() {
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        // Device appears
-        let current = devices(&["Device1"]);
-        let (found, _) = process_device_changes(&current, &mut tracked);
-        assert_eq!(found.len(), 1);
+            assert!(found.is_empty());
+            assert!(lost.is_empty());
+            assert!(tracked.is_empty());
+        }
 
-        // Device disappears
-        let empty: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
-        process_device_changes(&empty, &mut tracked);
-        process_device_changes(&empty, &mut tracked);
+        #[test]
+        fn test_device_with_special_characters() {
+            let current = devices(&["Device-1_test", "Device 2", "Device\t3"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
 
-        // Device reappears before being lost
-        let (found, lost) = process_device_changes(&current, &mut tracked);
-        assert!(found.is_empty()); // Not new, was still tracked
-        assert!(lost.is_empty()); // Not lost, count reset
-        assert_eq!(
-            tracked
-                .get(&DeviceIdentifier::from("Device1"))
-                .map(|(c, _)| *c),
-            Some(0)
-        );
-    }
+            let (found, _) = process_device_changes(&current, &mut tracked);
 
-    #[cfg(feature = "meshtastic")]
-    // Test many devices performance
-    #[test]
-    fn test_many_devices() {
-        let device_names: Vec<DeviceIdentifier> = (0..100)
-            .map(|i| DeviceIdentifier::from(format!("Device{}", i).as_str()))
-            .collect();
-        let current: HashMap<DeviceIdentifier, RadioType> = device_names
-            .iter()
-            .map(|s| (s.clone(), RadioType::Meshtastic))
-            .collect();
+            assert_eq!(found.len(), 3);
+            assert!(tracked.contains_key(&DeviceIdentifier::from("Device-1_test")));
+            assert!(tracked.contains_key(&DeviceIdentifier::from("Device 2")));
+            assert!(tracked.contains_key(&DeviceIdentifier::from("Device\t3")));
+        }
 
-        let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+        #[test]
+        fn test_multiple_devices_lost_simultaneously() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
+            tracked.insert(
+                tracked_device("Device2", 2).0,
+                tracked_device("Device2", 2).1,
+            );
+            tracked.insert(
+                tracked_device("Device3", 2).0,
+                tracked_device("Device3", 2).1,
+            );
 
-        let (found, lost) = process_device_changes(&current, &mut tracked);
+            let (found, lost) = process_device_changes(&current, &mut tracked);
 
-        assert_eq!(found.len(), 100);
-        assert!(lost.is_empty());
-        assert_eq!(tracked.len(), 100);
-    }
+            assert!(found.is_empty());
+            assert_eq!(lost.len(), 3);
+            assert!(lost.contains(&DeviceIdentifier::from("Device1")));
+            assert!(lost.contains(&DeviceIdentifier::from("Device2")));
+            assert!(lost.contains(&DeviceIdentifier::from("Device3")));
+            assert!(tracked.is_empty());
+        }
+
+        // Test MSH_SERVICE constant
+        #[cfg(feature = "meshtastic")]
+        #[test]
+        fn test_msh_service_uuid() {
+            assert_eq!(
+                MESHTASTIC_SERVICE_UUID,
+                Uuid::from_u128(0x6ba1b218_15a8_461f_9fa8_5dcae273eafd)
+            );
+        }
+
+        #[cfg(feature = "meshcore")]
+        #[test]
+        fn test_meshcore_service_uuid() {
+            assert_eq!(
+                MESHCORE_SERVICE_UUID,
+                Uuid::from_u128(0x6e400001_b5a3_f393_e0a9_e50e24dcca9e)
+            );
+        }
+
+        // Test detect_radio_type function
+        #[cfg(feature = "meshtastic")]
+        #[test]
+        fn test_detect_radio_type_meshtastic() {
+            let services = vec![MESHTASTIC_SERVICE_UUID];
+            assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
+        }
+
+        #[cfg(feature = "meshcore")]
+        #[test]
+        fn test_detect_radio_type_meshcore() {
+            let services = vec![MESHCORE_SERVICE_UUID];
+            assert_eq!(detect_radio_type(&services), Some(RadioType::MeshCore));
+        }
+
+        #[test]
+        fn test_detect_radio_type_empty() {
+            let services: Vec<Uuid> = vec![];
+            // Should return default
+            assert_eq!(detect_radio_type(&services), None);
+        }
+
+        #[test]
+        fn test_detect_radio_type_unknown_uuid() {
+            let services = vec![Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc)];
+            // Should return default
+            assert_eq!(detect_radio_type(&services), None);
+        }
+
+        // Async tests for announce_device_changes
+        use futures_channel::mpsc;
+
+        // Mock peripheral for testing - we can't easily implement Peripheral trait,
+        // but we can test with empty vectors
+        #[tokio::test]
+        async fn test_announce_device_changes_empty_peripherals_empty_tracked() {
+            let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+            announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+            // Close the sender to signal no more messages
+            sender.close_channel();
+
+            // No events should be sent
+            assert!(
+                receiver.try_recv().is_err(),
+                "Expected no events but received one"
+            );
+            assert!(tracked.is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_announce_device_changes_empty_peripherals_with_tracked_unseen_once() {
+            let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 0).0,
+                tracked_device("Device1", 0).1,
+            );
+            let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+            announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+            sender.close_channel();
+
+            // No events should be sent (the device has only been unseen once)
+            assert!(
+                receiver.try_recv().is_err(),
+                "Expected no events but received one"
+            );
+            // Device should still be tracked with incremented count
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(1)
+            );
+        }
+
+        #[tokio::test]
+        async fn test_announce_device_changes_empty_peripherals_device_lost() {
+            let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
+            let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+            announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+            sender.close_channel();
+
+            // Should receive MeshRadioLost event
+            let event = receiver.try_recv().expect("Expected MeshRadioLost event");
+            assert!(
+                matches!(event, MeshRadioLost(device_id) if device_id == DeviceIdentifier::from("Device1"))
+            );
+
+            // No more events
+            assert!(
+                receiver.try_recv().is_err(),
+                "Expected no more events but received one"
+            );
+
+            // Device should be removed from tracking
+            assert!(!tracked.contains_key(&DeviceIdentifier::from("Device1")));
+        }
+
+        #[tokio::test]
+        async fn test_announce_device_changes_multiple_devices_lost() {
+            let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 2).0,
+                tracked_device("Device1", 2).1,
+            );
+            tracked.insert(
+                tracked_device("Device2", 2).0,
+                tracked_device("Device2", 2).1,
+            );
+            let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+            announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+            sender.close_channel();
+
+            // Should receive 2 MeshRadioLost events
+            let mut lost_devices = Vec::new();
+            while let Ok(event) = receiver.try_recv() {
+                if let MeshRadioLost(name) = event {
+                    lost_devices.push(name);
+                }
+            }
+
+            assert_eq!(lost_devices.len(), 2);
+            assert!(lost_devices.contains(&DeviceIdentifier::from("Device1")));
+            assert!(lost_devices.contains(&DeviceIdentifier::from("Device2")));
+            assert!(tracked.is_empty());
+        }
+
+        #[tokio::test]
+        async fn test_announce_device_changes_mixed_tracked_states() {
+            let (mut sender, mut receiver) = mpsc::channel::<DeviceListEvent>(10);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                tracked_device("Device1", 0).0,
+                tracked_device("Device1", 0).1,
+            );
+            tracked.insert(
+                tracked_device("Device2", 1).0,
+                tracked_device("Device2", 1).1,
+            );
+            tracked.insert(
+                tracked_device("Device3", 2).0,
+                tracked_device("Device3", 2).1,
+            );
+            let peripherals: Vec<btleplug::platform::Peripheral> = vec![];
+
+            announce_device_changes(&mut sender, &peripherals, &mut tracked).await;
+
+            sender.close_channel();
+
+            // Should receive only 1 MeshRadioLost event for Device3
+            let event = receiver.try_recv().expect("Expected MeshRadioLost event");
+            assert!(
+                matches!(event, MeshRadioLost(name) if name == DeviceIdentifier::from("Device3"))
+            );
+
+            // No more events
+            assert!(
+                receiver.try_recv().is_err(),
+                "Expected no more events but received one"
+            );
+
+            // Device1 and Device2 should still be tracked
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(1)
+            );
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device2"))
+                    .map(|(c, _)| *c),
+                Some(2)
+            );
+            assert!(!tracked.contains_key(&DeviceIdentifier::from("Device3")));
+        }
+
+        // Tests for radio type handling in process_device_changes
+
+        #[cfg(feature = "meshtastic")]
+        fn devices_meshtastic(items: &[&str]) -> HashMap<DeviceIdentifier, RadioType> {
+            items
+                .iter()
+                .map(|s| (DeviceIdentifier::from(*s), RadioType::Meshtastic))
+                .collect()
+        }
+
+        #[cfg(feature = "meshcore")]
+        fn devices_meshcore(items: &[&str]) -> HashMap<DeviceIdentifier, RadioType> {
+            items
+                .iter()
+                .map(|s| (DeviceIdentifier::from(*s), RadioType::MeshCore))
+                .collect()
+        }
+
+        #[cfg(feature = "meshtastic")]
+        #[test]
+        fn test_process_device_changes_preserves_meshtastic_radio_type() {
+            let current = devices_meshtastic(&["Device1"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, _) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
+            assert_eq!(found[0].1, RadioType::Meshtastic);
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(_, rt)| *rt),
+                Some(RadioType::Meshtastic)
+            );
+        }
+
+        #[cfg(feature = "meshcore")]
+        #[test]
+        fn test_process_device_changes_preserves_meshcore_radio_type() {
+            let current = devices_meshcore(&["Device1"]);
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, _) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from("Device1"));
+            assert_eq!(found[0].1, RadioType::MeshCore);
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(_, rt)| *rt),
+                Some(RadioType::MeshCore)
+            );
+        }
+
+        #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
+        #[test]
+        fn test_process_device_changes_mixed_radio_types() {
+            let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            current.insert(
+                DeviceIdentifier::from("MeshtasticDevice"),
+                RadioType::Meshtastic,
+            );
+            current.insert(
+                DeviceIdentifier::from("MeshCoreDevice"),
+                RadioType::MeshCore,
+            );
+
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, _) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 2);
+            let meshtastic_found = found
+                .iter()
+                .find(|(name, _)| name == &DeviceIdentifier::from("MeshtasticDevice"))
+                .expect("MeshtasticDevice should be found");
+            let meshcore_found = found
+                .iter()
+                .find(|(name, _)| name == &DeviceIdentifier::from("MeshCoreDevice"))
+                .expect("MeshCoreDevice should be found");
+
+            assert_eq!(meshtastic_found.1, RadioType::Meshtastic);
+            assert_eq!(meshcore_found.1, RadioType::MeshCore);
+        }
+
+        // Test detect_radio_type with multiple service UUIDs
+        #[cfg(feature = "meshtastic")]
+        #[test]
+        fn test_detect_radio_type_meshtastic_with_other_uuids() {
+            let other_uuid = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+            let services = vec![other_uuid, MESHTASTIC_SERVICE_UUID];
+            assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
+        }
+
+        #[cfg(feature = "meshcore")]
+        #[test]
+        fn test_detect_radio_type_meshcore_with_other_uuids() {
+            let other_uuid = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+            let services = vec![other_uuid, MESHCORE_SERVICE_UUID];
+            assert_eq!(detect_radio_type(&services), Some(RadioType::MeshCore));
+        }
+
+        #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
+        #[test]
+        fn test_detect_radio_type_both_services_meshtastic_first() {
+            // When both services are present, meshtastic takes priority (checked first)
+            let services = vec![MESHTASTIC_SERVICE_UUID, MESHCORE_SERVICE_UUID];
+            assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
+        }
+
+        #[cfg(all(feature = "meshtastic", feature = "meshcore"))]
+        #[test]
+        fn test_detect_radio_type_both_services_meshcore_first() {
+            // Even when meshcore UUID is first, meshtastic still wins (due to check order)
+            let services = vec![MESHCORE_SERVICE_UUID, MESHTASTIC_SERVICE_UUID];
+            assert_eq!(detect_radio_type(&services), Some(RadioType::Meshtastic));
+        }
+
+        #[test]
+        fn test_detect_radio_type_many_unknown_uuids() {
+            let services: Vec<Uuid> = (0..10)
+                .map(|i| Uuid::from_u128(0x10000000_0000_0000_0000_000000000000 + i))
+                .collect();
+            assert_eq!(detect_radio_type(&services), None);
+        }
+
+        #[cfg(feature = "meshtastic")]
+        // Test helper functions
+        #[test]
+        fn test_devices_helper_creates_correct_map() {
+            let result = devices(&["A", "B", "C"]);
+            assert_eq!(result.len(), 3);
+            assert!(result.contains_key(&DeviceIdentifier::from("A")));
+            assert!(result.contains_key(&DeviceIdentifier::from("B")));
+            assert!(result.contains_key(&DeviceIdentifier::from("C")));
+            assert_eq!(
+                result.get(&DeviceIdentifier::from("A")),
+                Some(&RadioType::Meshtastic)
+            );
+        }
+
+        #[test]
+        fn test_devices_helper_empty() {
+            let result = devices(&[]);
+            assert!(result.is_empty());
+        }
+
+        #[cfg(feature = "meshtastic")]
+        #[test]
+        fn test_tracked_device_helper() {
+            let (name, (count, radio_type)) = tracked_device("TestDevice", 5);
+            assert_eq!(name, DeviceIdentifier::from("TestDevice"));
+            assert_eq!(count, 5);
+            assert_eq!(radio_type, RadioType::Meshtastic);
+        }
+
+        // Test boundary conditions for unseen count
+        #[cfg(feature = "meshtastic")]
+        #[test]
+        fn test_unseen_count_boundary_at_2() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                DeviceIdentifier::from("Device1"),
+                (2, RadioType::Meshtastic),
+            );
+
+            let (_, lost) = process_device_changes(&current, &mut tracked);
+
+            // At count 2, after increment it becomes 3, which triggers loss
+            assert_eq!(lost.len(), 1);
+            assert!(lost.contains(&DeviceIdentifier::from("Device1")));
+        }
+
+        #[cfg(feature = "meshtastic")]
+        #[test]
+        fn test_unseen_count_boundary_at_1() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                DeviceIdentifier::from("Device1"),
+                (1, RadioType::Meshtastic),
+            );
+
+            let (_, lost) = process_device_changes(&current, &mut tracked);
+
+            // At count 1, after increment it becomes 2, not yet lost
+            assert!(lost.is_empty());
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(2)
+            );
+        }
+
+        #[cfg(feature = "meshtastic")]
+        // Test that lost event includes correct device names
+        #[test]
+        fn test_lost_returns_correct_device_names() {
+            let current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+            tracked.insert(
+                DeviceIdentifier::from("UniqueDeviceName123"),
+                (2, RadioType::Meshtastic),
+            );
+
+            let (_, lost) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(lost, vec![DeviceIdentifier::from("UniqueDeviceName123")]);
+        }
+
+        #[cfg(feature = "meshtastic")]
+        // Test Unicode device names
+        #[test]
+        fn test_device_with_unicode_name() {
+            let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            current.insert(
+                DeviceIdentifier::from("日本語デバイス"),
+                RadioType::Meshtastic,
+            );
+            current.insert(DeviceIdentifier::from("Устройство"), RadioType::Meshtastic);
+            current.insert(DeviceIdentifier::from("📱Device"), RadioType::Meshtastic);
+
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, _) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 3);
+            assert!(tracked.contains_key(&DeviceIdentifier::from("日本語デバイス")));
+            assert!(tracked.contains_key(&DeviceIdentifier::from("Устройство")));
+            assert!(tracked.contains_key(&DeviceIdentifier::from("📱Device")));
+        }
+
+        #[cfg(feature = "meshtastic")]
+        // Test device with an empty name
+        #[test]
+        fn test_device_with_empty_name() {
+            let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            current.insert(DeviceIdentifier::from(""), RadioType::Meshtastic);
+
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, _) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, DeviceIdentifier::from(""));
+            assert!(tracked.contains_key(&DeviceIdentifier::from("")));
+        }
+
+        #[cfg(feature = "meshtastic")]
+        // Test very long device name
+        #[test]
+        fn test_device_with_long_name() {
+            let long_name = DeviceIdentifier::from("A".repeat(1000));
+            let mut current: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            current.insert(long_name.clone(), RadioType::Meshtastic);
+
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, _) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 1);
+            assert_eq!(found[0].0, long_name);
+        }
+
+        // Test rapid device cycling
+        #[test]
+        fn test_rapid_device_cycling() {
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            // Device appears
+            let current = devices(&["Device1"]);
+            let (found, _) = process_device_changes(&current, &mut tracked);
+            assert_eq!(found.len(), 1);
+
+            // Device disappears
+            let empty: HashMap<DeviceIdentifier, RadioType> = HashMap::new();
+            process_device_changes(&empty, &mut tracked);
+            process_device_changes(&empty, &mut tracked);
+
+            // Device reappears before being lost
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+            assert!(found.is_empty()); // Not new, was still tracked
+            assert!(lost.is_empty()); // Not lost, count reset
+            assert_eq!(
+                tracked
+                    .get(&DeviceIdentifier::from("Device1"))
+                    .map(|(c, _)| *c),
+                Some(0)
+            );
+        }
+
+        #[cfg(feature = "meshtastic")]
+        // Test many devices performance
+        #[test]
+        fn test_many_devices() {
+            let device_names: Vec<DeviceIdentifier> = (0..100)
+                .map(|i| DeviceIdentifier::from(format!("Device{}", i).as_str()))
+                .collect();
+            let current: HashMap<DeviceIdentifier, RadioType> = device_names
+                .iter()
+                .map(|s| (s.clone(), RadioType::Meshtastic))
+                .collect();
+
+            let mut tracked: HashMap<DeviceIdentifier, (i32, RadioType)> = HashMap::new();
+
+            let (found, lost) = process_device_changes(&current, &mut tracked);
+
+            assert_eq!(found.len(), 100);
+            assert!(lost.is_empty());
+            assert_eq!(tracked.len(), 100);
+        }
+    } // mod ble_tests
 }

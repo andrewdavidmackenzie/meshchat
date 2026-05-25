@@ -33,6 +33,7 @@ use meshtastic::protobufs::telemetry::Variant::DeviceMetrics;
 use meshtastic::protobufs::{FromRadio, MeshPacket, PortNum, Position, Telemetry, User};
 use meshtastic::types::NodeId;
 use meshtastic::utils;
+#[cfg(feature = "bluetooth")]
 use meshtastic::utils::stream::BleId;
 use std::pin::Pin;
 use std::time::Duration;
@@ -600,10 +601,16 @@ async fn do_connect(
 ) -> Result<(PacketReceiver, ConnectedStreamApi), Error> {
     let stream_api = StreamApi::new();
     let (packet_receiver, stream_api) = match device {
+        #[cfg(feature = "tcp")]
         DeviceIdentifier::Tcp { host, port, .. } => {
+            let endpoint = if host.contains(':') {
+                format!("[{host}]:{port}")
+            } else {
+                format!("{host}:{port}")
+            };
             let tcp_stream = timeout(
                 Duration::from_secs(30),
-                utils::stream::build_tcp_stream(format!("{host}:{port}")),
+                utils::stream::build_tcp_stream(endpoint),
             )
             .await
             .map_err(|_| Error::StreamBuildError {
@@ -615,8 +622,8 @@ async fn do_connect(
             })??;
             stream_api.connect(tcp_stream).await
         }
+        #[cfg(feature = "bluetooth")]
         DeviceIdentifier::Ble { name, mac } => {
-            // On windows try and connect using MAC Address, on other platforms use the name
             #[cfg(windows)]
             let ble_id = BleId::from_mac_address(
                 mac.ok_or_else(|| Error::StreamBuildError {

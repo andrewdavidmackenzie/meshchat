@@ -247,9 +247,10 @@ impl DeviceList {
             device_row = device_row.push(icon);
             device_row = device_row.push(Space::new().width(8));
 
-            // Transport badge so the user can tell BLE devices apart from LAN/TCP devices.
             let (transport_label, transport_tip) = match device_identifier {
+                #[cfg(feature = "bluetooth")]
                 DeviceIdentifier::Ble { .. } => ("BT", "Connected via Bluetooth LE".to_string()),
+                #[cfg(feature = "tcp")]
                 DeviceIdentifier::Tcp { host, port, .. } => {
                     ("TCP", format!("Reachable over TCP at {host}:{port}"))
                 }
@@ -1333,7 +1334,7 @@ mod tests {
         #[cfg(feature = "meshcore")]
         let _ = view.update(MeshRadioFound(
             "meshcore_device".into(),
-            RadioType::Meshtastic,
+            RadioType::MeshCore,
         ));
 
         let config = Config::default();

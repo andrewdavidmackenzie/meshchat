@@ -403,6 +403,7 @@ pub fn load_config() -> Task<Message> {
 #[cfg(test)]
 mod tests {
     use crate::config::{Config, HistoryLength, ONE_DAY_IN_SECONDS, load, save};
+    #[cfg(feature = "bluetooth")]
     use btleplug::api::BDAddr;
     use std::collections::{HashMap, HashSet};
     use std::io;
@@ -451,7 +452,7 @@ mod tests {
         assert_default(returned);
     }
 
-    #[cfg(feature = "meshtastic")]
+    #[cfg(all(feature = "meshtastic", feature = "bluetooth"))]
     #[tokio::test]
     async fn mac_address_saved() {
         let config = Config {

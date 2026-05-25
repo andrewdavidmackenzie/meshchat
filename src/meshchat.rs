@@ -18,13 +18,17 @@ use crate::device::DeviceMessage::DisconnectRequest;
 use crate::device::DeviceMessage::SubscriptionMessage;
 use crate::device::{Device, DeviceIdentifier};
 use crate::device_list::{DeviceList, DeviceListEvent, RadioType};
+#[cfg(feature = "bluetooth")]
 use crate::discovery::ble_discovery;
-#[cfg(feature = "meshtastic")]
+#[cfg(feature = "tcp")]
 use crate::discovery::mdns_discovery;
+#[cfg(feature = "meshcore")]
+use crate::meshc;
+#[cfg(feature = "meshtastic")]
+use crate::mesht;
 use crate::notification::{Notification, Notifications};
 use crate::styles::{modal_style, picker_header_style, tooltip_style};
 use crate::timestamp::TimeStamp;
-use crate::{meshc, mesht};
 use iced::font::Weight;
 use iced::keyboard::key;
 use iced::widget::{Column, center, container, mouse_area, opaque, operation, stack, text};
@@ -587,8 +591,9 @@ impl MeshChat {
     pub(crate) fn subscription(&self) -> Subscription<Message> {
         // jonesy:allow(misaligned_ptr) via alloc in subscription vec (misaligned_ptr)
         let subscriptions = vec![
+            #[cfg(feature = "bluetooth")]
             Subscription::run(ble_discovery).map(DeviceListViewEvent),
-            #[cfg(feature = "meshtastic")]
+            #[cfg(feature = "tcp")]
             Subscription::run(mdns_discovery).map(DeviceListViewEvent),
             #[cfg(feature = "meshtastic")]
             Subscription::run(mesht::subscription::subscribe)
