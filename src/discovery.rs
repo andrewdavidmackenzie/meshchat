@@ -239,83 +239,97 @@ fn process_device_changes(
 /// over TCP on the local network. Devices advertise themselves via mDNS-SD as
 /// `_meshtastic._tcp.local.`.
 #[cfg(feature = "tcp")]
+const MDNS_MAX_RETRIES: u32 = 5;
+
+#[cfg(feature = "tcp")]
 pub fn mdns_discovery() -> impl Stream<Item = DeviceListEvent> {
     stream::channel(
         100,
         move |mut gui_sender: Sender<DeviceListEvent>| async move {
-            let daemon = match ServiceDaemon::new() {
-                Ok(d) => d,
-                Err(e) => {
-                    let _ = gui_sender
-                        .send(Error(format!("mDNS daemon could not start: {e}")))
-                        .await;
-                    return;
-                }
-            };
+            let mut backoff_secs = 2u64;
 
-            let receiver = match daemon.browse(MESHTASTIC_MDNS_SERVICE) {
-                Ok(r) => r,
-                Err(e) => {
-                    let _ = gui_sender
-                        .send(Error(format!("mDNS browse failed: {e}")))
-                        .await;
-                    return;
-                }
-            };
-
-            // Track fullname → identifier so that ServiceRemoved events can be mapped back to
-            // the same identifier that was emitted on ServiceResolved.
-            let mut resolved: HashMap<String, DeviceIdentifier> = HashMap::new();
-
-            while let Ok(event) = receiver.recv_async().await {
-                match event {
-                    ServiceEvent::ServiceResolved(info) => {
-                        let Some(host) = info
-                            .get_addresses()
-                            .iter()
-                            .find_map(|addr| match addr {
-                                IpAddr::V4(v4) => Some(v4.to_string()),
-                                _ => None,
-                            })
-                            .or_else(|| {
-                                info.get_addresses()
-                                    .iter()
-                                    .next()
-                                    .map(|addr| addr.to_string())
-                            })
-                        else {
-                            continue;
-                        };
-                        let port = info.get_port();
-                        // Friendly name = the service instance label, e.g. "MyMeshy" from
-                        // "MyMeshy._meshtastic._tcp.local."
-                        let fullname = info.get_fullname().to_string();
-                        let name = fullname
-                            .strip_suffix(MESHTASTIC_MDNS_SERVICE)
-                            .and_then(|s| s.strip_suffix('.'))
-                            .map(|s| s.to_string());
-
-                        let identifier = DeviceIdentifier::Tcp { name, host, port };
-                        let previous = resolved.insert(fullname, identifier.clone());
-                        if previous.as_ref() != Some(&identifier) {
-                            if let Some(old) = previous {
-                                let _ = gui_sender.send(MeshRadioLost(old)).await;
-                            }
+            for attempt in 1..=MDNS_MAX_RETRIES {
+                match mdns_browse(&mut gui_sender).await {
+                    Ok(()) => return,
+                    Err(e) => {
+                        if attempt == MDNS_MAX_RETRIES {
                             let _ = gui_sender
-                                .send(MeshRadioFound(identifier, RadioType::Meshtastic))
+                                .send(Error(format!(
+                                    "mDNS failed after {MDNS_MAX_RETRIES} attempts: {e}"
+                                )))
                                 .await;
+                            return;
                         }
+                        let _ = gui_sender
+                            .send(Error(format!(
+                                "mDNS attempt {attempt}/{MDNS_MAX_RETRIES} failed: {e}, retrying in {backoff_secs}s"
+                            )))
+                            .await;
+                        tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+                        backoff_secs = backoff_secs.saturating_mul(2).min(60);
                     }
-                    ServiceEvent::ServiceRemoved(_, fullname) => {
-                        if let Some(identifier) = resolved.remove(&fullname) {
-                            let _ = gui_sender.send(MeshRadioLost(identifier)).await;
-                        }
-                    }
-                    _ => {}
                 }
             }
         },
     )
+}
+
+#[cfg(feature = "tcp")]
+async fn mdns_browse(gui_sender: &mut Sender<DeviceListEvent>) -> Result<(), String> {
+    let daemon = ServiceDaemon::new().map_err(|e| format!("mDNS daemon could not start: {e}"))?;
+    let receiver = daemon
+        .browse(MESHTASTIC_MDNS_SERVICE)
+        .map_err(|e| format!("mDNS browse failed: {e}"))?;
+
+    let mut resolved: HashMap<String, DeviceIdentifier> = HashMap::new();
+
+    while let Ok(event) = receiver.recv_async().await {
+        match event {
+            ServiceEvent::ServiceResolved(info) => {
+                let Some(host) = info
+                    .get_addresses()
+                    .iter()
+                    .find_map(|addr| match addr {
+                        IpAddr::V4(v4) => Some(v4.to_string()),
+                        _ => None,
+                    })
+                    .or_else(|| {
+                        info.get_addresses()
+                            .iter()
+                            .next()
+                            .map(|addr| addr.to_string())
+                    })
+                else {
+                    continue;
+                };
+                let port = info.get_port();
+                let fullname = info.get_fullname().to_string();
+                let name = fullname
+                    .strip_suffix(MESHTASTIC_MDNS_SERVICE)
+                    .and_then(|s| s.strip_suffix('.'))
+                    .map(|s| s.to_string());
+
+                let identifier = DeviceIdentifier::Tcp { name, host, port };
+                let previous = resolved.insert(fullname, identifier.clone());
+                if previous.as_ref() != Some(&identifier) {
+                    if let Some(old) = previous {
+                        let _ = gui_sender.send(MeshRadioLost(old)).await;
+                    }
+                    let _ = gui_sender
+                        .send(MeshRadioFound(identifier, RadioType::Meshtastic))
+                        .await;
+                }
+            }
+            ServiceEvent::ServiceRemoved(_, fullname) => {
+                if let Some(identifier) = resolved.remove(&fullname) {
+                    let _ = gui_sender.send(MeshRadioLost(identifier)).await;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Err("mDNS browse session ended unexpectedly".to_string())
 }
 
 #[cfg(test)]
