@@ -1061,6 +1061,7 @@ mod tests {
                 is_favorite: false,
                 is_ignored: false,
                 is_key_manually_verified: false,
+                is_muted: false,
             })),
         };
 
