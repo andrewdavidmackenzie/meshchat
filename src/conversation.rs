@@ -262,7 +262,7 @@ impl Conversation {
         show_position_updates: bool,
         show_user_updates: bool,
     ) -> Element<'a, Message> {
-        // jonesy:allow(assert) via channel_view -> ringmap::RingMap::is_empty
+        // jonesy:allow(assert,bounds) via channel_view -> ringmap::RingMap
         let channel_view_content = self.channel_view(
             nodes,
             fav_nodes,
@@ -282,6 +282,7 @@ impl Conversation {
     /// Return the number of unread messages in the channel, not counting message types that
     /// are currently not being shown
     pub fn unread_count(&self, show_position_updates: bool, show_user_updates: bool) -> usize {
+        // jonesy:allow(bounds) via ringmap::RingMap::values()
         self.messages.values().fold(0, |acc, entry| {
             if (matches!(entry.message(), PositionMessage(..)) && !show_position_updates)
                 || (matches!(entry.message(), UserMessage(..)) && !show_user_updates)
@@ -315,7 +316,7 @@ impl Conversation {
             let mut previous_from: Option<NodeId> = None;
 
             // Add a view to the column for each of the entries in this Channel
-            // jonesy:allow(unknown) via ringmap::RingMap::values
+            // jonesy:allow(unknown,bounds) via ringmap::RingMap::values
             for message in self.messages.values() {
                 // Hide any previously received position updates in the view if config is set to do so
                 if matches!(message.message(), PositionMessage(..)) && !show_position_updates {

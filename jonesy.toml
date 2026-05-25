@@ -1,4 +1,4 @@
-allow = ["expect", "capacity", "format", "misaligned_ptr", "oom", "unknown"]
+allow = ["expect", "capacity", "format", "misaligned_ptr", "async_resumed", "oom", "unknown"]
 
 [[rules]]
 function = "metal::device::*"

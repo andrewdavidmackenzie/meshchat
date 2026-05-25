@@ -493,22 +493,22 @@ impl Device {
             }
             ConnectionError(id, summary, detail) => {
                 self.connection_state = Disconnected(Some(id), Some(summary.clone()));
-                // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                 Task::perform(empty(), |_| Navigation(DeviceListView))
+                    // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                     .chain(Task::perform(empty(), move |_| {
                         AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             SendError(summary, detail) => {
-                // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                 Task::perform(empty(), |_| Navigation(DeviceListView))
+                    // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                     .chain(Task::perform(empty(), move |_| {
                         AppError(summary.clone(), detail.clone(), TimeStamp::now())
                     }))
             }
             NotReady => {
-                // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                 Task::perform(empty(), |_| Navigation(DeviceListView))
+                    // jonesy:allow(overflow) via iced_runtime::task::Task::chain
                     .chain(Task::perform(empty(), move |_| {
                         AppError("Subscription not ready".to_string(),
                                  "An attempt was made to communicate to radio prior to the subscription being Ready".to_string(),
@@ -785,6 +785,7 @@ impl Device {
     /// Count all the unread messages available to this device across channels and nodes
     pub fn unread_count(&self, show_position_updates: bool, show_user_updates: bool) -> usize {
         self.conversations.values().fold(0, |acc, channel| {
+            // jonesy:allow(bounds) via Conversation::unread_count -> RingMap
             acc.saturating_add(channel.unread_count(show_position_updates, show_user_updates))
         })
     }
@@ -897,7 +898,7 @@ impl Device {
                     let channel_row = Self::channel_row(
                         channel_name,
                         channel_view
-                            .unread_count(self.show_position_updates, self.show_user_updates),
+                            .unread_count(self.show_position_updates, self.show_user_updates), // jonesy:allow(bounds) via Conversation::unread_count -> RingMap
                         conversation_id,
                         select,
                     );
@@ -943,7 +944,7 @@ impl Device {
                     channels_list = channels_list.push(
                         self.node_row(
                             channel_view
-                                .unread_count(self.show_position_updates, self.show_user_updates),
+                                .unread_count(self.show_position_updates, self.show_user_updates), // jonesy:allow(bounds) via Conversation::unread_count -> RingMap
                             fav_node_id,
                             true, // Favourite
                             config,
@@ -994,7 +995,7 @@ impl Device {
                     channels_list = channels_list.push(
                         self.node_row(
                             channel_view
-                                .unread_count(self.show_position_updates, self.show_user_updates),
+                                .unread_count(self.show_position_updates, self.show_user_updates), // jonesy:allow(bounds) via Conversation::unread_count -> RingMap
                             *node_id,
                             false, // Not a Favourite
                             config,
