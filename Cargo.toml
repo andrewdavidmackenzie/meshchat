@@ -49,7 +49,7 @@ emojis = { version = "0.8.2", default-features = false }
 uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
 
 # Optional dependencies
-meshtastic = { version = "0.1.8", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
+meshtastic = { version = "0.1.9", default-features = false, features = ["serde", "tokio", "bluetooth-le"], optional = true }
 meshcore-rs = { version = "0.1.9", default-features = false, features = ["ble"], optional = true }
 btleplug = { version = "0.11.8", default-features = false, optional = true }
 # mDNS-SD discovery of Meshtastic TCP devices on the LAN (`_meshtastic._tcp.local.`)
