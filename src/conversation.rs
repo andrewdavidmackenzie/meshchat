@@ -246,6 +246,7 @@ impl Conversation {
                 })
             }
             MarkUnread(message_id) => {
+                // jonesy:allow(bounds) via ringmap::RingMap::get_mut
                 if let Some(message) = self.messages.get_mut(&message_id) {
                     message.mark_unseen();
                     self.manually_unread.insert(message_id);
