@@ -146,6 +146,11 @@ impl MCMessage {
         self.seen = true;
     }
 
+    /// Mark this message as not having been seen by the user (unread)
+    pub fn mark_unseen(&mut self) {
+        self.seen = false;
+    }
+
     /// Return the emoji reply to this message, if any.
     pub fn emojis(&self) -> &HashMap<String, Vec<NodeId>> {
         &self.emoji_reply
@@ -511,6 +516,12 @@ impl MCMessage {
                 ))
             });
 
+        let unread_label = if self.seen {
+            "mark unread"
+        } else {
+            "mark read"
+        };
+
         // jonesy:allow(misaligned_ptr) via iced_aw menu_items!/menu_bar! macros (misaligned_ptr)
         #[rustfmt::skip]
         let menu_items = if matches!(conversation_id, ConversationId::Channel(_)) {
@@ -521,6 +532,7 @@ impl MCMessage {
                 (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
                 (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
                 (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(*conversation_id, ChannelViewMessage::PrepareReply(self.message_id))))),
+                (menu_button(unread_label.into(), DeviceViewEvent(ChannelMsg(*conversation_id, ChannelViewMessage::MarkUnread(self.message_id))))),
                 (menu_button(dm, DeviceViewEvent(ShowChannel(Some(ConversationId::Node(self.from()))))))
             )
         } else {
@@ -530,7 +542,8 @@ impl MCMessage {
                 (picker_element)))),
                 (menu_button("copy".into(), CopyToClipBoard(message.to_string()))),
                 (menu_button("forward".into(), DeviceViewEvent(StartForwardingMessage(self.clone())))),
-                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(*conversation_id, ChannelViewMessage::PrepareReply(self.message_id))))))
+                (menu_button("reply".into(), DeviceViewEvent(ChannelMsg(*conversation_id, ChannelViewMessage::PrepareReply(self.message_id))))),
+                (menu_button(unread_label.into(), DeviceViewEvent(ChannelMsg(*conversation_id, ChannelViewMessage::MarkUnread(self.message_id))))))
     };
 
         // Create the menu bar with the root button and list of options

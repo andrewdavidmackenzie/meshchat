@@ -26,6 +26,7 @@ if it finds any. This should be maintained.
 In tests, I use `expect()` to not use panic directly and to provide an explanation of why the assertion failed.
 
 Do not commit changes, I will do that manually.
+Never merge without my explicit prior consent or approval at the time.
 
 # Instructions
 

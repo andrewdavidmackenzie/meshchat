@@ -1,8 +1,8 @@
 use crate::Message::DeviceViewEvent;
 use crate::config::{Config, HistoryLength};
 use crate::conversation::ChannelViewMessage::{
-    CancelPrepareReply, ClearMessage, EmojiPickerMsg, FocusMessageInput, MessageInput, MessageSeen,
-    PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
+    CancelPrepareReply, ClearMessage, EmojiPickerMsg, FocusMessageInput, MarkUnread, MessageInput,
+    MessageSeen, PickChannel, PrepareReply, ReplyWithEmoji, SendMessage, ShareMeshChat,
 };
 use crate::conversation_id::{ConversationId, MessageId, NodeId};
 use crate::device::DeviceMessage::{
@@ -49,6 +49,7 @@ pub enum ChannelViewMessage {
     MessageSeen(MessageId, TimeStamp),
     PickChannel(Option<ConversationId>),
     ReplyWithEmoji(MessageId, String, ConversationId), // Send an emoji reply
+    MarkUnread(MessageId),
     EmojiPickerMsg(Box<PickerMessage<ChannelViewMessage>>),
     ShareMeshChat,
     /// Move keyboard focus to the message input. Sent as a deferred follow-up to events
@@ -69,6 +70,8 @@ pub struct Conversation {
     preparing_reply_to: Option<MessageId>,
     emoji_picker: EmojiPicker,
     last_seen_message: TimeStamp,
+    /// Messages the user has manually marked as unread; the sensor will not re-mark them seen.
+    manually_unread: HashSet<MessageId>,
 }
 
 // jonesy:allow(unknown) async state machine artifact
@@ -213,17 +216,20 @@ impl Conversation {
                 Task::none()
             }
             MessageSeen(message_id, timestamp) => {
-                // jonesy:allow(bounds) via ringmap::RingMap::get_mut
-                if let Some(message) = self.messages.get_mut(&message_id) {
-                    message.mark_seen();
-                    // Persist the timestamp of the last seen message in the ChannelView
-                    // Since the resolution is millisecond, and we don't care which message is
-                    // shown as long as it's the last one, no need to track more closely
-                    if timestamp > self.last_seen_message {
-                        self.last_seen_message = timestamp
+                // Don't mark as seen if the user manually marked this message as unread
+                if !self.manually_unread.contains(&message_id) {
+                    // jonesy:allow(bounds) via ringmap::RingMap::get_mut
+                    if let Some(message) = self.messages.get_mut(&message_id) {
+                        message.mark_seen();
+                        // Persist the timestamp of the last seen message in the ChannelView
+                        // Since the resolution is millisecond, and we don't care which message is
+                        // shown as long as it's the last one, no need to track more closely
+                        if timestamp > self.last_seen_message {
+                            self.last_seen_message = timestamp
+                        }
+                    } else {
+                        eprintln!("Message {} not found in ChannelView", message_id);
                     }
-                } else {
-                    eprintln!("Message {} not found in ChannelView", message_id);
                 }
                 Task::none()
             }
@@ -238,6 +244,13 @@ impl Conversation {
                         conversation_id,
                     ))
                 })
+            }
+            MarkUnread(message_id) => {
+                if let Some(message) = self.messages.get_mut(&message_id) {
+                    message.mark_unseen();
+                    self.manually_unread.insert(message_id);
+                }
+                Task::none()
             }
             // jonesy:allow(misaligned_ptr) via iced emoji picker update (misaligned_ptr)
             EmojiPickerMsg(picker_msg) => {
@@ -612,7 +625,7 @@ impl Conversation {
 mod test {
     use crate::config::HistoryLength;
     use crate::conversation::ChannelViewMessage::{
-        CancelPrepareReply, ClearMessage, FocusMessageInput, MessageInput, MessageSeen,
+        CancelPrepareReply, ClearMessage, FocusMessageInput, MarkUnread, MessageInput, MessageSeen,
         PrepareReply, SendMessage,
     };
     use crate::conversation::{Conversation, ConversationId};
@@ -962,6 +975,60 @@ mod test {
                 .seen()
         );
         assert_eq!(channel_view.unread_count(true, true), 0);
+    }
+
+    #[test]
+    fn test_mark_unread_survives_message_seen() {
+        let mut channel_view =
+            Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
+        let message = MCMessage::new(
+            MessageId::from(42),
+            NodeId::from(1u64),
+            NewTextMessage("test".into()),
+            TimeStamp::now(),
+        );
+        let timestamp = message.time();
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+
+        // Mark as seen first
+        let _ = channel_view.update(MessageSeen(MessageId::from(42), timestamp));
+        assert!(
+            channel_view
+                .messages
+                .get(&MessageId::from(42))
+                .expect("entry 42 should exist")
+                .seen()
+        );
+        assert_eq!(channel_view.unread_count(true, true), 0);
+
+        // Mark as unread
+        let _ = channel_view.update(MarkUnread(MessageId::from(42)));
+        assert!(
+            !channel_view
+                .messages
+                .get(&MessageId::from(42))
+                .expect("entry 42 should exist after mark unread")
+                .seen()
+        );
+        assert_eq!(channel_view.unread_count(true, true), 1);
+
+        // The message is in manually_unread, so MessageSeen should NOT re-mark it
+        assert!(channel_view.manually_unread.contains(&MessageId::from(42)));
+
+        let _ = channel_view.update(MessageSeen(MessageId::from(42), timestamp));
+        assert!(
+            !channel_view
+                .messages
+                .get(&MessageId::from(42))
+                .expect("entry 42 should exist after MessageSeen")
+                .seen(),
+            "manually unread message should not be marked seen by sensor"
+        );
+        assert_eq!(
+            channel_view.unread_count(true, true),
+            1,
+            "unread count should remain 1 after guarded MessageSeen"
+        );
     }
 
     #[test]
