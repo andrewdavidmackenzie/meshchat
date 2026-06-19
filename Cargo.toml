@@ -60,6 +60,7 @@ tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 
 [dev-dependencies]
+iced_test = "0.14"
 tempfile = "3.27.0"
 
 [build-dependencies]
