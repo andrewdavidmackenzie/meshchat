@@ -624,17 +624,20 @@ impl Conversation {
 
 #[cfg(test)]
 mod test {
-    use crate::config::HistoryLength;
+    use crate::config::{Config, HistoryLength};
     use crate::conversation::ChannelViewMessage::{
-        CancelPrepareReply, ClearMessage, FocusMessageInput, MarkUnread, MessageInput, MessageSeen,
-        PrepareReply, SendMessage,
+        CancelPrepareReply, ClearMessage, EmojiPickerMsg, FocusMessageInput, MarkUnread,
+        MessageInput, MessageSeen, PrepareReply, SendMessage,
     };
     use crate::conversation::{Conversation, ConversationId};
     use crate::conversation_id::{MessageId, NodeId};
+    use crate::device::Device;
     use crate::meshchat::{MCPosition, MCUser};
     use crate::message::MCContent::{EmojiReply, NewTextMessage};
     use crate::message::MCMessage;
     use crate::timestamp::TimeStamp;
+    use crate::widgets::emoji_picker::PickerMessage;
+    use std::collections::{HashMap, HashSet};
     use std::time::Duration;
 
     #[tokio::test]
@@ -1631,5 +1634,54 @@ mod test {
         let _ = channel_view.update(MessageSeen(MessageId::from(3), even_older));
         // last_seen_message should still be newer_timestamp since even_older < newer_timestamp
         assert_eq!(channel_view.last_seen_message, newer_timestamp);
+    }
+
+    #[test]
+    fn test_emoji_picker_msg_emoji_selected() {
+        let mut channel_view =
+            Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
+        // Add a message so we can reply to it
+        let message = MCMessage::new(
+            MessageId::from(1),
+            NodeId::from(1u64),
+            NewTextMessage("Hello".into()),
+            TimeStamp::now(),
+        );
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+        // EmojiSelected wraps a ChannelViewMessage - use a simple one
+        let _ = channel_view.update(EmojiPickerMsg(Box::new(PickerMessage::EmojiSelected(
+            ClearMessage,
+        ))));
+        // Should not panic when handling the forwarded message
+    }
+
+    #[test]
+    fn test_channel_view_with_enable_position_and_info() {
+        let mut channel_view =
+            Conversation::new(ConversationId::Channel(0.into()), NodeId::from(0u64));
+        let message = MCMessage::new(
+            MessageId::from(1),
+            NodeId::from(1u64),
+            NewTextMessage("Test".into()),
+            TimeStamp::now(),
+        );
+        let _ = channel_view.new_message(message, &HistoryLength::All);
+
+        let nodes = HashMap::new();
+        let fav_nodes = HashSet::new();
+        let device_view = Device::default();
+        let config = Config::default();
+
+        let _element = channel_view.view(
+            &nodes,
+            &fav_nodes,
+            true, // enable_position
+            true, // enable_my_info
+            &device_view,
+            &config,
+            true, // show_position_updates
+            true, // show_user_updates
+        );
+        // Should render the channel view with Send Position and Send Info buttons
     }
 }

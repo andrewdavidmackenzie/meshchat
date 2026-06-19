@@ -10,3 +10,6 @@ target
 
 .vscode
 .vs
+
+# Coverage profraw files
+*.profraw

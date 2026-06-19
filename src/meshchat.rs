@@ -622,6 +622,7 @@ impl MeshChat {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::config::HistoryLength;
     use crate::conversation_id::MessageId;
     use crate::device::DeviceEvent::MyNodeNum;
     use crate::meshchat::View::DeviceListView;
@@ -630,6 +631,7 @@ pub(crate) mod tests {
     use crate::message::MCContent::NewTextMessage;
     use iced::keyboard::key::NativeCode::MacOS;
     use iced::keyboard::{Key, Location};
+    use std::collections::{HashMap, HashSet};
     use std::sync::atomic::{AtomicU32, Ordering};
 
     static MESSAGE_ID_COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -1059,5 +1061,369 @@ pub(crate) mod tests {
         let initial_view = meshchat.current_view.clone();
         let _ = meshchat.update(Message::None);
         assert_eq!(meshchat.current_view, initial_view);
+    }
+
+    #[test]
+    fn test_new_creates_default() {
+        let (meshchat, _task) = MeshChat::new();
+        assert_eq!(meshchat.current_view, DeviceListView);
+        assert!(!meshchat.showing_settings);
+        assert!(meshchat.show_user.is_none());
+    }
+
+    #[test]
+    fn test_config_loaded_sets_state() {
+        let mut meshchat = test_app();
+        let config = Config {
+            history_length: HistoryLength::NumberOfMessages(100),
+            show_position_updates: true,
+            show_user_updates: false,
+            auto_reconnect: true,
+            auto_update_startup: false,
+            restore_window_size: true,
+            restore_window_position: false,
+            ble_device: None,
+            conversation_id: None,
+            window_size: None,
+            window_position: None,
+            fav_nodes: HashSet::new(),
+            aliases: HashMap::new(),
+            device_aliases: HashMap::new(),
+        };
+        let _ = meshchat.update(ConfigLoaded(config));
+        assert_eq!(
+            meshchat.config.history_length,
+            HistoryLength::NumberOfMessages(100)
+        );
+        assert!(meshchat.config.show_position_updates);
+        assert!(!meshchat.config.show_user_updates);
+        assert!(meshchat.config.auto_reconnect);
+        assert!(!meshchat.config.auto_update_startup);
+        assert!(meshchat.config.restore_window_size);
+        assert!(!meshchat.config.restore_window_position);
+    }
+
+    #[test]
+    fn test_config_loaded_with_auto_reconnect_sets_device() {
+        let mut meshchat = test_app();
+        let config = Config {
+            ble_device: Some(("AA:BB:CC".to_string(), RadioType::Meshtastic)),
+            auto_reconnect: true,
+            conversation_id: Some(ConversationId::Channel(0.into())),
+            ..Config::default()
+        };
+        let _ = meshchat.update(ConfigLoaded(config));
+        assert!(meshchat.config.auto_reconnect);
+        assert_eq!(
+            meshchat.config.ble_device,
+            Some(("AA:BB:CC".to_string(), RadioType::Meshtastic))
+        );
+    }
+
+    #[test]
+    fn test_device_and_channel_config_change() {
+        let mut meshchat = test_app();
+        assert!(meshchat.config.ble_device.is_none());
+        let _ = meshchat.update(DeviceAndChannelConfigChange(
+            None,
+            Some(ConversationId::Channel(1.into())),
+        ));
+        assert!(meshchat.config.ble_device.is_none());
+        assert_eq!(
+            meshchat.config.conversation_id,
+            Some(ConversationId::Channel(1.into()))
+        );
+    }
+
+    #[test]
+    fn test_copy_to_clipboard_does_not_panic() {
+        let mut meshchat = test_app();
+        let _task = meshchat.update(Message::CopyToClipBoard("test text".to_string()));
+    }
+
+    #[test]
+    fn test_app_notification_does_not_panic() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(AppNotification(
+            "Test".to_string(),
+            "Detail".to_string(),
+            TimeStamp::now(),
+        ));
+    }
+
+    #[test]
+    fn test_app_error_does_not_panic() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(AppError(
+            "Error".to_string(),
+            "Detail".to_string(),
+            TimeStamp::now(),
+        ));
+    }
+
+    #[test]
+    fn test_critical_error_does_not_panic() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(CriticalAppError(
+            "Critical".to_string(),
+            "Detail".to_string(),
+            TimeStamp::now(),
+        ));
+    }
+
+    #[test]
+    fn test_remove_notification_does_not_panic() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(AppNotification(
+            "Test".to_string(),
+            "".to_string(),
+            TimeStamp::now(),
+        ));
+        let _ = meshchat.update(RemoveNotification(0));
+    }
+
+    #[test]
+    fn test_toggle_save_window_size() {
+        let mut meshchat = test_app();
+        let initial = meshchat.config.restore_window_size;
+        let _ = meshchat.update(ToggleSaveWindowSize);
+        assert_eq!(meshchat.config.restore_window_size, !initial);
+        // Toggle back
+        let _ = meshchat.update(ToggleSaveWindowSize);
+        assert_eq!(meshchat.config.restore_window_size, initial);
+    }
+
+    #[test]
+    fn test_toggle_save_window_position() {
+        let mut meshchat = test_app();
+        let initial = meshchat.config.restore_window_position;
+        let _ = meshchat.update(ToggleSaveWindowPosition);
+        assert_eq!(meshchat.config.restore_window_position, !initial);
+    }
+
+    #[test]
+    fn test_set_window_size_with_restore_enabled() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_size = true;
+        let size = Size::new(800.0, 600.0);
+        let _ = meshchat.update(Message::SetWindowSize(size));
+        assert_eq!(meshchat.config.window_size, Some(size.into()));
+    }
+
+    #[test]
+    fn test_set_window_size_with_restore_disabled() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_size = false;
+        let _ = meshchat.update(Message::SetWindowSize(Size::new(800.0, 600.0)));
+        assert!(meshchat.config.window_size.is_none());
+    }
+
+    #[test]
+    fn test_set_window_position_with_restore_enabled() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_position = true;
+        let point = Point::new(100.0, 200.0);
+        let _ = meshchat.update(Message::SetWindowPosition(Some(point)));
+        assert!(meshchat.config.window_position.is_some());
+    }
+
+    #[test]
+    fn test_tab_key_press_does_not_panic() {
+        let mut meshchat = test_app();
+        use iced::keyboard::key::Named;
+
+        let key_event = Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Named(Named::Tab),
+            modified_key: Key::Unidentified,
+            physical_key: key::Physical::Unidentified(MacOS(48)),
+            location: Location::Standard,
+            modifiers: Default::default(),
+            text: None,
+            repeat: false,
+        });
+        let _task = meshchat.update(Message::Event(key_event));
+        // Just verify no panic
+    }
+
+    #[test]
+    fn test_tab_key_with_shift_does_not_panic() {
+        let mut meshchat = test_app();
+        use iced::keyboard::key::Named;
+
+        let key_event = Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Named(Named::Tab),
+            modified_key: Key::Unidentified,
+            physical_key: key::Physical::Unidentified(MacOS(48)),
+            location: Location::Standard,
+            modifiers: keyboard::Modifiers::SHIFT,
+            text: None,
+            repeat: false,
+        });
+        let _task = meshchat.update(Message::Event(key_event));
+        // Just verify no panic
+    }
+
+    #[test]
+    fn test_window_moved_event_with_restore_enabled() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_position = true;
+        let point = Point::new(300.0, 400.0);
+        let _ = meshchat.update(Message::Event(Event::Window(window::Event::Moved(point))));
+        assert!(meshchat.config.window_position.is_some());
+    }
+
+    #[test]
+    fn test_window_resized_event_with_restore_enabled() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_size = true;
+        let size = Size::new(1024.0, 768.0);
+        let _ = meshchat.update(Message::Event(Event::Window(window::Event::Resized(size))));
+        assert_eq!(meshchat.config.window_size, Some(size.into()));
+    }
+
+    #[test]
+    fn test_click_on_settings_then_close_via_escape() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(OpenSettingsDialog);
+        assert!(meshchat.showing_settings);
+
+        let key_event = Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Named(key::Named::Escape),
+            modified_key: Key::Unidentified,
+            physical_key: key::Physical::Unidentified(MacOS(0)),
+            location: Location::Standard,
+            modifiers: Default::default(),
+            text: None,
+            repeat: false,
+        });
+        let _ = meshchat.update(Message::Event(key_event));
+        assert!(!meshchat.showing_settings);
+    }
+
+    #[test]
+    fn test_navigate_to_device_view_with_conversation() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(Navigation(View::DeviceView(Some(ConversationId::Channel(
+            0.into(),
+        )))));
+        assert_eq!(
+            meshchat.current_view,
+            View::DeviceView(Some(ConversationId::Channel(0.into())))
+        );
+    }
+
+    #[test]
+    fn test_navigate_to_device_view_and_back() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(Navigation(View::DeviceView(None)));
+        assert_eq!(meshchat.current_view, View::DeviceView(None));
+        let _ = meshchat.update(Navigation(View::DeviceListView));
+        assert_eq!(meshchat.current_view, View::DeviceListView);
+    }
+
+    #[test]
+    fn test_toggle_node_favourite_twice() {
+        let mut meshchat = test_app();
+        // Toggle on
+        let _ = meshchat.update(ToggleNodeFavourite(NodeId::from(42u64)));
+        assert!(meshchat.config.fav_nodes.contains(&NodeId::from(42u64)));
+        // Toggle off
+        let _ = meshchat.update(ToggleNodeFavourite(NodeId::from(42u64)));
+        assert!(!meshchat.config.fav_nodes.contains(&NodeId::from(42u64)));
+        // Toggle on again
+        let _ = meshchat.update(ToggleNodeFavourite(NodeId::from(42u64)));
+        assert!(meshchat.config.fav_nodes.contains(&NodeId::from(42u64)));
+    }
+
+    #[test]
+    fn test_add_empty_device_alias() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(AddDeviceAlias("AA:BB:CC".to_string(), "".to_string()));
+        assert!(meshchat.config.device_aliases.get("AA:BB:CC").is_none());
+    }
+
+    #[test]
+    fn test_config_loaded_with_window_size_and_position() {
+        let mut meshchat = test_app();
+        let config = Config {
+            restore_window_size: true,
+            window_size: Some(iced::Size::new(800.0, 600.0).into()),
+            restore_window_position: true,
+            window_position: Some(Point::new(100.0, 200.0).into()),
+            ..Config::default()
+        };
+        let _ = meshchat.update(ConfigLoaded(config));
+        assert!(meshchat.config.restore_window_size);
+        assert!(meshchat.config.restore_window_position);
+    }
+
+    #[test]
+    fn test_toggle_save_window_position_off_clears_config() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_position = true;
+        meshchat.config.window_position = Some(Point::new(100.0, 200.0).into());
+        let _ = meshchat.update(ToggleSaveWindowPosition);
+        assert!(!meshchat.config.restore_window_position);
+        assert!(meshchat.config.window_position.is_none());
+    }
+
+    #[test]
+    fn test_window_moved_with_restore_disabled() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_position = false;
+        let _ = meshchat.update(Message::Event(Event::Window(window::Event::Moved(
+            Point::new(300.0, 400.0),
+        ))));
+        assert!(meshchat.config.window_position.is_none());
+    }
+
+    #[test]
+    fn test_window_resized_with_restore_disabled() {
+        let mut meshchat = test_app();
+        meshchat.config.restore_window_size = false;
+        let _ = meshchat.update(Message::Event(Event::Window(window::Event::Resized(
+            Size::new(1024.0, 768.0),
+        ))));
+        assert!(meshchat.config.window_size.is_none());
+    }
+
+    #[test]
+    fn test_close_requested_when_disconnected() {
+        let mut meshchat = test_app();
+        let _task = meshchat.update(Message::Event(Event::Window(window::Event::CloseRequested)));
+    }
+
+    #[test]
+    fn test_show_location_does_not_panic() {
+        let mut meshchat = test_app();
+        let position = MCPosition {
+            latitude: 45.5,
+            longitude: -73.5,
+            altitude: Some(100),
+            ..Default::default()
+        };
+        let _ = meshchat.update(ShowLocation(position));
+    }
+
+    #[test]
+    fn test_device_list_view_event_does_not_panic() {
+        let mut meshchat = test_app();
+        let _ = meshchat.update(DeviceListViewEvent(
+            crate::device_list::DeviceListEvent::MeshRadioFound(
+                crate::device::DeviceIdentifier::Ble {
+                    name: Some("device1".into()),
+                    mac: None,
+                },
+                crate::device_list::RadioType::Meshtastic,
+            ),
+        ));
+    }
+
+    #[test]
+    fn test_other_event_does_nothing() {
+        let mut meshchat = test_app();
+        use iced::mouse::Button::Left;
+        use iced::mouse::Event::ButtonPressed;
+        let _ = meshchat.update(Message::Event(Event::Mouse(ButtonPressed(Left))));
     }
 }
