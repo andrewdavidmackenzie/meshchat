@@ -3153,4 +3153,200 @@ mod tests {
         let id = DeviceIdentifier::from("MyDevice");
         assert!(matches!(id, DeviceIdentifier::Ble { .. }));
     }
+
+    #[test]
+    fn test_set_my_user() {
+        let mut device = Device::default();
+        assert!(device.my_user.is_none());
+        let user = MCUser {
+            id: "!test".to_string(),
+            long_name: "Test".to_string(),
+            short_name: "T".to_string(),
+            hw_model_str: "TBEAM".to_string(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "CLIENT".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+        device.set_my_user(user.clone());
+        assert!(device.my_user.is_some());
+        assert_eq!(
+            device.my_user.as_ref().expect("should have user").id,
+            "!test"
+        );
+    }
+
+    #[test]
+    fn test_set_my_position() {
+        let mut device = Device::default();
+        assert!(device.my_position.is_none());
+        let position = MCPosition {
+            latitude: 47.0,
+            longitude: 11.0,
+            ..Default::default()
+        };
+        device.set_my_position(position);
+        assert!(device.my_position.is_some());
+    }
+
+    #[test]
+    fn test_my_user_info_event() {
+        let mut device = Device::default();
+        let user = MCUser {
+            id: "!user.event".to_string(),
+            long_name: "Event User".to_string(),
+            short_name: "EU".to_string(),
+            hw_model_str: "TBEAM".to_string(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "CLIENT".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        };
+        let _ = device.update(SubscriptionMessage(MyUserInfo(user)));
+        assert!(device.my_user.is_some());
+    }
+
+    #[test]
+    fn test_my_position_event() {
+        let mut device = Device::default();
+        let position = MCPosition {
+            latitude: 51.5,
+            longitude: -0.13,
+            ..Default::default()
+        };
+        let _ = device.update(SubscriptionMessage(MyPosition(position)));
+        assert!(device.my_position.is_some());
+    }
+
+    #[test]
+    fn test_radio_notification_event() {
+        let mut device = Device::default();
+        let _ = device.update(SubscriptionMessage(RadioNotification(
+            "Test notification".to_string(),
+            TimeStamp::now(),
+        )));
+        // Should not panic, task is returned but not executed
+    }
+
+    #[test]
+    fn test_send_error_event() {
+        let mut device = Device::default();
+        let _ = device.update(SubscriptionMessage(SendError(
+            "Send Error".to_string(),
+            "Failed to send".to_string(),
+        )));
+        assert!(matches!(device.connection_state, Disconnected(_, _)));
+    }
+
+    #[test]
+    fn test_not_ready_event() {
+        let mut device = Device::default();
+        let _ = device.update(SubscriptionMessage(NotReady));
+        assert!(matches!(device.connection_state, Disconnected(_, _)));
+    }
+
+    #[test]
+    fn test_send_text_message_not_connected() {
+        let mut device = Device::default();
+        let _ = device.update(DeviceMessage::SendTextMessage(
+            "Hello".to_string(),
+            ConversationId::Channel(0.into()),
+            None,
+        ));
+        // Should not panic when not connected
+    }
+
+    #[test]
+    fn test_send_emoji_reply_not_connected() {
+        let mut device = Device::default();
+        let _ = device.update(DeviceMessage::SendEmojiReplyMessage(
+            MessageId::from(1u64),
+            "👍".to_string(),
+            ConversationId::Channel(0.into()),
+        ));
+        // Should not panic when not connected
+    }
+
+    #[test]
+    fn test_send_position_message_with_position() {
+        let mut device = Device::default();
+        device.my_position = Some(MCPosition {
+            latitude: 40.0,
+            longitude: -74.0,
+            ..Default::default()
+        });
+        let _ = device.update(DeviceMessage::SendPositionMessage(ConversationId::Channel(
+            0.into(),
+        )));
+        // Should not panic
+    }
+
+    #[test]
+    fn test_send_self_info_with_user() {
+        let mut device = Device::default();
+        device.my_user = Some(MCUser {
+            id: "!self".to_string(),
+            long_name: "Self".to_string(),
+            short_name: "SE".to_string(),
+            hw_model_str: "TBEAM".to_string(),
+            hw_model: 0,
+            is_licensed: false,
+            role_str: "CLIENT".to_string(),
+            role: 0,
+            public_key: vec![],
+            is_unmessagable: false,
+        });
+        let _ = device.update(DeviceMessage::SendSelfInfoMessage(ConversationId::Channel(
+            0.into(),
+        )));
+        // Should not panic
+    }
+
+    #[test]
+    fn test_forward_message_with_forwarding_message_set() {
+        let mut device = Device::default();
+        let entry = MCMessage::new(
+            MessageId::from(1),
+            NodeId::from(100u64),
+            MCContent::NewTextMessage("forward me".into()),
+            TimeStamp::from(0u64),
+        );
+        let _ = device.update(StartForwardingMessage(entry));
+        assert!(device.forwarding_message.is_some());
+
+        let _ = device.update(ForwardMessage(ConversationId::Channel(0.into())));
+        assert!(device.forwarding_message.is_none());
+    }
+
+    #[test]
+    fn test_subscription_connected_event_with_viewing_conversation() {
+        let mut device = Device::default();
+        device.viewing_conversation = Some(ConversationId::Channel(0.into()));
+        let _ = device.update(SubscriptionMessage(ConnectedEvent(
+            "device1".into(),
+            RadioType::Meshtastic,
+        )));
+        assert_eq!(
+            device.connection_state,
+            Connected("device1".into(), RadioType::Meshtastic,)
+        );
+    }
+
+    #[test]
+    fn test_show_channel_none_when_connected() {
+        let mut device = Device::default();
+        device.viewing_conversation = Some(ConversationId::Channel(0.into()));
+        device.connection_state = Connected("device1".into(), RadioType::Meshtastic);
+        device.add_channel(MCChannel {
+            index: 0,
+            name: "Test".to_string(),
+        });
+
+        let _ = device.update(ShowChannel(None));
+        assert!(device.viewing_conversation.is_none());
+    }
 }

@@ -24,6 +24,9 @@ mod widgets;
 mod conversation_id;
 mod notification;
 
+#[cfg(test)]
+mod ui_test;
+
 #[cfg(feature = "meshcore")]
 mod meshc;
 #[cfg(feature = "meshtastic")]
