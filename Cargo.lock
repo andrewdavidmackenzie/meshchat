@@ -2817,16 +2817,15 @@ dependencies = [
 
 [[package]]
 name = "meshcore-rs"
-version = "0.1.10"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a14ea1ff575728b082f006bcb1c523a20b5c83fed4895aaad65455dee85a0ef9"
+checksum = "d54efb1ab62a0452c82dec34a39db419ac6a525773eae4da835cbf77a233b2ae"
 dependencies = [
  "btleplug",
  "bytes",
  "futures",
  "thiserror 2.0.18",
  "tokio",
- "tokio-serial",
  "tokio-stream",
  "tracing",
  "uuid",
