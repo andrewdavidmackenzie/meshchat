@@ -4094,9 +4094,9 @@ dependencies = [
 
 [[package]]
 name = "ringmap"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "219d417c84282f92a4af7c9cf3586debefa76b82b618664772ff11732b8cd03c"
+checksum = "5f2bc8363230878a282b6c221c0397f3a1250e0477ba07b72ada36a871435c1d"
 dependencies = [
  "equivalent",
  "hashbrown 0.17.0",
