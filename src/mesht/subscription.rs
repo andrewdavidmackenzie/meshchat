@@ -121,15 +121,14 @@ impl MyRouter {
                     .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
             // This Packet conveys information about a Channel that exists on the radio
-            Some(Channel(channel)) => {
+            Some(Channel(channel))
                 if meshtastic::protobufs::channel::Role::try_from(channel.role)
-                    != Ok(meshtastic::protobufs::channel::Role::Disabled)
-                {
-                    self.gui_sender
-                        .send(NewChannel(MCChannel::from(channel)))
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Send error: {e}"));
-                }
+                    != Ok(meshtastic::protobufs::channel::Role::Disabled) =>
+            {
+                self.gui_sender
+                    .send(NewChannel(MCChannel::from(channel)))
+                    .await
+                    .unwrap_or_else(|e| eprintln!("Send error: {e}"));
             }
             Some(ClientNotification(notification)) => {
                 // A notification message from the device to the client To be used for important

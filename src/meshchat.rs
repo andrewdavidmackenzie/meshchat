@@ -35,7 +35,7 @@ use iced::widget::{Column, center, container, mouse_area, opaque, operation, sta
 use iced::{Center, Event, Font, Point, Size, Subscription, Task, clipboard, keyboard, window};
 use iced::{Element, Fill, event};
 #[cfg(feature = "auto-update")]
-use self_update::Status;
+use self_update::VersionStatus;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::fmt::Formatter;
@@ -163,13 +163,13 @@ pub enum Message {
     ToggleSaveWindowPosition,
     HistoryLengthSelected(HistoryLength),
     #[cfg(feature = "auto-update")]
-    UpdateChecked(Result<Status, String>),
+    UpdateChecked(Result<VersionStatus, String>),
     None,
 }
 
 /// Check for a new release of MeshChat and update if available
 #[cfg(feature = "auto-update")]
-async fn check_for_update() -> Result<Status, String> {
+async fn check_for_update() -> Result<VersionStatus, String> {
     let mut update_builder = self_update::backends::github::Update::configure();
 
     let release_update = update_builder
@@ -418,12 +418,13 @@ impl MeshChat {
             #[cfg(feature = "auto-update")]
             UpdateChecked(result) => {
                 match result {
-                    Ok(Status::UpToDate(version)) => {
+                    Ok(VersionStatus::UpToDate(version)) => {
                         println!("Already up to date: `{}`", version)
                     }
-                    Ok(Status::Updated(version)) => {
+                    Ok(VersionStatus::Updated(version)) => {
                         println!("Updated to version: `{}`", version)
                     }
+                    Ok(_) => {}
                     Err(e) => eprintln!("Error updating: {:?}", e),
                 }
                 Task::none()
@@ -1339,7 +1340,7 @@ pub(crate) mod tests {
     fn test_add_empty_device_alias() {
         let mut meshchat = test_app();
         let _ = meshchat.update(AddDeviceAlias("AA:BB:CC".to_string(), "".to_string()));
-        assert!(meshchat.config.device_aliases.get("AA:BB:CC").is_none());
+        assert!(!meshchat.config.device_aliases.contains_key("AA:BB:CC"));
     }
 
     #[test]
