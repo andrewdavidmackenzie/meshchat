@@ -88,10 +88,10 @@ impl Default for DeviceIdentifier {
     fn default() -> Self {
         #[cfg(feature = "bluetooth")]
         {
-            return DeviceIdentifier::Ble {
+            DeviceIdentifier::Ble {
                 name: None,
                 mac: None,
-            };
+            }
         }
         #[cfg(all(feature = "tcp", not(feature = "bluetooth")))]
         {
@@ -140,16 +140,16 @@ impl From<&str> for DeviceIdentifier {
                     Some((addr, name)) => (addr, Some(name.to_string())),
                     None => (rest, None),
                 };
-                if let Some((host, port_str)) = addr.rsplit_once(':') {
-                    if let Ok(port) = port_str.parse::<u16>() {
-                        let host = host.trim_start_matches('[').trim_end_matches(']');
-                        if !host.is_empty() && port > 0 {
-                            return DeviceIdentifier::Tcp {
-                                name,
-                                host: host.to_string(),
-                                port,
-                            };
-                        }
+                if let Some((host, port_str)) = addr.rsplit_once(':')
+                    && let Ok(port) = port_str.parse::<u16>()
+                {
+                    let host = host.trim_start_matches('[').trim_end_matches(']');
+                    if !host.is_empty() && port > 0 {
+                        return DeviceIdentifier::Tcp {
+                            name,
+                            host: host.to_string(),
+                            port,
+                        };
                     }
                 }
             }
@@ -162,10 +162,10 @@ impl From<&str> for DeviceIdentifier {
                     mac: Some(mac),
                 };
             }
-            return DeviceIdentifier::Ble {
+            DeviceIdentifier::Ble {
                 name: Some(value.to_string()),
                 mac: None,
-            };
+            }
         }
         #[cfg(all(feature = "tcp", not(feature = "bluetooth")))]
         {

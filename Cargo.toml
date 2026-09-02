@@ -55,7 +55,7 @@ btleplug = { version = "0.12.0", default-features = false, optional = true }
 # mDNS-SD discovery of Meshtastic TCP devices on the LAN (`_meshtastic._tcp.local.`)
 mdns-sd = { version = "0.21", default-features = false, features = ["async"], optional = true }
 # Self-update requiers us to chose the http backend to use
-self_update = { version = "1.1.0", default-features = false, features = ["reqwest"], optional = true }
+self_update = { version = "1.1.0", default-features = false, features = ["reqwest", "rustls", "github"], optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
 
