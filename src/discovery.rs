@@ -127,7 +127,7 @@ async fn scan_for_devices(gui_sender: &mut Sender<DeviceListEvent>, adapter: &Ad
                     .unwrap_or_else(|e| eprintln!("Discovery could not get BT peripherals: {e}"));
             }
         }
-        tokio::time::sleep(Duration::from_secs(4)).await;
+        tokio::time::sleep(Duration::from_secs(4)).await; // jonesy:allow(overflow) constant 4s duration cannot overflow
     }
 }
 
@@ -265,6 +265,7 @@ pub fn mdns_discovery() -> impl Stream<Item = DeviceListEvent> {
                                 "mDNS attempt {attempt}/{MDNS_MAX_RETRIES} failed: {e}, retrying in {backoff_secs}s"
                             )))
                             .await;
+                        // jonesy:allow(overflow) backoff_secs is capped at 60 via .min(60) below
                         tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
                         backoff_secs = backoff_secs.saturating_mul(2).min(60);
                     }
